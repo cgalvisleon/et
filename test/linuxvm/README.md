@@ -91,6 +91,24 @@ línea lleva también `IOERROR escritores_parados=…`, lo que devolvieron `Put`
 `diskfull.sh` cada caso imprime sus líneas `DISKFULL …` y `DISKFULL-OK` o
 `DISKFULL-FAIL`.
 
+## Medidas de producción (tareas 71 y 72)
+
+`test/storebench/medir.sh` (ver `test/storebench/RESULTADOS.md`) mide en la VM la memoria con 100 millones de
+claves (`memoria`) y el `Open` tras un `kill -9` con 1 GB de WAL (`caida-vm`), bajo el candado de `test/ci`. Con
+`STORE_CACHE_SIZE=512` el proceso no pasa de ~560 MB: los 4 GiB alcanzan.
+
+**Subir la memoria de la VM de forma temporal** (solo con IA holgada, ≥ 50 % libre en `memory_pressure`), y volver:
+
+```bash
+ssh ia 'export PATH=/opt/homebrew/bin:$PATH; limactl stop etstore; limactl edit etstore --memory 6 --tty=false'
+# … medir …
+ssh ia 'export PATH=/opt/homebrew/bin:$PATH; limactl stop etstore; limactl edit etstore --memory 4 --tty=false'
+ssh ia 'PATH=/opt/homebrew/bin:$PATH limactl list etstore'   # MEMORY 4GiB
+```
+
+`limactl edit --memory` cambia `~/.lima/etstore/lima.yaml` con la VM detenida (se aplica al próximo `start`);
+`etstore.yaml` de este repo sigue en 4 GiB.
+
 ## Detener o borrar
 
 ```bash

@@ -26,7 +26,8 @@ type forkKey struct {
 // forkState es lo que el gestor sabe de un fork: si existe y cuántos bloques tiene. Se lee de los archivos la primera
 // vez que se usa el fork y después lo mantiene el gestor (un motor por directorio: nadie más escribe sus archivos).
 //
-// mu protege el fork: Read, Write, Sync, Exists y NBlocks lo toman compartido; Create, Extend y Unlink, exclusivo.
+// mu protege el fork: Read, Write, Exists y NBlocks lo toman compartido, y Sync solo para tomar los descriptores (el
+// fsync va con el fork suelto); Create, Extend y Unlink, exclusivo.
 type forkState struct {
 	mu      sync.RWMutex
 	loaded  bool
@@ -255,7 +256,10 @@ func (m *manager) Write(file FileNo, fork Fork, block page.BlockNumber, buf page
 }
 
 /**
-* Sync hace fsync de los archivos del fork escritos desde su último fsync.
+* Sync hace fsync de los archivos del fork escritos desde su último fsync. Toma los descriptores con el fork en
+* compartido y hace los fsync con el fork suelto: Extend (que lo pide en exclusivo, a veces con páginas del árbol
+* bloqueadas) y las lecturas y escrituras que esperarían detrás no esperan un fsync. Un Unlink en medio no cierra
+* esos descriptores hasta que se sueltan (fileCache.drop), y el fsync de un archivo ya borrado no hace daño.
 * @param file FileNo, fork Fork
 * @return error
 **/
@@ -264,10 +268,13 @@ func (m *manager) Sync(file FileNo, fork Fork) error {
 	if err != nil {
 		return err
 	}
-	defer st.mu.RUnlock()
-
 	keys := m.takeDirty(func(k segKey) bool { return k.file == file && k.fork == fork })
-	return m.syncSegs(keys)
+	handles, err := m.acquireSegs(keys)
+	st.mu.RUnlock()
+	if err != nil {
+		return err
+	}
+	return m.syncHandles(handles)
 }
 
 /**
@@ -561,18 +568,42 @@ func (m *manager) takeDirty(match func(segKey) bool) []segKey {
 // syncSegs hace fsync de cada archivo. Un fsync fallido deja el gestor inutilizable (doc.go, «Fallos de escritura»):
 // la marca de sucio ya se quitó y reintentar daría un éxito falso.
 func (m *manager) syncSegs(keys []segKey) error {
+	handles, err := m.acquireSegs(keys)
+	if err != nil {
+		return err
+	}
+	return m.syncHandles(handles)
+}
+
+// acquireSegs toma los descriptores de los archivos (quien llama los suelta con syncHandles). Si uno no abre, suelta
+// los ya tomados y deja el gestor inutilizable: sus marcas de sucio ya se quitaron.
+func (m *manager) acquireSegs(keys []segKey) ([]*handle, error) {
+	handles := make([]*handle, 0, len(keys))
 	for _, key := range keys {
 		h, err := m.files.acquire(key, m.segName(key), false)
 		if err != nil {
-			return m.fail(fmt.Errorf("smgr: abrir %s para fsync: %w", m.segName(key), err))
+			for _, taken := range handles {
+				m.files.release(taken)
+			}
+			return nil, m.fail(fmt.Errorf("smgr: abrir %s para fsync: %w", m.segName(key), err))
 		}
-		err = h.f.Sync()
-		m.files.release(h)
-		if err != nil {
-			return m.fail(fmt.Errorf("smgr: fsync de %s: %w", m.segName(key), err))
-		}
+		handles = append(handles, h)
 	}
-	return nil
+	return handles, nil
+}
+
+// syncHandles hace fsync de cada descriptor tomado y los suelta todos. Un fsync fallido deja el gestor inutilizable.
+func (m *manager) syncHandles(handles []*handle) error {
+	var err error
+	for _, h := range handles {
+		if err == nil {
+			if serr := h.f.Sync(); serr != nil {
+				err = m.fail(fmt.Errorf("smgr: fsync de %s: %w", m.segName(h.key), serr))
+			}
+		}
+		m.files.release(h)
+	}
+	return err
 }
 
 // evict cierra un descriptor que la caché expulsó. Si el archivo tiene escrituras sin fsync, antes hace fsync por ese

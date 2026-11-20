@@ -60,6 +60,9 @@ type storeCheck struct {
 	live    int64
 	curID   string
 	decided bool
+
+	// halfDead son los hallazgos de hojas medio muertas (borrados cortados a medias), que Repair termina.
+	halfDead []int
 }
 
 /**
@@ -113,8 +116,8 @@ func (c *storeCheck) fixed(i int, err error) error {
 
 /**
 * run revisa el store: el árbol con sus hojas (conteo, congelado, mapa de visibilidad de cada hoja, cadenas de
-* desborde), la lista de libres, los bits del mapa fuera de las hojas, las páginas sin dueño y Count. Si el árbol no
-* pasa, el resto no es confiable y no se mira (ni se repara).
+* desborde, borrados a medias) y su pila de páginas borradas, la lista de libres, los bits del mapa fuera de las
+* hojas, las páginas sin dueño y Count. Si el árbol no pasa, el resto no es confiable y no se mira (ni se repara).
 * @return error: ErrFailed
 **/
 func (c *storeCheck) run() error {
@@ -146,13 +149,35 @@ func (c *storeCheck) run() error {
 		return c.problem(err, FindTree, -1, MSG_CHECK_TREE)
 	}
 	c.r.TreePages += int64(st.Pages)
+	c.r.Deleted += int64(st.Deleted)
 	c.r.Entries += int64(st.Entries)
 	for _, step := range []func() error{c.freeList, c.visibilityMap, c.lostPages} {
 		if err := step(); err != nil {
 			return err
 		}
 	}
-	return c.count(before)
+	if err := c.count(before); err != nil {
+		return err
+	}
+	return c.finishDeletes()
+}
+
+/**
+* finishDeletes, con repair, termina los borrados de páginas cortados a medias (btree.FinishDeletes): las páginas
+* desenganchadas quedan en la pila de borradas de la meta, con el próximo xid como marca.
+* @return error: ErrFailed
+**/
+func (c *storeCheck) finishDeletes() error {
+	if !c.repair || len(c.halfDead) == 0 {
+		return nil
+	}
+	if _, err := c.s.tree.FinishDeletes(c.e.txs.NextXID); err != nil {
+		return c.e.fatal(err)
+	}
+	for _, i := range c.halfDead {
+		c.r.repaired(i)
+	}
+	return nil
 }
 
 /**
@@ -178,6 +203,9 @@ func (c *storeCheck) treePage(blk page.BlockNumber) error {
 **/
 func (c *storeCheck) leaf(info btree.LeafInfo, entries []btree.Version) error {
 	c.leaves.set(info.Block)
+	if info.HalfDead {
+		c.halfDead = append(c.halfDead, c.add(FindHalfDead, int64(info.Block), 1, true, MSG_CHECK_HALF_DEAD))
+	}
 	unfrozen, first := 0, page.XID(0)
 	for i := range entries {
 		v := &entries[i]

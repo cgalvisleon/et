@@ -64,10 +64,11 @@ var (
 // Open abre el WAL del motor de dir y lo recupera: recorre los registros desde redo (el punto de rehacer del último
 // checkpoint, o Start en un motor nuevo) llamando a fn con cada uno (nil: ninguno), corta la cola inválida (el resto
 // del último segmento y los segmentos siguientes, que nunca se confirmaron) y deja listo el WAL para seguir
-// escribiendo. Devuelve el WAL y el final de lo válido: la posición del próximo registro.
+// escribiendo. Si la cola inválida empieza dentro de un segmento sellado (checkSealed), falla con ErrCorrupted sin
+// cortar nada. Devuelve el WAL y el final de lo válido: la posición del próximo registro.
 func Open(fsys vfs.FS, dir string, opts Options, redo Position, fn func(rec *Record) error) (*WAL, Position, error) {
-	if opts.SegmentSize < MaxRecordSize {
-		return nil, Position{}, fmt.Errorf(MSG_SEGMENT_SIZE, opts.SegmentSize, MaxRecordSize)
+	if opts.SegmentSize < MaxRecordSize+TrailerSize {
+		return nil, Position{}, fmt.Errorf(MSG_SEGMENT_SIZE, opts.SegmentSize, MaxRecordSize+TrailerSize)
 	}
 	if fn == nil {
 		fn = func(*Record) error { return nil }
@@ -96,6 +97,11 @@ func Open(fsys vfs.FS, dir string, opts Options, redo Position, fn func(rec *Rec
 	end, err := scan(fsys, walDir, redo, opts.StopLSN, recordsOnly(fn), func(end Position) { sizes[end.Segment] = end })
 	if err != nil {
 		return nil, end, err
+	}
+	if opts.StopLSN == 0 || end.LSN <= opts.StopLSN { // el objetivo de una recuperación corta a propósito
+		if err := checkSealed(fsys, walDir, end, nums); err != nil {
+			return nil, end, err
+		}
 	}
 	if err := cutTail(fsys, walDir, end, nums); err != nil {
 		return nil, end, err
@@ -242,7 +248,7 @@ func (w *WAL) writable() error {
 // el lugar todavía no está preasignado lo preasigna ahora: con el disco lleno devuelve ErrNoRoom sin dejar el WAL
 // inutilizable (no se asignó lsn). Con writeMu tomado.
 func (w *WAL) allocate(size int64) (*segment, int64, error) {
-	if w.active.size+size > w.opts.SegmentSize {
+	if w.active.size+size > w.capacity() {
 		if err := w.rotate(); err != nil {
 			return nil, 0, w.reserveError(err)
 		}
@@ -260,7 +266,7 @@ func (w *WAL) allocate(size int64) (*segment, int64, error) {
 	return seg, offset, nil
 }
 
-// rotate sella el segmento activo (sus escrituras terminadas y fsync) y pasa al siguiente: un repuesto reciclado si
+// rotate sella el segmento activo (sus escrituras terminadas y fsync, y después su marca de sellado) y pasa al siguiente: un repuesto reciclado si
 // lo hay, o uno nuevo. Con preasignación, antes de sellar deja el siguiente preasignado: si el disco está lleno
 // devuelve ese error sin tocar nada. Un fsync o una apertura fallidos dejan el WAL inutilizable. Con writeMu tomado.
 func (w *WAL) rotate() error {
@@ -273,6 +279,9 @@ func (w *WAL) rotate() error {
 	if err := old.seal(); err != nil {
 		w.fail(err)
 		return failedError(err)
+	}
+	if err := w.markSealed(old); err != nil {
+		return err
 	}
 	num := old.num + 1
 	var file vfs.File

@@ -18,10 +18,14 @@
 // Implementación (ola 1): Open(fs, dir, maxFiles) devuelve el Manager. Por fork guarda en memoria si existe y cuántos
 // bloques tiene (se lee de los archivos la primera vez; todos menos el último deben medir 1 GB, si no ErrShortFile).
 // Los descriptores van en una caché LRU de maxFiles (DefaultMaxFiles = 256): expulsar un archivo con escrituras sin
-// fsync le hace fsync antes de cerrarlo, y sigue marcado para el próximo Sync. Sync quita las marcas y después hace
-// fsync; un fsync fallido deja el gestor inutilizable (todo devuelve ese error). Unlink borra del último archivo al
+// fsync le hace fsync antes de cerrarlo, y sigue marcado para el próximo Sync. Sync quita las marcas y toma los
+// descriptores con el fork en compartido, y hace los fsync con el fork suelto (así Extend, Read y Write del fork no
+// esperan el fsync del checkpoint; un Unlink en medio no cierra un descriptor en uso: lo cierra su último release); un
+// fsync fallido deja el gestor inutilizable (todo devuelve ese error). Unlink borra del último archivo al
 // primero. Un Extend que hace nacer un archivo hace fsync de los anteriores (ya llenos) antes de crearlo y de data/
-// después: así un corte nunca deja un archivo corto en el medio del fork (lo encontró TestExtendNewFileCrash).
+// después: así un corte nunca deja un archivo corto en el medio del fork (lo encontró TestExtendNewFileCrash). Ese
+// fsync va con el fork en exclusivo, una vez por GB de crecimiento: es la única espera a un fsync bajo el candado del
+// fork.
 // Bloqueos: el fork (RWMutex: exclusivo para Create, Extend y Unlink) → el mutex del gestor y el de la caché, que son
 // hojas.
 package smgr

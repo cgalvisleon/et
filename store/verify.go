@@ -9,6 +9,7 @@ import (
 
 	"github.com/cgalvisleon/et/store/internal/btree"
 	"github.com/cgalvisleon/et/store/internal/control"
+	"github.com/cgalvisleon/et/store/internal/page"
 	"github.com/cgalvisleon/et/store/internal/smgr"
 )
 
@@ -78,9 +79,11 @@ func (e *Engine) checkFiles(r *Report, repair bool) error {
 }
 
 /**
-* checkControl lee el control del disco y lo compara con el motor: el punto de rehacer es el del último checkpoint,
-* el checkpoint no es anterior a él y el frozenXID no pasa al siguiente xid. Un motor que todavía no hizo su primer
-* checkpoint no tiene control.
+* checkControl lee el control del disco y lo compara con el motor: el punto de rehacer es el del último checkpoint
+* terminado (no el vigente del WAL, que el paso 1 de un checkpoint mueve y queda adelante si el disco lleno corta
+* ese checkpoint, como RedoRecPtr de PostgreSQL), el vigente del WAL no es anterior a él (decidiría las imágenes de
+* página contra un punto más viejo que el de la recuperación), el checkpoint no es anterior a él y el frozenXID no
+* pasa al siguiente xid. Un motor que todavía no hizo su primer checkpoint no tiene control.
 * @param r *Report
 **/
 func (e *Engine) checkControl(r *Report) {
@@ -95,8 +98,11 @@ func (e *Engine) checkControl(r *Report) {
 		add(MSG_CHECK_CONTROL_READ, err)
 		return
 	}
-	if redo := e.log.RedoPoint().LSN; ctl.Redo.LSN != redo {
-		add(MSG_CHECK_CONTROL_REDO, ctl.Redo.LSN, redo)
+	if done := page.LSN(e.ctlRedo.Load()); ctl.Redo.LSN != done {
+		add(MSG_CHECK_CONTROL_REDO, ctl.Redo.LSN, done)
+	}
+	if redo := e.log.RedoPoint().LSN; redo < ctl.Redo.LSN {
+		add(MSG_CHECK_CONTROL_WAL, redo, ctl.Redo.LSN)
 	}
 	if ctl.CheckpointLSN < ctl.Redo.LSN {
 		add(MSG_CHECK_CONTROL_CKPT, ctl.CheckpointLSN, ctl.Redo.LSN)

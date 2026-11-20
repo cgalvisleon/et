@@ -123,7 +123,7 @@ func openEnvHook(t testing.TB, fsys vfs.FS, redo wal.Position, buffers int, bgDe
 **/
 func redoAny(pool buffer.Pool, sm smgr.Manager, rec *wal.Record) error {
 	switch {
-	case rec.Kind >= wal.KindLeafWrite && rec.Kind <= wal.KindSetFrozen:
+	case rec.Kind >= wal.KindLeafWrite && rec.Kind < wal.KindOverflowWrite:
 		return Redo(pool, sm, rec)
 	case rec.Kind == wal.KindOverflowWrite:
 		return overflow.Redo(pool, sm, rec)

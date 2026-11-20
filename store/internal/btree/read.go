@@ -94,6 +94,7 @@ func (t *BTree) lookup(id string, snap *xact.Snapshot, withValue bool) (Version,
 	if err := checkID(id); err != nil {
 		return Version{}, false, err
 	}
+	defer t.guard.leave(t.guard.enter())
 	var hs hints
 	defer t.flushHints(&hs)
 	k := searchKey([]byte(id))

@@ -112,6 +112,7 @@ func (e *Engine) readControl() (control.Control, bool, error) {
 	ctl, err := e.ctl.Read()
 	if err == nil {
 		e.hasControl = true
+		e.ctlRedo.Store(uint64(ctl.Redo.LSN))
 		return ctl, false, nil
 	}
 	if !errors.Is(err, control.ErrNoValidCopy) {

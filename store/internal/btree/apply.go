@@ -9,7 +9,7 @@ import (
 * applyBlock aplica el delta del bloque i de un registro de btree a su página, sin tocar pd_lsn. Es la misma función
 * en el camino normal y al rehacer: así las dos llegan a la misma página. No confía en el delta (al rehacer viene del
 * disco): un delta malo es ErrBadRecord, nunca un pánico.
-* @param kind wal.Kind, i int: el registro y el número de bloque dentro de él
+* @param kind wal.Kind, i int: el registro y el papel del bloque dentro de él (blockRole)
 * @param p page.Page: bloqueada en exclusivo (restaurada de su imagen si la traía)
 * @param delta []byte, lsn page.LSN: el lsn del registro (lo lleva la entrada nueva de KindLeafWrite)
 * @return error
@@ -41,7 +41,7 @@ func applyBlock(kind wal.Kind, i int, p page.Page, delta []byte, lsn page.LSN) e
 	case kind == wal.KindInsertPivot && i == 0:
 		off, item, _ := parseInsertPivot(delta)
 		return insertAt(kind, p, off, item)
-	case kind == wal.KindInsertPivot:
+	case kind == wal.KindInsertPivot && i == 1:
 		return clearFlags(p, page.OpaqueIncompleteSplit)
 	case kind == wal.KindNewRoot && i == 0:
 		return applyNewRoot(p, delta)
@@ -50,7 +50,54 @@ func applyBlock(kind wal.Kind, i int, p page.Page, delta []byte, lsn page.LSN) e
 	case kind == wal.KindNewRoot:
 		return clearFlags(p, page.OpaqueIncompleteSplit|page.OpaqueRoot)
 	}
+	return applyDelete(kind, i, p, delta)
+}
+
+/**
+* applyDelete aplica los bloques de los registros del borrado de páginas y la raíz rápida de KindInsertPivot.
+* @param kind wal.Kind, i int: el papel del bloque (blockRole), p page.Page, delta []byte
+* @return error
+**/
+func applyDelete(kind wal.Kind, i int, p page.Page, delta []byte) error {
+	switch {
+	case kind == wal.KindInsertPivot && i == 2:
+		return applyMetaFast(p, delta)
+	case kind == wal.KindMarkHalfDead && i == 0:
+		return applyHalfDeadLeaf(p, delta)
+	case kind == wal.KindMarkHalfDead:
+		return applyHalfDeadParent(p, delta)
+	case kind == wal.KindUnlinkPage:
+		return applyUnlink(i, p, delta)
+	case kind == wal.KindRecyclePage:
+		return applyRecycle(i, p, delta)
+	}
 	return badRecord(kind, "not a btree kind")
+}
+
+/**
+* blockRole es el papel del bloque i de un registro: su número, salvo en KindUnlinkPage, cuyos bloques opcionales no
+* ocupan lugar si no vienen (unlinkRole).
+* @param kind wal.Kind, blocks []wal.BlockRef, i int
+* @return int
+**/
+func blockRole(kind wal.Kind, blocks []wal.BlockRef, i int) int {
+	if kind == wal.KindUnlinkPage {
+		return unlinkRole(blocks, i)
+	}
+	return i
+}
+
+/**
+* applyMetaFast anota en la meta la raíz rápida nueva (el padre de la única página de su nivel que se partió).
+* @param p page.Page, delta []byte: fastRoot(4) fastLevel(4)
+* @return error
+**/
+func applyMetaFast(p page.Page, delta []byte) error {
+	if _, err := readMetaPage(p); err != nil {
+		return err
+	}
+	setMetaFast(p, page.BlockNumber(le.Uint32(delta)), le.Uint32(delta[4:]))
+	return nil
 }
 
 /**

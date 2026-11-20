@@ -12,9 +12,10 @@ import (
 	"github.com/cgalvisleon/et/store/internal/vfs"
 )
 
-// smallOptions: segmentos del tamaño mínimo que admite Open (MaxRecordSize), para rotar con pocos registros.
+// smallOptions: segmentos del tamaño mínimo que admite Open (MaxRecordSize + TrailerSize), para rotar con pocos
+// registros.
 func smallOptions(spares int) Options {
-	return Options{SegmentSize: MaxRecordSize, Spares: spares}
+	return Options{SegmentSize: MaxRecordSize + TrailerSize, Spares: spares}
 }
 
 // testRecord es el registro número i de una historia de prueba: su contenido sale de i, así se puede comparar.

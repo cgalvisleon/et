@@ -185,7 +185,7 @@ func parseSplitRight(delta []byte) (splitRight, error) {
 		}
 		d.items, rest = append(d.items, rest[itemLenSize:itemLenSize+n]), rest[itemLenSize+n:]
 	}
-	if len(rest) != 0 || count == 0 || d.opaque.Prev <= MetaBlock || d.opaque.Flags&notTreePage != 0 {
+	if len(rest) != 0 || count == 0 || d.opaque.Prev <= MetaBlock || d.opaque.Flags&(notTreePage|ignoredPage) != 0 {
 		return splitRight{}, badRecord(wal.KindSplit, "bad right delta")
 	}
 	return d, nil
@@ -230,6 +230,26 @@ func checkDelta(kind wal.Kind, i int, delta []byte) error {
 		_, err = parseVacuum(delta)
 	case kind == wal.KindSetHints:
 		_, err = parseHints(delta)
+	case kind == wal.KindMarkHalfDead:
+		err = checkHalfDeadDelta(i, delta)
+	case kind == wal.KindUnlinkPage && i == roleTarget:
+		_, err = parseUnlinkTarget(delta)
+	case kind == wal.KindUnlinkPage && i == roleMeta:
+		if len(delta) != blockDeltaSize && len(delta) != blockDeltaSize+fastDeltaSize {
+			err = badRecord(kind, "bad meta delta length")
+		}
+	case kind == wal.KindUnlinkPage:
+		if len(delta) != blockDeltaSize || i < 0 || i > roleLeaf {
+			err = badRecord(kind, "bad delta length")
+		}
+	case kind == wal.KindRecyclePage:
+		if (i == 0 && len(delta) != recycleMetaSize) || (i != 0 && len(delta) != blockDeltaSize) {
+			err = badRecord(kind, "bad recycle delta length")
+		}
+	case kind == wal.KindInsertPivot && i == 2:
+		if len(delta) != fastDeltaSize || page.BlockNumber(le.Uint32(delta)) <= MetaBlock {
+			err = badRecord(kind, "bad fast root delta")
+		}
 	default:
 		err = checkFixedDelta(kind, i, delta)
 	}

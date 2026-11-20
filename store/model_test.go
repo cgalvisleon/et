@@ -163,11 +163,13 @@ func (o op) apply(s state) bool {
 }
 
 // generator arma operaciones al azar sobre pocos stores e ids, para que choquen: valores chicos y grandes (desborde),
-// ids cortos y algunos largos (particiones), checkpoints, limpiezas y bajas de stores de vez en cuando.
+// ids cortos y algunos largos (particiones), checkpoints, limpiezas, bajas de stores y lotes que borran un tramo
+// seguido de ids (hojas vacías que la limpieza borra del árbol) de vez en cuando.
 type generator struct {
 	rng      *rand.Rand
 	ids      []string
 	deferred bool // también escrituras diferidas, lotes con CommitDeferred y WaitDurable (solo la prueba de modelo)
+	purges   bool // también lotes que borran un tramo seguido de ids (solo la prueba de modelo)
 }
 
 /**
@@ -247,6 +249,9 @@ func (g *generator) makeDeferred(o *op) {
 * @return op
 **/
 func (g *generator) batch() op {
+	if g.purges && g.rng.IntN(3) == 0 {
+		return g.purge()
+	}
 	o := op{kind: "batch", rollback: g.rng.IntN(4) == 0}
 	dropped := map[string]bool{}
 	for len(o.sub) < 2+g.rng.IntN(11) {
@@ -266,6 +271,22 @@ func (g *generator) batch() op {
 			sub.kind = "read"
 		}
 		o.sub = append(o.sub, sub)
+	}
+	o.wants = make([]bool, len(o.sub))
+	o.deferred = g.deferred && !o.rollback && g.rng.IntN(4) == 0
+	return o
+}
+
+/**
+* purge arma un lote que borra (Remove) un tramo seguido de 20 a 70 ids de un store: así quedan hojas vacías que la
+* limpieza borra del árbol (y sus padres, si se quedan sin hijos).
+* @return op
+**/
+func (g *generator) purge() op {
+	o := op{kind: "batch", rollback: g.rng.IntN(8) == 0}
+	store, first, n := []string{"a", "b", "c"}[g.rng.IntN(3)], g.rng.IntN(len(g.ids)), 20+g.rng.IntN(51)
+	for i := range n {
+		o.sub = append(o.sub, op{kind: "remove", store: store, id: g.ids[(first+i)%len(g.ids)]})
 	}
 	o.wants = make([]bool, len(o.sub))
 	o.deferred = g.deferred && !o.rollback && g.rng.IntN(4) == 0
@@ -581,7 +602,7 @@ func TestModelCrash(t *testing.T) {
 func runModel(t *testing.T, mode crashfs.Mode, seed uint64) {
 	base := crashfs.New()
 	gen := newGenerator(seed)
-	gen.deferred = true
+	gen.deferred, gen.purges = true, true
 	candidates := []state{{}} // los estados que puede tener el motor tras el corte
 	// Archivos de estados de una página y el primer xid junto al final del primero: se llena enseguida y se trunca.
 	cfg := smallXact(xact.XidsPerPage - 10)
@@ -602,7 +623,8 @@ func runModel(t *testing.T, mode crashfs.Mode, seed uint64) {
 		verifyTrees(t, e)
 		vacuumAndAudit(t, e, confirmed)
 		checkAfterCrash(t, e)
-		t.Logf("round %d: replayed %d records, %d stores", round, e.replayed, len(e.Stores()))
+		t.Logf("round %d: replayed %d records, %d stores, %d pages deleted", round, e.replayed, len(e.Stores()),
+			e.Stats().PagesDeleted)
 		target := 20 + gen.rng.IntN(1500)
 		candidates = crashDuring(t, e, proc, gen, confirmed, target, mode, seed+uint64(round))
 	}
@@ -611,6 +633,8 @@ func runModel(t *testing.T, mode crashfs.Mode, seed uint64) {
 	verifyTrees(t, e)
 	vacuumAndAudit(t, e, confirmed)
 	checkAfterCrash(t, e)
+	st := e.Stats()
+	t.Logf("last open: %d pages deleted, %d recycled", st.PagesDeleted, st.PagesRecycled)
 	mustOK(t, e.Close())
 	if files := xactFiles(t, base); slices.Contains(files, "0001") {
 		t.Fatalf("status files %v: 0001 not truncated", files)

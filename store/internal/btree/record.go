@@ -36,7 +36,7 @@ func (t *BTree) logChange(kind wal.Kind, xid page.XID, flags wal.Flags, refs []w
 	var applyErr error
 	for i, h := range hs {
 		p := h.Page()
-		if err := applyBlock(kind, i, p, refs[i].Delta, lsn); err != nil {
+		if err := applyBlock(kind, blockRole(kind, refs, i), p, refs[i].Delta, lsn); err != nil {
 			applyErr = errors.Join(applyErr, err)
 			continue
 		}

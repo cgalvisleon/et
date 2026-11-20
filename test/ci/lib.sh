@@ -94,3 +94,34 @@ prune() {
   ls -1d "$CI"/$1 2>/dev/null | sort | awk -v k="$2" '{a[NR] = $0} END {for (i = 1; i <= NR - k; i++) print a[i]}' \
     | while read -r d; do rm -rf "$d"; done
 }
+
+# fuzz_one <paquete> <Fuzzer>: corre un fuzzer y guarda los casos nuevos que deje en testdata/fuzz/<Fuzzer>.
+fuzz_one() {
+  local pkg=$1 fn=$2 corpus before extra=()
+  corpus=$SRC/$pkg/testdata/fuzz/$fn
+  before=$(ls "$corpus" 2>/dev/null)
+  # Minimizar una entrada nueva dura hasta 60 s por omisión: con un -fuzztime corto el fuzzer termina con
+  # «context deadline exceeded» sin haber fallado. Se acota (page, como siempre, con 1x).
+  extra=(-fuzzminimizetime "$FUZZ_MINIMIZE")
+  [ "$pkg" = store/internal/page ] && extra=(-fuzzminimizetime 1x)
+  mac_go test "./$pkg" -run '^$' -fuzz "^$fn\$" -fuzztime "$FUZZTIME" -parallel "$FUZZ_PARALLEL" "${extra[@]}"
+  local rc=$? f
+  for f in $(ls "$corpus" 2>/dev/null); do
+    grep -qx "$f" <<<"$before" && continue
+    for dest in "$OUT/fuzz-found/$pkg/$fn" "$CI/fuzz-found/$pkg/$fn"; do mkdir -p "$dest" && cp "$corpus/$f" "$dest/"; done
+    echo "CASO NUEVO: $pkg/testdata/fuzz/$fn/$f"
+  done
+  return $rc
+}
+
+# fuzz_all: corre fuzz_one con cada func Fuzz de store/ (orden alfabético por archivo), cada uno como un paso.
+# Usa OUT, SUMMARY, FUZZTIME, FUZZ_PARALLEL y FUZZ_MINIMIZE.
+fuzz_all() {
+  local file fn pkg
+  while read -r file fn; do
+    pkg=$(dirname "${file#"$SRC"/}")
+    if ! step "fuzz-${pkg##*/}-$fn" 1800 fuzz_one "$pkg" "$fn"; then
+      grep '^CASO NUEVO' "$OUT/fuzz-${pkg##*/}-$fn.log" | sed 's/^/         /' | tee -a "$SUMMARY"
+    fi
+  done < <(grep -rH '^func Fuzz' --include='*_test.go' "$SRC/store" | sed -E 's/^([^:]+):func (Fuzz[A-Za-z0-9_]*).*/\1 \2/' | sort)
+}

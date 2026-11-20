@@ -7,9 +7,10 @@ La integración continua del motor corre en el equipo **IA** (macOS arm64) y en 
 |---|---|---|
 | `ci.sh` | Mac (o IA) | verificación de un cambio, ~10 min: sube la copia, VM: `go test -p 1 ./store/...`, `-race`, `powercut-lazyfs.sh ROUNDS=5`, `powercut-flakey.sh DROP_ROUNDS=3 ERROR_ROUNDS=2`; detiene la VM; macOS: `go test -p 1 ./store/...` |
 | `nightly.sh` | IA (LaunchAgent 03:00) o Mac | benchmarks contra la línea base, fuzzers de `store/` y la suite completa de cortes |
-| `status.sh` | Mac | muestra el último `ci.sh`, el último nocturno y qué corre ahora |
+| `fuzzlong.sh` | Mac (o IA) | corrida larga de los fuzzers (tarea 73): cada `func Fuzz` de `store/` `FUZZTIME` (48m: 10 × 48 min = 8 h), uno a la vez, con `nohup` bajo el candado |
+| `status.sh` | Mac | muestra el último `ci.sh`, el último nocturno, la corrida larga de fuzzers (o la en curso) y qué corre ahora |
 | `install-nightly.sh` / `uninstall-nightly.sh` | Mac | pone o quita el LaunchAgent `com.cgalvisleon.etstore-nightly` en IA |
-| `lib.sh` | — | funciones comunes (candado, memoria, pasos, resumen) |
+| `lib.sh` | — | funciones comunes (candado, memoria, pasos, resumen, `fuzz_one`/`fuzz_all`) |
 
 ## Uso
 
@@ -73,6 +74,26 @@ Dura algo más de 1 h con 5 min por fuzzer (la corrida de prueba, con 30 s por f
 ```
 
 La salida de launchd va a `~/etstore-ci/nightly-launchd.log`. IA no duerme (`caffeinate`), así que corre a su hora.
+
+## Corrida larga de fuzzers (`fuzzlong.sh`)
+
+```bash
+./test/ci/fuzzlong.sh                 # compila, sube la copia, instala test/ci en IA y la lanza con nohup (8 h)
+FUZZTIME=30m ./test/ci/fuzzlong.sh    # otra duración por fuzzer (en minutos, «…m»)
+./test/ci/status.sh fuzzlong          # en curso: el resumen hasta ahora y el fuzzer que corre; si no, el último
+ssh ia tail -f ~/etstore-ci/fuzzlong.log
+```
+
+Usa las mismas funciones que el nocturno (`fuzz_all` de `lib.sh`): `nice -n 15`, `-parallel 4`,
+`-fuzzminimizetime 10s` (`page` con `1x`), espera memoria libre ≥ 30 % antes de cada fuzzer. Resultado en
+`~/etstore-ci/fuzzlong-<fecha>/` (`summary.txt`, un `.log` por fuzzer, `fuzz-found/`), copia en
+`~/etstore-ci/last-fuzzlong.txt`; un caso nuevo de `testdata/fuzz` queda además en `~/etstore-ci/fuzz-found/`.
+No hay que detenerla: si se apura, el candado queda tomado hasta que termine.
+
+**Con el nocturno.** Si la corrida prevista (fuzzers × `FUZZTIME` + 2 min c/u) pasa por las 03:00, deja la marca
+`~/etstore-ci/skip-nightly-<AAAAMMDD>` y `nightly.sh` salta esa noche (lo anota en `~/etstore-ci/nightly-skipped.txt` y
+borra la marca). La misma marca, puesta a mano (`ssh ia 'echo motivo > ~/etstore-ci/skip-nightly-20261121'`), salta
+cualquier noche. Sin marca, el nocturno espera el candado hasta 3 h.
 
 ## Línea base
 

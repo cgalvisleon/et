@@ -165,12 +165,13 @@ const (
 
 // Mensajes del informe de Verify y Repair (report.go, verify.go, repair.go).
 const (
-	MSG_REPORT_TOTALS   = "stores %d, pages %d (tree %d, chains %d, free %d, lost %d), versions %d, live ids %d, orphan files %d\n"
+	MSG_REPORT_TOTALS   = "stores %d, pages %d (tree %d, deleted %d, chains %d, free %d, lost %d), versions %d, live ids %d, orphan files %d\n"
 	MSG_REPORT_FINDINGS = "findings %d (repaired %d, irreparable %d)\n"
 	MSG_REPORT_OMITTED  = "... and %d more findings\n"
 
 	MSG_CHECK_CONTROL_READ  = "cannot read the control file: %v"
-	MSG_CHECK_CONTROL_REDO  = "redo point lsn %d, the engine's is %d"
+	MSG_CHECK_CONTROL_REDO  = "redo point lsn %d, the last finished checkpoint's is %d"
+	MSG_CHECK_CONTROL_WAL   = "the WAL's redo point lsn %d is before the control's %d"
 	MSG_CHECK_CONTROL_CKPT  = "checkpoint lsn %d is before the redo point lsn %d"
 	MSG_CHECK_CONTROL_XID   = "frozenXID %d is after nextXID %d"
 	MSG_CHECK_CATALOG_READ  = "cannot read the catalog: %v"
@@ -198,4 +199,5 @@ const (
 	MSG_CHECK_COUNT         = "Count is %d, the walk finds %d live ids"
 	MSG_CHECK_LOST          = "pages without an owner: %s"
 	MSG_CHECK_ORPHAN_CHAIN  = "overflow pages without a version (orphan chain)"
+	MSG_CHECK_HALF_DEAD     = "half-dead leaf: a page deletion interrupted by a crash (the next vacuum finishes it)"
 )

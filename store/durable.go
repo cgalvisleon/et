@@ -14,16 +14,37 @@ type Deferred struct {
 	s *Store
 }
 
+// syncMode dice cuánto espera una confirmación su fsync.
+type syncMode int
+
+const (
+	syncConfig   syncMode = iota // según SYNC_ON_WRITE
+	syncDeferred                 // sin esperar (Deferred, CommitDeferred)
+	syncAlways                   // siempre, aun con SYNC_ON_WRITE=false (un lote con DDL)
+)
+
 /**
-* syncCommit es la espera de una confirmación: con SYNC_ON_WRITE y si no es diferida, el WAL durable hasta lsn (group
-* commit); si no, solo el freno de las diferidas (deferredBrake). Siempre anota lsn como confirmado (noteCommit) antes
-* de volver, para que WaitDurable lo cubra.
-* @param lsn page.LSN: el del registro que confirma, deferred bool
+* modeOf traduce la marca de diferido de una escritura al modo de espera.
+* @param deferred bool
+* @return syncMode
+**/
+func modeOf(deferred bool) syncMode {
+	if deferred {
+		return syncDeferred
+	}
+	return syncConfig
+}
+
+/**
+* syncCommit es la espera de una confirmación: el WAL durable hasta lsn (group commit) con syncAlways, o con
+* syncConfig y SYNC_ON_WRITE; si no, solo el freno de las diferidas (deferredBrake). Siempre anota lsn como
+* confirmado (noteCommit) antes de volver, para que WaitDurable lo cubra.
+* @param lsn page.LSN: el del registro que confirma, mode syncMode
 * @return error
 **/
-func (e *Engine) syncCommit(lsn page.LSN, deferred bool) error {
+func (e *Engine) syncCommit(lsn page.LSN, mode syncMode) error {
 	e.noteCommit(lsn)
-	if deferred || !e.cfg.syncOnWrite {
+	if mode == syncDeferred || (mode == syncConfig && !e.cfg.syncOnWrite) {
 		return e.deferredBrake(lsn)
 	}
 	return e.log.WaitDurable(lsn)

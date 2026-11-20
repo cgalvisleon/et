@@ -113,8 +113,10 @@ func (s *Store) freezeStore(horizon page.XID) error {
 	}
 	frozen = s.e.frozen.atLeast(frozen)
 	opts := s.e.vacuumOptions(horizon, frozen)
-	opts.Free = s.freeDead
+	opts.Free, opts.NextXID = s.freeDead, s.e.txs.NextXID
 	st, err := s.tree.Vacuum(opts)
+	s.e.metrics.pagesDeleted.Add(int64(st.Deleted))
+	s.e.metrics.pagesRecycled.Add(int64(st.Recycled))
 	if err != nil {
 		return err
 	}

@@ -110,3 +110,96 @@ usados); el directorio temporal de IA (`~/etbench`) se borró; la VM quedó dete
 - Benchmarks en Linux con NVMe propio (aplazado por decisión del usuario).
 - Recorridos (`ForEach`/`ForEachRange`), p99 de lectura con 64 escritores y amplificación de escritura: tarea 41
   (fase 2).
+
+---
+
+# Tareas 71, 72 y 73 — medidas de producción (bloque A de F-23)
+
+Fecha: **2026-11-20**. Copia medida en 71 y 72: **`c28bc39` con `store/` sin cambios** (el sello dice `+cambios` por
+lo nuevo de `test/storebench`; a esa hora el árbol de `store/` estaba igual al commit). Subida con
+`test/linuxvm/run.sh` (`ETSTORE_SYNC_ONLY=1`) y guardada aparte en IA (`~/etbench/et.tgz`) para que otra subida no
+cambiara lo medido. Todo bajo el candado de `test/ci` (`~/etstore-ci/lock`), un proceso pesado a la vez, `nice`; la
+memoria libre de IA estuvo entre 83 % y 85 % (Ollama y el corrector siguieron sin tocarlos). La VM quedó en 4 GiB
+(no hizo falta subirla: el proceso no pasa de 567 MB) y detenida.
+
+Herramientas nuevas: `storebench -crashwal <MB> -dir d` (carga lotes durables de 20.000 claves sin `Close` hasta que el
+WAL por rehacer llega a esos MB y se mata con `SIGKILL`) y `storebench -recover -dir d` (mide `Open`, muestra `Count` y
+`Engine.Verify` y cierra); `test/storebench/medir.sh memoria|caida-mac|caida-vm` las corre en IA.
+
+```bash
+./test/storebench/medir.sh memoria                 # 71 (VM): STORE_CACHE_SIZE=512, 100 M claves, y dos reaperturas en frío
+./test/storebench/medir.sh caida-mac               # 72 (macOS de IA), 3 vueltas: CHECKPOINT_TIMEOUT=3600 storebench -crashwal 1024, luego -recover
+./test/storebench/medir.sh caida-vm                # 72 (VM), 3 vueltas, drop_caches antes de cada Open
+CRASH_MB=2048 REPS=1 ./test/storebench/medir.sh caida-mac   # 72: el máximo que acumula la configuración por omisión
+CRASH_MB=2048 REPS=1 ./test/storebench/medir.sh caida-vm
+```
+
+## Tarea 71 — memoria con caché de 512 MB y 100 millones de claves (VM)
+
+`STORE_CACHE_SIZE=512`, claves de 11 B, valores de 100 B, lotes de 20.000. Una corrida que carga, cierra, reabre y lee
+(un proceso) y dos reaperturas en procesos nuevos con la caché del SO vaciada (`drop_caches`). RSS máximo de
+`getrusage` (el de `/usr/bin/time -v` entre paréntesis).
+
+| | carga | heap vivo | RSS actual | RSS máximo | caché + % | `Open` | lectura fría p50 / p99 / p999 | en caché p50 / p99 |
+|---|---|---|---|---|---|---|---|---|
+| tras cargar (100 M) | 6 min 59 s (238.324 claves/s), 16.685 MB | 21 MB | 562 MB | **566 MB** (567) | **+10,5 %** | — | — | — |
+| tras reabrir y leer (mismo proceso) | — | 17 MB | 559 MB | 566 MB | +10,5 % | 172 ms | 133 / 350 / 721 µs | 6,0 / 7,5 µs |
+| proceso nuevo, frío, vuelta 1 | — | 17 MB | 555 MB | **555 MB** (555) | **+8,4 %** | 43 ms | 138 / 283 / 1.272 µs | 6,0 / 7,3 µs |
+| proceso nuevo, frío, vuelta 2 | — | 17 MB | 555 MB | 554 MB (555) | +8,3 % | 36 ms | 132 / 204 / 354 µs | 6,0 / 7,5 µs |
+
+**Resultado: casi.** Reabrir y leer cumple (+8,4 %); la carga pasa el criterio por 3 MB (566 MB contra el tope de
+563 MB, +10,5 %). Lo que no es caché sube con la caché: con 128 MB eran ~24 MB (heap vivo 6–7 MB), con 512 MB son
+~43–54 MB (heap vivo 17 MB tras abrir, 21 MB durante la carga). El heap crece unos 11 MB con la caché (estructuras por
+búfer en el heap de Go, probable; sin perfilar) y durante la carga se suma la holgura del recolector. Para cumplir
+también al cargar haría falta bajar el heap por búfer o el pico de la carga (perfilar con `pprof` el heap vivo con
+512 MB), o aceptar la meta como «caché + 10 % en régimen, + 11 % cargando». Los datos se borraron y `fstrim` liberó
+76,7 GiB (la VM volvió a 3,1 GB usados).
+
+## Tarea 72 — `Open` tras `kill -9` con ~1 GB de WAL por rehacer
+
+Configuración por omisión (`MAX_WAL_SIZE` 1024 MB, `WAL_SEGMENT_SIZE` 128 MB, `STORE_CACHE_SIZE` 128 MB,
+`SYNC_ON_WRITE` true) salvo `CHECKPOINT_TIMEOUT=3600`. Motor nuevo, lotes durables de 20.000 claves secuenciales de
+100 B (~200 B de WAL por clave). `Open` medido dentro del proceso (sin contar arrancarlo); después `Count` y
+`Engine.Verify` dieron lo esperado y limpio en todas las vueltas. En la VM la caché del SO se vació antes de cada
+`Open`; en macOS no se puede sin `sudo` (`purge`), así que el WAL pudo estar en la caché del SO.
+
+| equipo | vuelta | claves | WAL por rehacer | `Open` | MB/s | RSS máx. al recuperar |
+|---|---|---|---|---|---|---|
+| macOS IA (NVMe) | 1 | 5,10 M | 1.025 MB | 2,386 s | 430 | 152 MB |
+| macOS IA (NVMe) | 2 | 5,10 M | 1.025 MB | 2,422 s | 423 | 152 MB |
+| macOS IA (NVMe) | 3 | 5,10 M | 1.025 MB | 2,402 s | 427 | 152 MB |
+| VM Linux (frío) | 1 | 5,10 M | 1.025 MB | 2,453 s | 418 | 148 MB |
+| VM Linux (frío) | 2 | 5,10 M | 1.025 MB | 2,477 s | 414 | 148 MB |
+| VM Linux (frío) | 3 | 5,10 M | 1.025 MB | 2,453 s | 418 | 148 MB |
+| macOS IA, máximo natural | 1 | 13,62 M | 1.071 MB (pico visto 1.125) | 2,520 s | 425 | 152 MB |
+| VM Linux, máximo natural | 1 | 13,74 M | 1.077 MB (pico visto 1.133) | 2,492 s | 432 | 148 MB |
+
+**Resultado: cumple** (≤ 5 s): ~2,4–2,5 s por GB en los dos equipos, ~420 MB/s de rehacer (lo pone la CPU, no el
+disco: macOS con el WAL en caché y la VM en frío dan lo mismo).
+
+**El checkpoint por volumen.** Se dispara a `MAX_WAL_SIZE / 1,9` = 539 MB, pero el WAL por rehacer se cuenta desde el
+punto de rehacer del último checkpoint **terminado**, y mientras uno corre (escribe páginas, 7–11 s con esta carga) el
+WAL sigue creciendo. Con carga continua el primero no había terminado al llegar a 1.025 MB, así que el GB por rehacer
+se alcanza con la configuración por omisión. Dejando correr tres checkpoints, el máximo que se acumula es
+~1.125–1.133 MB (539 MB + lo escrito durante el checkpoint); el tope duro es el freno de los escritores en
+2 × `MAX_WAL_SIZE` = 2 GB, que a ~420 MB/s se rehace en ~4,9 s. **La cota de 5 s se cumple con `MAX_WAL_SIZE` = 1024
+aun en el peor caso** (2 GB); con 1.536 MB el peor caso (3 GB) daría ~7 s. Cota propuesta para la documentación: «~2,5
+s por GB de WAL; con la configuración por omisión ≤ 3 s en régimen y ≤ 5 s en el tope del freno».
+
+**`Stats.WALSinceCheckpoint` se queda corto mientras corre un checkpoint.** Mide `SizeSince(RedoPoint())`, y
+`BeginCheckpoint` mueve el punto de rehacer al *empezar*: en las vueltas de arriba marcaba 420–537 MB con 1.025–1.077
+MB por rehacer. Lo que rehace la recuperación es `walBacklog()` (desde el del último checkpoint terminado), que no se
+expone. `storebench -crashwal` lo reconstruye (`redoTracker`: suma lo escrito y anota dónde empezó cada checkpoint,
+error ≤ un lote ≈ 4 MB). Queda como hallazgo para `store/` (no tocado): exponer el backlog real en `Stats` o aclarar
+el comentario del campo.
+
+## Tarea 73 — fuzzers 8 h (macOS de IA)
+
+`./test/ci/fuzzlong.sh`: los 10 `func Fuzz` de `store/` uno a la vez, `-fuzztime 48m -parallel 4`, `nice -n 15`,
+`-fuzzminimizetime 10s` (`page` 1x), con `nohup` bajo el candado. Lanzada el 2026-11-20 a las 11:38 sobre `c28bc39` con
+`store/` sin cambios (una primera de 11:37 tomó la copia de trabajo con la tarea 70 a medio hacer —
+`FuzzOpenDamaged/seed#0` fallaba con «root, fast root or deleted head is the meta page»— y se descartó:
+`~/etstore-ci/descartada-fuzzlong-20261120-113725`). Fin previsto **19:58**: no pasa por las 03:00, el nocturno queda
+igual. Estado: **en curso**; consultar con `./test/ci/status.sh fuzzlong` (resumen en
+`~/etstore-ci/fuzzlong-20261120-113812/summary.txt`, al terminar `~/etstore-ci/last-fuzzlong.txt`; casos nuevos en
+`~/etstore-ci/fuzz-found/`). Mientras corre, `ci.sh` espera el candado (hasta 1 h) y falla si no lo obtiene.

@@ -694,7 +694,7 @@ func TestFlushAllWaitsWriteInFlight(t *testing.T) {
 	}
 	writing := make(chan error, 1)
 	go func() {
-		writing <- p.flush(d)
+		writing <- p.flush(d, false)
 		p.unpin(d)
 	}()
 	<-stall.started
@@ -736,5 +736,48 @@ func mustNil(t *testing.T, err error) {
 	t.Helper()
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+// TestVictimBusySkipped: la víctima que elige el reemplazo está sucia y otro tiene su contenido en exclusivo (la
+// fijó después de que el clock-sweep la eligiera). Pin no espera ese bloqueo —quien pide puede tener otras páginas
+// bloqueadas y cerrar un ciclo, tarea 91—: la suelta y reemplaza otra. Antes se colgaba en content.RLock.
+func TestVictimBusySkipped(t *testing.T) {
+	e := newOSEnv(t, 3)
+	e.writeDisk(t, 4)
+	busy := e.newBlock(t, 1, 900) // sucio
+	touch(t, e.pool, tag1(0), Normal)
+	pinned, err := e.pool.Pin(tag1(1), Normal) // el tercer búfer queda fijado
+	mustNil(t, err)
+	defer pinned.Release()
+
+	p := e.pool
+	v := &p.descs[mustLookup(t, p, tag1(busy))]
+	v.mu.Lock()
+	v.usage = 0
+	v.mu.Unlock()
+	p.hand.Store(uint64(v.id)) // el clock-sweep empieza por la víctima ocupada
+	v.content.Lock()           // otro la tiene en exclusivo
+	defer v.content.Unlock()
+
+	done := make(chan error, 1)
+	go func() {
+		h, err := p.Pin(tag1(2), Normal)
+		if err == nil {
+			h.Release()
+		}
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		mustNil(t, err)
+	case <-time.After(2 * time.Second):
+		t.Fatal("Pin waited for the content lock of a busy victim")
+	}
+	if !p.cached(tag1(busy)) {
+		t.Fatal("the busy victim was evicted")
+	}
+	if p.cached(tag1(0)) {
+		t.Fatal("block 0 should have been replaced instead of the busy victim")
 	}
 }

@@ -88,8 +88,10 @@ type parentLinks struct {
 * quedan todo-visibles o todo-congeladas. Con mapa y un árbol de dos niveles o más recorre las hojas por los enlaces
 * del nivel 1 y salta, sin leerlas, las que el mapa da por todo-congeladas (y sin Aggressive, también las
 * todo-visibles); si no, recorre todas por sus enlaces. Las versiones con desborde se marcan «liberándose» en el
-* mismo registro (KindLeafVacuum), se libera su cadena con opts.Free y recién entonces se quitan (pregunta 58). Puede
-* correr con lecturas y escrituras; quien llama no corre dos limpiezas del mismo store a la vez.
+* mismo registro (KindLeafVacuum), se libera su cadena con opts.Free y recién entonces se quitan (pregunta 58). Antes
+* de recorrer recicla las páginas borradas que ya nadie puede ver, y cada hoja que queda vacía se borra del árbol
+* (deleteLeaf; «Borrado de páginas» en doc.go). Puede correr con lecturas y escrituras; quien llama no corre dos
+* limpiezas del mismo store a la vez.
 * @param opts VacuumOptions
 * @return VacuumStats, error
 **/
@@ -97,7 +99,14 @@ func (t *BTree) Vacuum(opts VacuumOptions) (VacuumStats, error) {
 	opts.FreezeLimit = min(opts.FreezeLimit, opts.Horizon)
 	r := &vacuumRun{t: t, opts: opts}
 	r.st.FrozenXID = opts.Horizon
-	m, err := t.readMeta()
+	err := t.recycle(opts, &r.st)
+	if err == nil {
+		err = t.finishLeftmost(opts, &r.st)
+	}
+	var m meta
+	if err == nil {
+		m, err = t.readMeta()
+	}
 	if err == nil {
 		if m.level == 0 || t.vm == nil {
 			err = r.leftmostChain()
@@ -107,6 +116,40 @@ func (t *BTree) Vacuum(opts VacuumOptions) (VacuumStats, error) {
 	}
 	r.st.Complete = err == nil && r.st.SkippedVisible == 0
 	return r.st, err
+}
+
+/**
+* finishLeftmost termina los borrados a medias que quedaron a la izquierda de la primera hoja con enlace: esas hojas
+* medio muertas no se alcanzan bajando (su espacio de claves ya es de su hermana derecha) ni siguiendo enlaces a la
+* derecha desde ahí, así que se buscan por los enlaces izquierdos.
+* @param opts VacuumOptions, st *VacuumStats
+* @return error
+**/
+func (t *BTree) finishLeftmost(opts VacuumOptions, st *VacuumStats) error {
+	for {
+		h, n, _, err := t.descend(minusInf, 0, buffer.Share, false)
+		if err != nil {
+			return err
+		}
+		blk, prev := n.blk, n.o.Prev
+		h.Release()
+		if prev == 0 {
+			return nil
+		}
+		for prev != 0 {
+			if h, n, err = t.lockNode(prev, buffer.Share); err != nil {
+				return err
+			}
+			blk, prev = n.blk, n.o.Prev
+			h.Release()
+		}
+		if !n.halfDead() {
+			return corruptAt(blk, "leaf left of the first linked leaf is not half-dead")
+		}
+		if err := t.unlinkHalfDead(blk, opts, st); err != nil {
+			return err
+		}
+	}
 }
 
 /**
@@ -254,10 +297,19 @@ func (r *vacuumRun) leaf(blk page.BlockNumber) (page.BlockNumber, error) {
 		return 0, corruptAt(blk, "vacuum reached a page of level %d", n.o.Level)
 	}
 	next := n.o.Next
+	if n.ignore() { // medio muerta (un corte dejó su borrado a medias) o borrada: se termina, no se limpia
+		half := n.halfDead()
+		h.Release()
+		if half {
+			return next, r.t.unlinkHalfDead(blk, r.opts, &r.st)
+		}
+		return next, nil
+	}
 	plan, err := r.t.planLeaf(n, r.opts, &r.carry)
 	if err == nil {
 		err = r.t.vacuumLeaf(h, n, plan, r.opts.XID)
 	}
+	empty := n.dataCount() == 0
 	h.Release()
 	if err != nil {
 		return 0, err
@@ -266,7 +318,13 @@ func (r *vacuumRun) leaf(blk page.BlockNumber) (page.BlockNumber, error) {
 	r.st.Removed += len(plan.remove)
 	r.st.Frozen += len(plan.freeze)
 	r.st.FrozenXID = min(r.st.FrozenXID, plan.oldest)
-	return next, r.t.freeChains(blk, plan.chains, r.opts, &r.st)
+	if err := r.t.freeChains(blk, plan.chains, r.opts, &r.st); err != nil {
+		return 0, err
+	}
+	if empty || len(plan.chains) > 0 {
+		err = r.t.deleteLeaf(blk, r.opts, &r.st)
+	}
+	return next, err
 }
 
 /**
@@ -316,12 +374,15 @@ func (t *BTree) planLeaf(n node, opts VacuumOptions, carry *vacuumGroup) (leafPl
 		}
 	}
 	if g != nil { // una hoja vacía deja pasar el grupo de la anterior
+		shared := false
 		if continuesRight(n, g.id) {
-			shared, err := t.rightStartsWith(n, g.id)
-			if err != nil {
+			var err error
+			if shared, err = t.rightStartsWith(n, g.id); err != nil {
 				return leafPlan{}, err
 			}
-			plan.shared = plan.shared || shared
+		}
+		if shared {
+			plan.shared = true
 		} else {
 			plan.endGroup(g)
 		}
@@ -335,15 +396,16 @@ func (t *BTree) planLeaf(n node, opts VacuumOptions, carry *vacuumGroup) (leafPl
 /**
 * finish decide, con todo lo que queda en la hoja, qué se congela (confirmada y xid < FreezeLimit), el menor xid sin
 * congelar y los bits del mapa: todo-visible si todo lo que queda es visible para todos, todo-congelada si además todo
-* queda congelado. Una hoja con partición incompleta o que comparte un id con una vecina no lleva bits.
+* queda congelado. Una hoja con partición incompleta, que comparte un id con una vecina o que queda vacía no lleva bits.
 * @param n node, opts VacuumOptions
 **/
 func (plan *leafPlan) finish(n node, opts VacuumOptions) {
-	allFrozen := true
+	allFrozen, remaining := true, 0
 	for _, k := range plan.kept {
 		if _, removed := slices.BinarySearch(plan.remove, k.off); removed {
 			continue
 		}
+		remaining++
 		committed := k.status == xact.StatusCommitted
 		if !k.frozen && !(committed && k.xid < opts.Horizon) {
 			plan.busy = true
@@ -357,8 +419,8 @@ func (plan *leafPlan) finish(n node, opts VacuumOptions) {
 			plan.oldest = min(plan.oldest, k.xid)
 		}
 	}
-	if plan.busy || plan.shared || n.incomplete() {
-		return
+	if plan.busy || plan.shared || n.incomplete() || remaining == 0 {
+		return // una hoja que queda vacía no lleva bits: se va a borrar (y si no se puede, la próxima pasada la mira)
 	}
 	plan.vmBits = fsm.VMAllVisible
 	if allFrozen {
@@ -468,30 +530,38 @@ func continuesRight(n node, id []byte) bool {
 }
 
 /**
-* rightStartsWith dice si la hermana derecha de la hoja todavía empieza con versiones de id: la bloquea en compartido
-* con la hoja bloqueada (de izquierda a derecha, como latest). Cuando la limpieza ya quitó esas versiones, la clave alta
-* sigue nombrando el id pero la hoja ya no comparte nada y puede llevar bits: una versión nueva del id va siempre a la
-* izquierda de la clave alta, así que la hermana no vuelve a tener ese id.
+* rightStartsWith dice si a la derecha de la hoja todavía hay versiones de id: si la primera hoja con entradas a su
+* derecha empieza con ese id (las versiones de un id van juntas, así que una hoja vacía o que se está borrando en el
+* medio no corta la cadena). Bloquea cada hermana en compartido con la hoja bloqueada, de izquierda a derecha y de a
+* una (como latest). Cuando la limpieza ya quitó esas versiones, la clave alta sigue nombrando el id pero la hoja ya
+* no comparte nada: puede llevar bits y su lápida de referencia se quita. Una versión nueva del id va siempre a la
+* izquierda de la clave alta (a esta hoja, que está bloqueada), así que la derecha no vuelve a tener ese id.
 * @param n node: la hoja, no la de más a la derecha; id []byte
 * @return bool, error
 **/
 func (t *BTree) rightStartsWith(n node, id []byte) (bool, error) {
-	h, rn, err := t.lockNode(n.o.Next, buffer.Share)
-	if err != nil {
-		return false, err
+	blk := n.o.Next
+	for {
+		h, rn, err := t.lockNode(blk, buffer.Share)
+		if err != nil {
+			return false, err
+		}
+		if rn.o.Level != n.o.Level {
+			h.Release()
+			return false, corruptAt(rn.blk, "right sibling at level %d, expected %d", rn.o.Level, n.o.Level)
+		}
+		if rn.dataCount() > 0 {
+			e, err := rn.entryAt(rn.firstData())
+			h.Release()
+			return err == nil && bytes.Equal(e.id(), id), err
+		}
+		next := rn.o.Next
+		h.Release()
+		if next == 0 {
+			return false, nil
+		}
+		blk = next
 	}
-	defer h.Release()
-	if rn.o.Level != n.o.Level {
-		return false, corruptAt(rn.blk, "right sibling at level %d, expected %d", rn.o.Level, n.o.Level)
-	}
-	if rn.dataCount() == 0 {
-		return false, nil
-	}
-	e, err := rn.entryAt(rn.firstData())
-	if err != nil {
-		return false, err
-	}
-	return bytes.Equal(e.id(), id), nil
 }
 
 /**
@@ -549,10 +619,12 @@ func (t *BTree) removeFreeing(blk page.BlockNumber, vs []Version, xid page.XID) 
 	for _, v := range vs {
 		k := key{id: []byte(v.ID), lsn: v.LSN}
 		for {
-			past, err := n.pastHighKey(k)
-			if err != nil {
-				h.Release()
-				return removed, err
+			past := n.ignore() // una que se está borrando no tiene entradas: se sigue a la derecha
+			if !past {
+				if past, err = n.pastHighKey(k); err != nil {
+					h.Release()
+					return removed, err
+				}
 			}
 			if !past {
 				break

@@ -34,6 +34,8 @@ type Stats struct {
 	// Versiones por limpiar y transacciones
 	WritesSinceVacuum int64  // escrituras desde la última limpieza: lo que mira VACUUM_THRESHOLD
 	Vacuums           int64  // limpiezas del motor (Vacuum y la de fondo)
+	PagesDeleted      int64  // páginas del árbol borradas por la limpieza (hojas vacías y padres sin hijos)
+	PagesRecycled     int64  // páginas borradas devueltas a la lista de libres (ya nadie podía verlas)
 	OpenBatches       int64  // lotes abiertos
 	OpenSnapshots     int64  // snapshots abiertos
 	NextXID           uint64 // el próximo xid a asignar
@@ -97,6 +99,8 @@ type engineMetrics struct {
 	checkpointTook atomic.Int64 // duración del último checkpoint, en ns
 	vacuums        atomic.Int64
 	vacuumWrites   atomic.Int64 // Engine.writes al empezar la última limpieza
+	pagesDeleted   atomic.Int64 // páginas del árbol desenganchadas por la limpieza
+	pagesRecycled  atomic.Int64 // páginas borradas devueltas a la lista de libres
 	openBatches    atomic.Int64
 	openSnapshots  atomic.Int64
 	diskFull       atomic.Int64 // operaciones rechazadas con ErrDiskFull sin tocar el motor
@@ -160,6 +164,8 @@ func (e *Engine) stats() Stats {
 
 		WritesSinceVacuum: e.writes.Load() - m.vacuumWrites.Load(),
 		Vacuums:           m.vacuums.Load(),
+		PagesDeleted:      m.pagesDeleted.Load(),
+		PagesRecycled:     m.pagesRecycled.Load(),
 		OpenBatches:       m.openBatches.Load(),
 		OpenSnapshots:     m.openSnapshots.Load(),
 		NextXID:           uint64(e.txs.NextXID()),

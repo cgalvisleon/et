@@ -22,6 +22,7 @@ const metaFreeHead = page.HeaderSize + 24
 type audit struct {
 	blocks   int // bloques del fork principal
 	tree     int // páginas del árbol (sin la meta)
+	deleted  int // páginas borradas del árbol que esperan reciclarse
 	free     int // páginas en la lista de libres
 	chains   int // páginas de desborde de las versiones del árbol
 	overflow int // páginas marcadas de desborde
@@ -29,9 +30,10 @@ type audit struct {
 	versions int // versiones que ve un recorrido (las vivas)
 }
 
-// orphans son las páginas que no son del árbol, de la lista de libres ni de una cadena de una versión.
+// orphans son las páginas que no son del árbol (enganchadas o borradas), de la lista de libres ni de una cadena de una
+// versión.
 func (a audit) orphans() int {
-	return a.blocks - 1 - a.tree - a.free - a.chains
+	return a.blocks - 1 - a.tree - a.deleted - a.free - a.chains
 }
 
 /**
@@ -64,7 +66,7 @@ func auditStore(t testing.TB, s *Store) audit {
 	a := audit{blocks: int(n)}
 	st, err := s.tree.Verify()
 	mustOK(t, err)
-	a.tree, a.entries = st.Pages, st.Entries
+	a.tree, a.deleted, a.entries = st.Pages, st.Deleted, st.Entries
 
 	owner := map[page.BlockNumber]string{}
 	claim := func(blk page.BlockNumber, who string) {

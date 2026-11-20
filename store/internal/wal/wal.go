@@ -17,8 +17,10 @@ const (
 	// BlockHeaderSize es el largo del encabezado de una referencia a bloque.
 	BlockHeaderSize = 16
 
-	// MaxBlocks es la cantidad máxima de bloques de un registro (una partición toca tres).
-	MaxBlocks = 4
+	// MaxBlocks es la cantidad máxima de bloques de un registro: una partición toca tres; el desenganche de una página
+	// del árbol (btree KindUnlinkPage), cinco —la página, sus dos hermanas, la hoja medio muerta y la meta—, como el
+	// XLOG_BTREE_UNLINK_PAGE_META de nbtree.
+	MaxBlocks = 5
 
 	// MaxRecordSize es el largo máximo de un registro: MaxBlocks imágenes y deltas de una página y sus encabezados
 	// caben con holgura. Como WAL_SEGMENT_SIZE ≥ MinSegmentSize, un registro siempre cabe en un segmento.

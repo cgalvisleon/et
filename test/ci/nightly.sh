@@ -33,6 +33,13 @@ THRESHOLD=${THRESHOLD:-10}
 BENCH_RUNS=${BENCH_RUNS:-3}
 BASELINE=$CI/baseline.tsv
 
+# Una marca ~/etstore-ci/skip-nightly-<AAAAMMDD> salta la noche de esa fecha (la deja fuzzlong.sh si su corrida
+# larga pasa por las 03:00, o a mano); se borra al usarla.
+if [ -e "$CI/skip-nightly-$(date +%Y%m%d)" ]; then
+  echo "$(date '+%F %T') nocturno saltado: $(cat "$CI/skip-nightly-$(date +%Y%m%d)")" | tee -a "$CI/nightly-skipped.txt"
+  rm -f "$CI/skip-nightly-$(date +%Y%m%d)"
+  exit 0
+fi
 take_lock 10800 || exit 1
 take_snapshot || exit 1
 OUT=$CI/nightly-$(date +%Y%m%d-%H%M%S)
@@ -131,31 +138,7 @@ fi
 
 # ---------- 2. fuzzers ----------
 
-# fuzz_one <paquete> <Fuzzer>: corre un fuzzer y guarda los casos nuevos que deje en testdata/fuzz/<Fuzzer>.
-fuzz_one() {
-  local pkg=$1 fn=$2 corpus before extra=()
-  corpus=$SRC/$pkg/testdata/fuzz/$fn
-  before=$(ls "$corpus" 2>/dev/null)
-  # Minimizar una entrada nueva dura hasta 60 s por omisión: con un -fuzztime corto el fuzzer termina con
-  # «context deadline exceeded» sin haber fallado. Se acota (page, como siempre, con 1x).
-  extra=(-fuzzminimizetime "$FUZZ_MINIMIZE")
-  [ "$pkg" = store/internal/page ] && extra=(-fuzzminimizetime 1x)
-  mac_go test "./$pkg" -run '^$' -fuzz "^$fn\$" -fuzztime "$FUZZTIME" -parallel "$FUZZ_PARALLEL" "${extra[@]}"
-  local rc=$? f
-  for f in $(ls "$corpus" 2>/dev/null); do
-    grep -qx "$f" <<<"$before" && continue
-    for dest in "$OUT/fuzz-found/$pkg/$fn" "$CI/fuzz-found/$pkg/$fn"; do mkdir -p "$dest" && cp "$corpus/$f" "$dest/"; done
-    echo "CASO NUEVO: $pkg/testdata/fuzz/$fn/$f"
-  done
-  return $rc
-}
-
-while read -r file fn; do
-  pkg=$(dirname "${file#"$SRC"/}")
-  if ! step "fuzz-${pkg##*/}-$fn" 1800 fuzz_one "$pkg" "$fn"; then
-    grep '^CASO NUEVO' "$OUT/fuzz-${pkg##*/}-$fn.log" | sed 's/^/         /' | tee -a "$SUMMARY"
-  fi
-done < <(grep -rH '^func Fuzz' --include='*_test.go' "$SRC/store" | sed -E 's/^([^:]+):func (Fuzz[A-Za-z0-9_]*).*/\1 \2/' | sort)
+fuzz_all   # lib.sh: cada func Fuzz de store/, uno a la vez, FUZZTIME cada uno
 
 # ---------- 3. cortes en la VM ----------
 

@@ -225,12 +225,16 @@ func (e *Engine) writeControl(state control.State, info checkpointInfo, lsn page
 		FrozenXID:       info.frozen,
 	}
 	if e.hasControl {
-		return e.ctl.Write(c)
+		if err := e.ctl.Write(c); err != nil {
+			return err
+		}
+	} else {
+		if err := e.ctl.Create(c); err != nil {
+			return err
+		}
+		e.hasControl = true
 	}
-	if err := e.ctl.Create(c); err != nil {
-		return err
-	}
-	e.hasControl = true
+	e.ctlRedo.Store(uint64(info.redo.LSN))
 	return nil
 }
 

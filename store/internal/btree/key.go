@@ -14,11 +14,14 @@ const MaxLSN page.LSN = math.MaxUint64
 
 // key es una clave del árbol: (id ascendente por bytes, lsn descendente). Es la misma para entradas, pivotes y
 // búsquedas: un pivote (k, l) manda a la derecha toda clave ≥ (k, l). top es mayor que toda clave (recorrer hacia
-// atrás desde el final). id puede ser una vista dentro de una página: vale mientras la página siga bloqueada.
+// atrás desde el final). before es una clave de búsqueda apenas menor que (id, lsn): baja hasta la página cuya clave
+// alta es (id, lsn), no hasta su hermana derecha (como pivotsearch de nbtree; lo usa el borrado de páginas para hallar
+// el padre). id puede ser una vista dentro de una página: vale mientras la página siga bloqueada.
 type key struct {
-	id  []byte
-	lsn page.LSN
-	top bool
+	id     []byte
+	lsn    page.LSN
+	top    bool
+	before bool
 }
 
 // minusInf es la clave del primer enlace de una página interna: menor que toda clave real (los ids miden 1 o más).
@@ -35,7 +38,8 @@ func searchKey(id []byte) key {
 }
 
 /**
-* compareKeys ordena dos claves: id ascendente, después lsn descendente (la versión más nueva primero).
+* compareKeys ordena dos claves: id ascendente, después lsn descendente (la versión más nueva primero); con todo
+* igual, la que tiene before va primero.
 * @param a, b key
 * @return int: -1, 0 o 1
 **/
@@ -51,7 +55,16 @@ func compareKeys(a, b key) int {
 	if c := bytes.Compare(a.id, b.id); c != 0 {
 		return c
 	}
-	return cmp.Compare(b.lsn, a.lsn)
+	if c := cmp.Compare(b.lsn, a.lsn); c != 0 {
+		return c
+	}
+	switch {
+	case a.before == b.before:
+		return 0
+	case a.before:
+		return -1
+	}
+	return 1
 }
 
 /**
@@ -90,5 +103,5 @@ func commonPrefix(a, b []byte) int {
 * @return key
 **/
 func cloneKey(k key) key {
-	return key{id: bytes.Clone(k.id), lsn: k.lsn, top: k.top}
+	return key{id: bytes.Clone(k.id), lsn: k.lsn, top: k.top, before: k.before}
 }

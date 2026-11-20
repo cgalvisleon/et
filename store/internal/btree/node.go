@@ -2,8 +2,12 @@ package btree
 
 import "github.com/cgalvisleon/et/store/internal/page"
 
-// notTreePage son las marcas de páginas que no son del árbol (o que el árbol de la fase 1 no usa).
-const notTreePage = page.OpaqueMeta | page.OpaqueFree | page.OpaqueOverflow | page.OpaqueDeleted | page.OpaqueHalfDead
+// notTreePage son las marcas de páginas que no son del árbol.
+const notTreePage = page.OpaqueMeta | page.OpaqueFree | page.OpaqueOverflow
+
+// ignoredPage son las marcas de las páginas que se están borrando: un recorrido las salta siguiendo a la derecha (como
+// P_IGNORE de nbtree).
+const ignoredPage = page.OpaqueDeleted | page.OpaqueHalfDead
 
 // capacity es el espacio de una página del árbol para ítems y sus punteros.
 const capacity = page.Size - page.HeaderSize - page.OpaqueSize
@@ -22,7 +26,8 @@ type node struct {
 /**
 * readNode valida una página del árbol: iniciada, con espacio especial de árbol, nivel coherente con la marca de
 * hoja, punteros a ítems sanos (page.CheckItems: la caché solo verifica la suma) y clave alta si no es la de más a la
-* derecha.
+* derecha. Una página borrada se valida con checkDeleted (no tiene clave alta: solo sus datos de borrada); una medio
+* muerta es una hoja vacía con su clave alta.
 * @param blk page.BlockNumber, p page.Page
 * @return node, error: ErrCorrupt con el bloque
 **/
@@ -41,8 +46,14 @@ func readNode(blk page.BlockNumber, p page.Page) (node, error) {
 		return node{}, corruptAt(blk, "%v", err)
 	}
 	n := node{blk: blk, p: p, o: o}
+	if n.deleted() {
+		return n, checkDeleted(n)
+	}
 	if n.firstData() > n.maxOff()+1 {
 		return node{}, corruptAt(blk, "page without its high key")
+	}
+	if n.halfDead() && (!n.leaf() || n.dataCount() != 0 || n.rightmost()) {
+		return node{}, corruptAt(blk, "half-dead page that is not an empty leaf with a high key")
 	}
 	return n, nil
 }
@@ -55,6 +66,18 @@ func (n node) rightmost() bool { return n.o.Next == 0 }
 
 // incomplete dice si su hermana derecha todavía no tiene enlace en el padre.
 func (n node) incomplete() bool { return n.o.Flags&page.OpaqueIncompleteSplit != 0 }
+
+// root dice si lleva la marca de raíz.
+func (n node) root() bool { return n.o.Flags&page.OpaqueRoot != 0 }
+
+// deleted dice si la página está borrada (desenganchada de sus hermanas, esperando que se recicle).
+func (n node) deleted() bool { return n.o.Flags&page.OpaqueDeleted != 0 }
+
+// halfDead dice si es una hoja medio muerta: vacía, sin enlace en el padre y todavía enganchada a sus hermanas.
+func (n node) halfDead() bool { return n.o.Flags&page.OpaqueHalfDead != 0 }
+
+// ignore dice si un recorrido la salta siguiendo a la derecha (borrada o medio muerta).
+func (n node) ignore() bool { return n.o.Flags&ignoredPage != 0 }
 
 // firstData es el número del primer ítem de datos.
 func (n node) firstData() page.OffsetNumber {

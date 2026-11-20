@@ -17,6 +17,26 @@
 // sigue en el siguiente. Un segmento reciclado (renombrado a un número futuro tras un checkpoint) conserva registros
 // viejos con CRC válido: el chequeo de lsn contiguo los descarta.
 //
+// # Marca de sellado (tarea 90)
+//
+// Los registros de un segmento terminan antes de WAL_SEGMENT_SIZE − TrailerSize (TrailerSize = 32; Open exige
+// WAL_SEGMENT_SIZE ≥ MaxRecordSize + TrailerSize). Al sellarlo (rotate: Switch, o un registro que no cabe), después
+// del fsync de sus registros se escribe en sus últimos 32 bytes la marca de sellado y se hace otro fsync, así la marca
+// nunca es durable antes que los registros que promete (un fsync fallido no deja un WAL que no abre):
+//
+//	0   4 crc     CRC-32C de [4, 32)
+//	4   4 magic   0x4c414553 («SEAL»)
+//	8   8 cero    donde un registro tendría totalLen: la marca nunca pasa por un registro
+//	16  8 num     número del segmento (uno reciclado conserva la de su número viejo, que no vale para el nuevo)
+//	24  8 end     desplazamiento siguiente a su último registro
+//
+// Al abrir, solo el último segmento sin sellar puede terminar en un registro roto (una cola de escrituras sin fsync).
+// Si el final válido cae antes del end de la marca de su segmento, o queda un segmento sellado después del final, es
+// corrupción (bit rot, una escritura perdida por el disco): Open devuelve ErrCorrupted sin cortar nada (checkSealed),
+// salvo que el corte sea el objetivo de Options.StopLSN. Un segmento sin marca (escrito por una versión anterior, o con
+// registros en esa zona) se trata como antes. Un segmento sellado que Open reabre como activo (el siguiente quedó
+// vacío) sigue recibiendo registros después de su end: la marca vieja solo protege lo que ya promete.
+//
 // # Registro (little-endian)
 //
 //	encabezado (HeaderSize = 32)
@@ -64,14 +84,16 @@
 //	KindOverflowWrite (overflow) una página de desborde nueva (BlockWillInit) con su trozo del valor
 //
 // Los demás Kind de btree, overflow y fsm están en kind.go (KindSetFrozen, 23, es el frozenXID de la meta de un store;
-// KindLeafVacuum también congela).
+// KindLeafVacuum también congela; KindMarkHalfDead, KindUnlinkPage y KindRecyclePage, 24 a 26, son el borrado de
+// páginas del árbol).
 //
 // # Abrir y recuperar
 //
 // Open(fs, dir, opts, redo, fn) recorre el WAL desde redo (el punto de rehacer del control, o Start = segmento 1,
-// desplazamiento 0, lsn 1 en un motor nuevo) llamando a fn con cada registro, corta la cola (el resto del último
-// segmento válido y los segmentos siguientes enteros: un registro viejo nunca confirmado podría quedar justo donde
-// termina uno nuevo) y deja el WAL listo para escribir a continuación. NewReader da un Reader para recorrer sin
+// desplazamiento 0, lsn 1 en un motor nuevo) llamando a fn con cada registro, comprueba que el final no corte un
+// segmento sellado (ver «Marca de sellado»), corta la cola (el resto del último segmento válido y los segmentos
+// siguientes enteros: un registro viejo nunca confirmado podría quedar justo donde termina uno nuevo) y deja el WAL
+// listo para escribir a continuación. NewReader da un Reader para recorrer sin
 // escribir. Options.Spares es cuántos segmentos reciclados se guardan; Recycle borra el resto. MakeImage y
 // RestoreImage (o BlockRef.SetImage y BlockRef.RestoreImage) arman y restauran las imágenes de página entera.
 //

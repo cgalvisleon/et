@@ -61,7 +61,7 @@ func (t *BTree) finishSplitOnce(blk page.BlockNumber) (bool, error) {
 
 /**
 * insertPivot pone en el padre de la hija el enlace a su hermana derecha, con la hija bloqueada (de hija a padre),
-* y le apaga OpaqueIncompleteSplit en el mismo registro. Si el padre no tiene lugar, lo parte y pide repetir; si el
+* y le apaga OpaqueIncompleteSplit en el mismo registro (con la meta, si la raíz rápida sube al padre). Si el padre no tiene lugar, lo parte y pide repetir; si el
 * camino tiene una partición incompleta, la termina y pide repetir. Consume h.
 * @param h buffer.Handle, n node: la hija, bloqueada en exclusivo e incompleta
 * @param link []byte: el pivote (clave alta de la hija, enlace a su hermana derecha)
@@ -87,12 +87,45 @@ func (t *BTree) insertPivot(h buffer.Handle, n node, link []byte) (bool, error) 
 	}
 	refs := []wal.BlockRef{{Delta: itemDelta(pos, link)}, {}}
 	hs := []buffer.Handle{ph, h}
+	metaH, err := t.fastRootUp(n, pn)
+	if err != nil {
+		releaseAll(hs...)
+		return false, err
+	}
+	if metaH != nil {
+		refs = append(refs, wal.BlockRef{Delta: metaFastDelta(pn.blk, pn.o.Level)})
+		hs = append(hs, metaH)
+	}
 	res, err := t.logChange(wal.KindInsertPivot, 0, 0, refs, hs, nil)
 	releaseAll(hs...)
 	if err != nil {
 		return false, err
 	}
 	return true, res.Write()
+}
+
+/**
+* fastRootUp decide si la raíz rápida sube al padre (como split_only_page en _bt_insertonpg): la hija que se partió es
+* la de más a la izquierda de su nivel y la raíz rápida está en su nivel o más abajo, así que ese nivel dejó de tener
+* una sola página. Bloquea la meta en exclusivo después de las páginas del árbol.
+* @param n node: la hija, pn node: el padre, los dos bloqueados en exclusivo
+* @return buffer.Handle: la meta bloqueada si sube (nil si no), error
+**/
+func (t *BTree) fastRootUp(n, pn node) (buffer.Handle, error) {
+	if n.o.Prev != 0 {
+		return nil, nil
+	}
+	h, err := t.pool.Pin(t.tag(MetaBlock), buffer.Normal)
+	if err != nil {
+		return nil, err
+	}
+	h.Lock(buffer.Exclusive)
+	m, err := readMetaPage(h.Page())
+	if err != nil || m.fastLevel > n.o.Level || m.fastRoot == pn.blk {
+		h.Release()
+		return nil, err
+	}
+	return h, nil
 }
 
 /**

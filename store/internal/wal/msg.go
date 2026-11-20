@@ -24,6 +24,8 @@ const (
 	MSG_NO_ROOM         = "%w: %d bytes ready, %d needed: %w"
 	MSG_NOT_SEALED      = "wal: segment %d is not sealed (the active segment is %d)"
 	MSG_SEGMENT_EMPTY   = "wal: %w: sealed segment %d has no valid first record"
+	MSG_SEALED_CUT      = "wal: %w: invalid record in sealed segment %d at offset %d (lsn %d), its records end at offset %d"
+	MSG_SEALED_AFTER    = "wal: %w: sealed segment %d is past the end of the valid WAL at %+v"
 )
 
 var (

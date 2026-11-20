@@ -75,6 +75,13 @@ type BTree struct {
 	// Solo es una pista: se comprueba con la hoja bloqueada antes de usarla.
 	fastLeaf atomic.Uint32
 
+	// guard cuenta las operaciones en vuelo: el reciclado de páginas borradas las espera (guard.go).
+	guard opGuard
+
+	// beforeUnlink, si no es nil, corre antes de cada KindUnlinkPage; si devuelve error, el borrado queda a medias
+	// (solo para las pruebas: simula un corte entre los pasos del borrado).
+	beforeUnlink func(target page.BlockNumber) error
+
 	// afterSplit, si no es nil, corre entre los dos pasos de una partición; si devuelve error, la partición queda
 	// incompleta (solo para las pruebas: simula un corte entre KindSplit y KindInsertPivot).
 	afterSplit func(left page.BlockNumber) error
@@ -189,7 +196,7 @@ func (t *BTree) lockNodeWith(blk page.BlockNumber, mode buffer.LockMode, strateg
 }
 
 /**
-* readMeta lee la raíz de la página meta con bloqueo compartido y la suelta.
+* readMeta lee la página meta con bloqueo compartido y la suelta.
 * @return meta, error
 **/
 func (t *BTree) readMeta() (meta, error) {

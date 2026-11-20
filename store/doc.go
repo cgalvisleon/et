@@ -18,8 +18,8 @@
 // estados, la prueba del diseño recursivo) y, de la 3, Verify y Repair con cmd/storecheck, Stats y OnStats, Pressure y
 // DirUsage, el disco lleno o lento, el DDL dentro de un lote, el respaldo en caliente con su restauración y el archivo
 // continuo del WAL con la recuperación a un punto en el tiempo, y la replicación (tarea 46: réplica física, ranuras de
-// retención y flujo lógico de cambios). Pendiente: el borrado de páginas del árbol (las hojas vacías no se devuelven a
-// la lista de libres).
+// retención y flujo lógico de cambios) y el borrado de páginas del árbol (tarea 70: las hojas vacías y los padres que
+// se quedan sin hijos vuelven a la lista de libres, ver «Borrado de páginas del árbol»).
 //
 // El código del diseño anterior (un log append-only con todas las claves en un índice en RAM) se borró el 2026-11-19;
 // lo que servía de él (lsn contiguos, reserva bajo writeMu, escritura en paralelo, published, group commit, CRC-32C,
@@ -77,7 +77,7 @@
 //	buffer    caché de páginas: pins, bloqueos, clock-sweep, bgwriter    page, smgr, wal (Flusher)
 //	fsm       lista de páginas libres y mapa de visibilidad              page, smgr, buffer, wal
 //	overflow  cadenas de páginas de desborde                             page, smgr, buffer, fsm, wal
-//	btree     árbol B+ Lehman-Yao con versiones                          page, smgr, buffer, fsm, overflow, xact, wal
+//	btree     árbol B+ Lehman-Yao con versiones y borrado de páginas     page, smgr, buffer, fsm, overflow, xact, wal
 //	metric    histograma de latencias log2 de tamaño fijo (Stats)        —
 //	store     motor: checkpoints, recuperación, transacciones, API       todos
 //
@@ -92,12 +92,12 @@
 //	engine.go      Engine, open, close, enter/leave, enterRead, fail/failed, logRecord
 //	config.go      variables de entorno y constantes (ver «Variables de entorno»)
 //	msg.go         errores públicos y mensajes
-//	store.go       Store y las operaciones sueltas: write, writeLoop, commit, update
+//	store.go       Store y las operaciones sueltas: write, writeRound, writeLeaf, commit, update
 //	counts.go      contadores vivos de Count y walProxy (el Flusher de la recuperación)
 //	records.go     formato de KindCheckpoint, KindCreateStore(In), KindDropStore, KindEmptyStore y KindCommit
 //	ddl.go         Store (abre o crea), DropStore, Stores, openTree
 //	ddlbatch.go    storeIn, createIn, dropStoreIn, markDrop, finishDDL, applyDDL, undoDDL, pendingFiles
-//	batch.go       Batch: newBatch, writeIn/batchLoop, readIn, putIn…updateIn, commit, rollback, aborto por tiempo
+//	batch.go       Batch: newBatch, writeIn/writeInRound/batchLeaf, waitOther, readIn, putIn…updateIn, commit, rollback, aborto por tiempo
 //	snapshot.go    Snapshot: snapshotFor, release, readAt
 //	timers.go      Engine.timers: los temporizadores de TRANSACTION_TIMEOUT de lotes y snapshots, que Close detiene
 //	scan.go        scanRange (rango [from, to), sentido, offset, limit), scanner, scanAt, keys, keysAfter, countAt,
@@ -158,8 +158,18 @@
 // del id.
 //
 // Página meta (bloque 0 de cada store, desde el byte 32): magic(4) version(4) root(4) level(4) fastRoot(4)
-// fastLevel(4) freeHead(4) reservado(4) frozenXID(8) reservado(8) = 48 B. frozenXID es el del store: ninguna versión
-// del store con un xid menor queda sin congelar (o sin quitar).
+// fastLevel(4) freeHead(4) deletedHead(4) frozenXID(8) reservado(8) = 48 B. frozenXID es el del store: ninguna versión
+// del store con un xid menor queda sin congelar (o sin quitar). fastRoot/fastLevel es la raíz rápida (btm_fastroot de
+// nbtree): la página de más a la izquierda del nivel más bajo con una sola página, donde empiezan las bajadas.
+// deletedHead es la cabeza de la pila de páginas del árbol borradas que esperan reciclarse (0 = vacía; era un campo
+// reservado en cero, así que una meta anterior al borrado de páginas se lee con la pila vacía).
+//
+// Página borrada del árbol (tarea 70): espacio especial con flags = OpaqueDeleted (más OpaqueLeaf si era una hoja),
+// prev y next los de sus hermanas al desengancharla (los lectores que todavía llegan siguen a la derecha) y su nivel;
+// un solo ítem de 16 B: safeXID(8) nextDeleted(4) reservado(4). safeXID es el próximo xid al desengancharla;
+// nextDeleted, la siguiente de la pila (0 = fin). Hoja medio muerta: la hoja vacía con su clave alta y la marca
+// OpaqueHalfDead; el enlace (downlink) de su clave alta, que en una hoja viva es 0, anota la cima del subárbol que se
+// borra con ella (0 = la hoja misma). Ver «Borrado de páginas del árbol».
 //
 // Página de desborde: encabezado, el trozo del valor desde el byte 32 hasta pd_lower (hasta 8.144 B), espacio
 // especial con flags = desborde, next = la siguiente de la cadena y level = la posición de la página en la cadena
@@ -189,10 +199,13 @@
 // que es también el cambio lógico: id, xid y valor; con FlagCommit es una operación suelta que nace confirmada), 17
 // KindSplit, 18 KindInsertPivot, 19 KindNewRoot, 20 KindInitStore, 21 KindLeafVacuum (limpieza de hoja, que también
 // congela), 22 KindSetHints (la primera marca de visibilidad de una hoja tras un checkpoint, con su imagen), 23
-// KindSetFrozen (frozenXID de la meta de un store); overflow 32 KindOverflowWrite; fsm 40 KindFreePush, 41 KindFreePop,
-// 42 KindVMSet, 43 KindVMClear.
+// KindSetFrozen (frozenXID de la meta de un store), 24 KindMarkHalfDead (hoja medio muerta y el enlace quitado del
+// padre del subárbol), 25 KindUnlinkPage (página desenganchada de sus hermanas, borrada y apilada en la meta), 26
+// KindRecyclePage (de la pila de borradas a la lista de libres); overflow 32 KindOverflowWrite; fsm 40 KindFreePush,
+// 41 KindFreePop, 42 KindVMSet, 43 KindVMClear.
 //
-// Registro del WAL: crc(4) lsn(8) totalLen(4) xid(8) kind(1) flags(1) blockCount(1) reservado(1) mainLen(4) = 32 B;
+// Registro del WAL: crc(4) lsn(8) totalLen(4) xid(8) kind(1) flags(1) blockCount(1) reservado(1) mainLen(4) = 32 B
+// (blockCount ≤ 5: el desenganche de una página toca cinco);
 // por bloque fileNo(4) fork(1) flags(1) reservado(2) block(4) imageLen(2) deltaLen(2) = 16 B, la imagen y el delta;
 // al final los datos principales. Flags del registro: FlagCommit, FlagCountAdd, FlagCountSub; de un bloque:
 // BlockHasImage, BlockImageCompressed, BlockWillInit. La imagen de página entera es la página antes del cambio, sin el
@@ -382,7 +395,8 @@
 //	variable                 por omisión  qué fija
 //	STORE_CACHE_SIZE         128          tamaño de la caché de páginas, en MB, mínimo 1 (pregunta 21)
 //	WAL_SEGMENT_SIZE         128          tamaño de cada segmento del WAL, en MB, mínimo 1 (pregunta 27)
-//	SYNC_ON_WRITE            true         una confirmación espera el fsync del WAL (false = todas diferidas)
+//	SYNC_ON_WRITE            true         una confirmación espera el fsync del WAL (false = todas diferidas, salvo
+//	                                      la de un lote con DDL)
 //	CHECKPOINT_TIMEOUT       300          segundos entre checkpoints, mínimo 1 (pregunta 28)
 //	MAX_WAL_SIZE             1024         MB de WAL que acotan la recuperación; dispara a MAX_WAL_SIZE / 1,9; con
 //	                                      más de 2 × MAX_WAL_SIZE sin reciclar los escritores esperan un checkpoint;
@@ -448,7 +462,8 @@
 // Una operación suelta es una transacción con su xid (xact.Transactions.Begin): si el valor no cabe en línea escribe
 // antes su cadena de desborde con ese xid; toma commitMu en lectura; btree.Write con Commit (FlagCommit), la
 // condición y un UnderLock que suma su delta al contador bajo writeMu; si btree devuelve WaitError suelta commitMu,
-// espera a esa transacción hasta LOCK_TIMEOUT (si vence, ErrConflict) y repite; si escribió, espera el WAL durable
+// libera el desborde, sale del store y del motor (Store.mu y closeMu), espera a esa transacción hasta LOCK_TIMEOUT
+// (si vence, ErrConflict) y repite desde la entrada con el mismo xid; si escribió, espera el WAL durable
 // (SYNC_ON_WRITE) y anota confirmada en el archivo de estados; suelta commitMu y termina la transacción (End
 // despierta a quien espera). Las lecturas y las escrituras de otros no ven la versión hasta que su xid figura
 // confirmada (Read Committed real, no solo «escrita en la hoja»). Si la condición no se cumple y el valor había ido a
@@ -457,15 +472,17 @@
 //
 // A confirmar (ola 4): cualquier error de escritura inutiliza el motor (salvo el disco lleno limpio, ver «Disco lleno
 // o lento»); Count incluye escrituras que todavía se están confirmando; el xid de una operación sin efecto queda en
-// curso hasta reabrir; DropStore espera a las operaciones en curso del store (hasta LOCK_TIMEOUT si una espera a otra
-// transacción).
+// curso hasta reabrir; DropStore espera a las operaciones en curso del store (una que espera a otra transacción no
+// cuenta: espera fuera del store y al volver encuentra ErrStoreDropped).
 //
 // # Lotes y snapshots
 //
 // Un lote toma su xid (xact Begin) y su snapshot (xact Snapshot(xid), cuyo Xmin cuenta en OldestActive) al crearlo.
 // Cada escritura es la suelta con Commit = false, el xid y el snapshot del lote: btree devuelve la propia versión o
 // la última confirmada (ErrSerialization si no es visible para el snapshot), y WaitError si otra en curso tiene el
-// id; se espera sin páginas bloqueadas hasta LOCK_TIMEOUT sin pasar el tiempo del lote (ErrConflict o ErrTimeout).
+// id; se espera sin páginas, Store.mu, closeMu ni Batch.mu (Batch.waitOther; el temporizador, Rollback y las otras
+// operaciones del lote no quedan detrás) hasta LOCK_TIMEOUT sin pasar el tiempo del lote (ErrConflict o ErrTimeout),
+// y se repite si el lote sigue activo.
 // Las versiones van al árbol desde la primera escritura; en RAM el lote solo guarda la suma de Count por número de
 // archivo. Commit: con commitMu en lectura, reserva KindCommit (time y las sumas, que se suman a los contadores bajo
 // writeMu en el underLock de Reserve), lo escribe, espera el WAL durable (un solo fsync, SYNC_ON_WRITE), anota
@@ -516,8 +533,9 @@
 // versiones se perderían en silencio al borrar. Un store creado por el mismo lote se borra enseguida (KindDropStore).
 //
 // Commit (finishDDL, con ddlMu de punta a punta): el KindCommit lleva la cola de DDL (los archivos creados y los
-// borrados; los borrados no van en las sumas de Count) y siempre espera el fsync, también con CommitDeferred: los
-// archivos de un store borrado se borran solo con el commit durable, como en PostgreSQL. Después, los creados
+// borrados; los borrados no van en las sumas de Count) y siempre espera el fsync (syncAlways), también con
+// CommitDeferred y con SYNC_ON_WRITE=false: los archivos de un store borrado se borran y el catálogo se guarda solo
+// con el commit durable, como en PostgreSQL (si no, un corte dejaría el lote abortado con su DDL hecho). Después, los creados
 // pierden FlagPendingCreate (creator = 0, createdBy = xid) y los borrados se marcan inservibles (ErrStoreDropped),
 // salen del catálogo, se guarda y se borran sus páginas de la caché y sus archivos. Como ddlMu está tomado desde
 // antes de reservar el KindCommit hasta guardar el catálogo, el paso 3 del checkpoint (que toma ddlMu) guarda el
@@ -681,26 +699,34 @@
 //
 //   - Entre páginas: de izquierda a derecha, de hija a padre; nunca al revés. Páginas del árbol → página meta → página
 //     libre (fsm); página de datos → su página del mapa de visibilidad.
-//   - Pedir una página (buffer.Pool.Pin) puede esperar al WAL (reemplazar una víctima sucia). Al bajar o moverse a la
-//     derecha se suelta la página antes de pedir la siguiente (Lehman-Yao). Pedirla con otra bloqueada solo se hace
-//     como nbtree, en el orden de arriba (al partir: la página nueva de fsm y la antigua hermana derecha; al terminar
-//     una partición: el padre y la meta; en la raíz nueva: la meta; en Latest: la hermana derecha), y nunca entre
-//     Reserve y Write de un registro: así esa espera no puede cerrar un ciclo, solo alargar el bloqueo.
+//   - Pedir una página (buffer.Pool.Pin) puede esperar al WAL (reemplazar una víctima sucia), pero nunca los bloqueos
+//     de la víctima: si otro la fijó después de que el clock-sweep la eligiera y tiene su contenido o su escritura (io)
+//     tomados, el reemplazo la suelta y elige otra (TryLock, como LWLockConditionalAcquire en BufferAlloc). Al bajar o
+//     moverse a la derecha se suelta la página antes de pedir la siguiente (Lehman-Yao). Pedirla con otra bloqueada
+//     solo se hace como nbtree, en el orden de arriba (al partir: la página nueva de fsm y la antigua hermana derecha;
+//     al terminar una partición: el padre y la meta; en la raíz nueva: la meta; en Latest: la hermana derecha), y
+//     nunca entre Reserve y Write de un registro: así la única espera de Pin es al WAL, que no toma páginas, y no puede
+//     cerrar un ciclo, solo alargar el bloqueo.
 //   - Consultar el estado de una transacción (xact) con una hoja bloqueada en compartido puede leer el disco o esperar
 //     al WAL (como clog en PostgreSQL); con un bloqueo exclusivo, igual.
 //   - Dentro de un búfer: io (escritura al disco) → contenido → encabezado.
 //   - Página (bloqueo de contenido) → writeMu → pubMu; writeMu → syncMu; syncMu → pubMu. Nunca writeMu → página.
 //   - Nunca se espera a otra transacción (xact.Manager.Wait) ni a un fsync con una página bloqueada. Un pin sí se puede
-//     tener mientras tanto.
+//     tener mientras tanto. El fsync del checkpoint (smgr Sync) va con el candado del fork suelto, así una extensión
+//     (fsm.Allocate → PinNew → smgr Extend, con páginas del árbol bloqueadas) no lo espera. La excepción documentada:
+//     cuando una extensión hace nacer un archivo de 1 GB, smgr Extend hace fsync del anterior bajo el fork en
+//     exclusivo (una vez por GB de crecimiento), para que un corte no deje un archivo corto en medio del fork.
 //   - Los locks del mapa de la caché, de la caché del archivo de estados y del catálogo en memoria son hojas: no se
 //     toma otro con ellos tomados. El catálogo nunca se toca con una página bloqueada.
 //   - DDL en lote: Batch.mu → closeMu (lectura) → ddlMu → Store.mu (StoreIn, DropStoreIn); al terminar un lote con DDL,
 //     Batch.mu → closeMu (lectura) → ddlMu → commitMu (lectura) → writeMu, y después (sin commitMu) ddlMu → Store.mu.
-//     Las esperas a otro lote (xact Wait) se hacen sin ddlMu ni páginas.
+//     Las esperas a otro lote (xact Wait) se hacen sin Batch.mu, closeMu, ddlMu, Store.mu ni páginas.
 //   - Locks del motor: closeMu (lectura) → ddlMu → txGate → Store.mu (Empty); closeMu (lectura) → txGate (lectura)
 //     (newBatch, Snapshot); closeMu (lectura) → Store.mu (lectura) → commitMu (lectura) → página → writeMu → contadores
-//     (hoja); ckptMu → commitMu (escritura); ckptMu → ddlMu; ckptMu → HintGate (escritura) → writeMu. Una operación
-//     suelta suelta commitMu antes de esperar a otra transacción. WaitDurable y el escritor del WAL: closeMu (lectura)
+//     (hoja); ckptMu → commitMu (escritura); ckptMu → ddlMu; ckptMu → HintGate (escritura) → writeMu. Una escritura,
+//     suelta o de un lote, que choca con otra transacción en curso suelta todo (commitMu, Store.mu, closeMu y
+//     Batch.mu; su desborde ya escrito se libera) antes de esperarla, como XactLockTableWait de PostgreSQL, y repite
+//     desde la entrada (el store pudo borrarse o vaciarse; el lote, terminar o abortar). WaitDurable y el escritor del WAL: closeMu (lectura)
 //     → syncMu (y pubMu al esperar la publicación), sin páginas. Verify y Repair: closeMu (lectura) → ckptMu → ddlMu
 //     (control, catálogo y data/); Store.vacuumMu → closeMu (lectura) → Store.mu (escritura) → commitMu (escritura,
 //     solo para repetir el conteo) → páginas. Backup: ckptMu → writeMu (wal.ForceImages, wal.Hold) y el checkpoint →
@@ -722,6 +748,14 @@
 //     cadena de desborde se libera con la hoja ya soltada; la meta (KindSetFrozen) al final, sin hojas. Una escritura o
 //     una partición que encuentra la hoja con page.FlagAllVisible borra su bit (página del mapa) con la hoja bloqueada,
 //     antes de reservar su registro. Engine.frozen.mu es una hoja.
+//   - Borrado de páginas (como nbtree, de izquierda a derecha y de abajo hacia arriba): marcar medio muerta bloquea la
+//     hoja (antes, sin ella, mira en compartido su hermana izquierda), con ella en compartido su hermana derecha, la
+//     página del mapa (si hay que borrar su bit) y, bajando desde la raíz con la hoja bloqueada, el padre del subárbol
+//     (como la búsqueda del padre al terminar una partición: de hija a padre); desenganchar bloquea la hoja (si se
+//     borra un padre), la hermana izquierda de la que se borra (siguiendo a la derecha), la que se borra, su hermana
+//     derecha y la meta; reciclar, la meta y después la página borrada. Antes de reciclar, la limpieza espera sin nada
+//     bloqueado a las operaciones del árbol en vuelo (btree.opGuard); ninguna operación espera a la limpieza con una
+//     página bloqueada.
 //
 // # Checkpoint
 //
@@ -745,8 +779,9 @@
 //     frozenXID del motor (tomado al empezar el paso 1, antes del punto de rehacer).
 //  6. Con el archivo continuo y WAL_ARCHIVE_MAX_SIZE, aplicar su tope (enforceArchiveCap). Reciclar los segmentos del
 //     WAL anteriores al punto de rehacer (respetando los segmentos que retienen un respaldo en curso, el archivo
-//     continuo y las ranuras, wal.Hold; antes, checkpointSlots invalida las que pasan MAX_SLOT_WAL_KEEP_SIZE y guarda
-//     el archivo slots con los avances): se renombran como repuestos hasta
+//     continuo y las ranuras, wal.Hold; antes, checkpointSlots invalida las que pasan MAX_SLOT_WAL_KEEP_SIZE, guarda
+//     el archivo slots con los avances y recién entonces mueve sus retenciones; ninguna pasa nunca lo guardado): se
+//     renombran como repuestos hasta
 //     wal.Options.Spares (MAX_WAL_SIZE / 2 / WAL_SEGMENT_SIZE, 4 por omisión) y el resto se borra.
 //  7. Truncar el archivo de estados por debajo de ese frozenXID (xact Truncate: los archivos enteros, de menor a
 //     mayor), o del frozenXID del control de un respaldo en curso si es menor.
@@ -800,7 +835,8 @@
 //     escrituras sueltas (KindLeafWrite con FlagCommit) anotan confirmada su xid al rehacerlas.
 //  5. wal.Open corta el WAL en su primer registro inválido (o tras el registro del objetivo de OpenAt,
 //     wal.Options.StopLSN) y deja en largo 0 los segmentos siguientes (un registro viejo nunca confirmado no puede
-//     pasar por válido después). Un registro inválido en un segmento sellado es corrupción: Open falla.
+//     pasar por válido después). Un registro inválido en un segmento sellado es corrupción: Open falla (la marca de
+//     sellado de cada segmento dice hasta dónde llegan sus registros; ver wal/doc.go, «Marca de sellado»).
 //  6. loadSlots lee el archivo slots y pone sus retenciones (una cuyo lsn ya no está en el WAL queda invalidada). Con
 //     WAL_ARCHIVE=on (no en una réplica), startArchive lee archive_status, retiene desde lo no archivado y sella el segmento en que el
 //     WAL quedó (ver «Archivo continuo del WAL y recuperación a un punto en el tiempo»).
@@ -814,7 +850,8 @@
 //  9. Checkpoint de fin de recuperación (sin repartir) y state = en producción; en un motor nuevo guarda el catálogo y
 //     crea el control (control.Create). Con marcador, borrarlo: la copia ya es un motor más.
 //
-// Las particiones incompletas las termina la próxima inserción que las encuentre. Un store del catálogo cuya página
+// Las particiones incompletas las termina la próxima inserción que las encuentre; los borrados de páginas a medias (una
+// hoja medio muerta), la próxima limpieza (o Repair). Un store del catálogo cuya página
 // meta no existe o está en ceros (su KindInitStore no llegó a ser durable) se crea de nuevo al abrirlo con Store:
 // ningún registro durable apunta a sus páginas.
 //
@@ -845,6 +882,64 @@
 // llegara su hoja queda huérfana (ninguna versión la nombra y la limpieza no la ve; la prueba de modelo las cuenta):
 // Repair las devuelve a la lista (fase 3, «Verificación y reparación»); DropStore espera a la limpieza del store en
 // curso en vez de cortarla.
+//
+// # Borrado de páginas del árbol
+//
+// Tarea 70 de F-23 (bloque A), como _bt_pagedel de nbtree (detalle y formatos en btree/doc.go, «Borrado de páginas»).
+// La limpieza devuelve al espacio libre las hojas que deja vacías y los padres que se quedan sin hijos, en tres pasos,
+// cada uno un registro del WAL con su Redo y cada estado intermedio un árbol válido:
+//
+//  1. Medio muerta (KindMarkHalfDead, como _bt_mark_page_halfdead): una hoja vacía que no es la de más a la derecha de
+//     su nivel ni la raíz, sin partición incompleta (ni ella ni su hermana izquierda hacia ella) y cuya hermana derecha
+//     no está medio muerta. Se sube por los padres de un solo hijo hasta la cima del subárbol que se borra (un padre que
+//     se puede borrar: ni el de más a la derecha de su nivel, ni la raíz, ni partido a medias); en el padre de la cima,
+//     el enlace a la cima pasa a ser el de su hermana derecha y se quita el de la hermana: el espacio de claves del
+//     subárbol pasa a la hermana derecha. Si la cima es el último enlace de un padre con más hijos no se borra (su
+//     hermana es de otro padre); la próxima pasada lo intenta otra vez.
+//  2. Desenganche (KindUnlinkPage, como _bt_unlink_halfdead_page), de arriba hacia abajo: la cima, cada padre de un
+//     solo hijo y por último la hoja. La izquierda y la derecha se enlazan entre sí; la página queda borrada con sus
+//     enlaces (un lector que todavía llega a ella sigue a la derecha), con safeXID = el próximo xid (el safexid de
+//     nbtree) y apilada en la meta. Si la hermana derecha queda sola en su nivel, pasa a ser la raíz rápida.
+//  3. Reciclado (KindRecyclePage), al empezar una pasada posterior: mientras la de arriba de la pila tenga safeXID <
+//     horizonte, la saca de la pila y la deja en la cabeza de la lista de libres (formato de fsm).
+//
+// Un lector nunca cae en una página reciclada: (a) toda operación suelta del árbol (Lookup, Exists, Write, cada Next
+// de un Cursor, Verify) se cuenta en btree.opGuard, de tamaño fijo, y antes de reciclar la limpieza espera, sin nada
+// bloqueado y hasta 2 s, a las que estaban en vuelo (si no terminan, recicla en otra pasada): ninguna puede tener un
+// enlace leído antes del desenganche; (b) un recorrido entre dos Next no se cuenta, pero retiene el horizonte con su
+// snapshot (todo recorrido del motor tiene uno): safeXID ≥ su Xmin, así que la página no se recicla mientras siga
+// abierto. Las páginas que se están borrando (medio muertas o borradas, P_IGNORE de nbtree) las salta toda bajada o
+// recorrido siguiendo a la derecha; un recorrido hacia atrás va a la izquierda como _bt_walk_left (si la página de
+// partida se borró, sigue a su derecha hasta una no borrada y busca la izquierda de esa); uno hacia adelante salta las
+// versiones de ids que ya pasó (el espacio de claves de una hoja borrada pasa a la derecha). Sin claves saltadas ni
+// repetidas (TestPageDeleteConcurrent en btree, TestPageDeleteReplica).
+//
+// Cortes: un corte entre los pasos deja una hoja medio muerta (y quizá parte de su cadena todavía sin desenganchar);
+// la próxima limpieza la termina —también una que quedó a la izquierda de todo, sin enlace en el padre, que busca por
+// los enlaces izquierdos de la primera hoja—, y Verify la informa como FindHalfDead (Repair la termina). Réplica: los
+// tres registros se rehacen como los demás; el reciclado choca con los snapshots abiertos de la réplica
+// (snapshotConflict: espera o cancela, como el safexid de XLOG_BTREE_REUSE_PAGE), y una lectura suelta de la réplica
+// tiene replayMu durante toda la operación. El flujo lógico los ignora (no son cambios de datos).
+//
+// Raíz rápida (btm_fastroot): la página de más a la izquierda de su nivel por la que empiezan las bajadas a niveles
+// iguales o menores; la raíz nueva la pone en sí misma, al partirse la página de más a la izquierda de su nivel sube
+// al padre (en el KindInsertPivot) y en el desenganche baja a la hermana derecha si queda sola (o vuelve a la raíz si
+// la borrada era la raíz rápida). Una bajada que la encuentra borrada, de otro nivel o con hermana izquierda baja
+// desde la raíz. Un árbol al que se le borra todo queda con una página por nivel (la de más a la derecha) y la raíz
+// rápida en la hoja, como nbtree (la raíz nunca se borra ni baja de nivel).
+//
+// Medido (TestDiskSteadyState): ventana deslizante de 20.000 ids (13 B) con valores de 256 B, uno de cada cuatro
+// reemplazado, limpieza de fondo cada 5 ms: el disco del store (sus dos forks) queda en 1,48 × los datos vivos (ids +
+// valores) desde la segunda vuelta de la ventana (meta ≤ 1,5): hojas al 87 % (la partición al final deja la izquierda
+// al 90 %) con 32 B fijos por versión (28 de encabezado y 4 del puntero), más internas, libres y borradas en espera.
+// Con valores de 100 B da 1,65 × (pesan los 32 B por versión) y con 1 KB, 1,40 ×. Para lograrlo hizo falta además que
+// la limpieza quite la lápida de referencia de un id que nombra la clave alta de su hoja cuando a la derecha ya no
+// quedan versiones de ese id (antes quedaba para siempre y la hoja nunca se vaciaba: 13 × tras diez vueltas).
+//
+// A confirmar (tarea 70): la pila de borradas es LIFO y se recicla mientras la de arriba sea segura (con un snapshot
+// largo abierto, las borradas antes de él esperan a las más nuevas); el reciclado solo al empezar cada pasada (la
+// página vuelve una pasada después); la espera de hasta 2 s a las operaciones en vuelo; no se borran páginas en la
+// misma pasada en que la hermana derecha quedó vacía (nbtree lo hace con rightsib_empty), ni se encoge el archivo.
 //
 // # Congelado y truncado del archivo de estados
 //
@@ -1059,8 +1154,9 @@
 //	WAL            WALSinceCheckpoint, LSN, DurableLSN            wal.SizeSince(RedoPoint), Published, Durable
 //	checkpoints    Checkpoints, LastCheckpoint,                   contados al terminar el paso 7 (también el que
 //	               LastCheckpointTook                             cierra la recuperación; uno de fondo se reparte)
-//	limpieza       WritesSinceVacuum, Vacuums                     Engine.writes menos su valor al empezar la última
-//	                                                              limpieza (lo que mira VACUUM_THRESHOLD)
+//	limpieza       WritesSinceVacuum, Vacuums, PagesDeleted,      Engine.writes menos su valor al empezar la última
+//	               PagesRecycled                                  limpieza (lo que mira VACUUM_THRESHOLD); páginas
+//	                                                              del árbol borradas y recicladas (btree.VacuumStats)
 //	transacciones  OpenBatches, OpenSnapshots, NextXID,           openTxn/closeTxn por tipo; xact OldestActive;
 //	               OldestXID, FrozenXID, FrozenAge                engineFrozen; FrozenAge = OldestXID − FrozenXID
 //	operaciones    Reads, Writes, Commits                         lecturas puntuales (Read, Exists, GetVersion y sus
@@ -1100,8 +1196,8 @@
 //
 // Tarea 45 de F-23 (fase 3, pregunta 29). Verify revisa con el motor abierto y no cambia nada (ni marcas de
 // visibilidad: su recorrido no las pone). Repair hace el mismo recorrido y arregla cada cosa reparable al encontrarla.
-// Los dos devuelven un Report: los totales (stores, páginas del árbol, de cadenas, libres y sin dueño, versiones, ids
-// vivos, archivos huérfanos) y los hallazgos (Kind, Store, File, Block y Blocks, Desc, Repairable, Repaired), con
+// Los dos devuelven un Report: los totales (stores, páginas del árbol, borradas en espera, de cadenas, libres y sin
+// dueño, versiones, ids vivos, archivos huérfanos) y los hallazgos (Kind, Store, File, Block y Blocks, Desc, Repairable, Repaired), con
 // String() para imprimir; guarda con detalle los primeros MaxFindings = 1.000 y cuenta todos (Total), así un motor muy
 // dañado no da un informe que crezca con las páginas. El error de Verify y Repair es solo ErrClosed o ErrFailed (la
 // caché o el WAL fallaron); el daño va en el informe. cmd/storecheck es el comando: go run ./cmd/storecheck -dir <dir>
@@ -1110,7 +1206,11 @@
 // Qué se revisa, en este orden:
 //
 //  1. Con ckptMu y ddlMu (ningún checkpoint ni DDL mientras tanto, unos milisegundos): el control leído del disco
-//     (válido, su punto de rehacer es el vigente del WAL, checkpointLSN ≥ punto de rehacer, frozenXID ≤ nextXID); el
+//     (válido, su punto de rehacer es el del último checkpoint terminado, Engine.ctlRedo, y el vigente del WAL no es
+//     anterior a él: el paso 1 de un checkpoint mueve el vigente y, si un disco lleno limpio corta los pasos 2 o 3, el
+//     vigente queda adelante del control, como RedoRecPtr de PostgreSQL, sin daño: las imágenes de página se deciden
+//     contra un punto posterior al de la recuperación, así que sobran, nunca faltan; checkpointLSN ≥ punto de rehacer,
+//     frozenXID ≤ nextXID); el
 //     catálogo leído sin tocar catalog.tmp (control.CatalogFile.Read: los mismos stores con los mismos números que el
 //     de memoria, nextFileNo no mayor); y data/: los números de archivo que ningún store tiene son huérfanos (de un
 //     DropStore o Empty cortados entre el catálogo y el borrado) y los nombres que no son de archivos de datos se
@@ -1126,8 +1226,11 @@
 //     cadenas de desborde (overflow.Manager.Pages: cada página de desborde, del xid de la versión, en su posición y
 //     con su trozo; de una versión «liberándose», solo lo que todavía es suyo) y su bit del mapa de visibilidad (un
 //     bit puesto exige page.FlagAllVisible y todas las versiones congeladas o confirmadas con xid menor que el
-//     horizonte; VMAllFrozen, todas congeladas). Si el árbol no pasa (una hoja ilegible, un enlace roto), lo demás del
-//     store no es confiable y no se mira ni se repara.
+//     horizonte; VMAllFrozen, todas congeladas). Una hoja medio muerta (un borrado de páginas cortado a medias) es un
+//     hallazgo reparable, FindHalfDead: btree.Verify reconoce el borrado a medias (la hoja y su cadena de padres de un
+//     solo hijo) y comprueba sus enlaces, y esas páginas son del árbol, no «sin dueño»; también recorre la pila de
+//     páginas borradas de la meta (cada una borrada, sin ciclos; son del árbol) y comprueba la raíz rápida. Si el árbol
+//     no pasa (una hoja ilegible, un enlace roto), lo demás del store no es confiable y no se mira ni se repara.
 //  4. La lista de libres (fsm.Manager.WalkFree): cada página es libre, existe y no tiene otro dueño (un bucle o una
 //     página del árbol en la lista se ven ahí).
 //  5. Los bits del mapa en bloques que no son hojas o no existen (fsm.Manager.ForEachVM).
@@ -1151,6 +1254,8 @@
 //     solo la limpieza, que vuelve a leer la hoja).
 //   - Count: lo corrige con una confirmación propia (KindCommit de un xid nuevo sin versiones, con lo que suma al
 //     store), hecha con commitMu en escritura y esperando su fsync; la recuperación la rehace como cualquier otra.
+//   - Borrados de páginas a medias: los termina (btree.FinishDeletes: los KindUnlinkPage que faltaban; las páginas
+//     quedan en la pila de borradas con el próximo xid como marca y la limpieza las recicla después).
 //
 // Qué no repara (lo informa sin tocarlo, y el store sigue legible en lo que no depende de eso): una página del
 // árbol ilegible o una estructura que no pasa btree.Verify, una cadena viva rota (ese valor se perdió: Read del id da
@@ -1406,10 +1511,14 @@
 // consumidor), y retiene con wal.Hold el segmento de RestartLSN (wal.SegmentOf: solo lee el primer registro de cada
 // segmento). CreateSlot la crea con ConfirmedLSN = lo escrito y la guarda enseguida (antes del Backup de la réplica,
 // así la copia y lo que sigue quedan retenidos); DropSlot la borra; Slots las describe (SlotInfo: Retained = segmentos
-// desde el retenido, Lag = registros sin confirmar). AdvanceSlot mueve la retención enseguida (y despierta a los
-// escritores frenados) pero se guarda en el paso 6 del siguiente checkpoint o en Close, como en PostgreSQL: tras un
-// corte del primario la ranura puede volver al valor del último checkpoint, y lo que se recicló siempre sale de lo
-// guardado (el archivo se guarda antes de reciclar), así nunca falta WAL que la ranura guardada promete. El consumidor
+// desde el retenido, Lag = registros sin confirmar). AdvanceSlot anota el avance en memoria y se guarda en el paso 6
+// del siguiente checkpoint o en Close, como en PostgreSQL; la retención (wal.Hold) solo pasa a otro segmento después
+// de guardar el archivo que la promete (moveHold: AdvanceSlot guarda antes de moverla, una vez por segmento, y
+// despierta a los escritores frenados; el paso 6 guarda y después mueve las de todas). Así ninguna retención pasa lo
+// guardado, aunque un AdvanceSlot llegue entre el guardado y el reciclaje, y con un disco lleno al guardar las
+// retenciones quedan donde estaban: lo que se recicla siempre sale de lo guardado y nunca falta WAL que la ranura
+// guardada promete. Tras un corte del primario la ranura vuelve al valor guardado. DropSlot guarda antes de soltar la
+// retención (si no puede guardar, la ranura sigue). El consumidor
 // recibe de nuevo lo posterior: la réplica lo salta por lsn y el lógico por TxInfo.CommitLSN. Nunca retrocede.
 // Tope: en el paso 6, una ranura que retiene más de MAX_SLOT_WAL_KEEP_SIZE se invalida (suelta su retención, queda
 // marcada en el archivo, Stats.SlotsInvalidated y SlotsInvalid); AdvanceSlot, WalSince y Changes de ella dan
@@ -1434,7 +1543,10 @@
 //     Las confirmaciones salen en el orden del WAL, que es el de confirmación. Lo confirmado hasta ConfirmedLSN se
 //     salta. KindAbort descarta; una transacción que nunca confirmó (murió con un corte del primario, o no escribió) se
 //     descarta en el primer KindCheckpoint cuyo xid vivo más viejo la supera. Los DDL sueltos (Store, DropStore, Empty)
-//     salen como una transacción propia de xid 0.
+//     salen como una transacción propia de xid 0. El KindDropStore de xid 0 que deshace un store creado dentro de un
+//     lote no es un DDL suelto: si el lote sigue abierto (dropOwnCreate, o un disco lleno en createIn) el store queda
+//     cancelado dentro de ese lote y al confirmar se saltan su create y sus cambios; si el lote ya abortó (undoDDL),
+//     se descarta (el lector anota qué archivos crea cada lote sin confirmar: crece con los stores, no con las claves).
 //   - Memoria: cada cambio se guarda codificado; si lo que el lector tiene en memoria pasa de logicalWorkMem (16 MB),
 //     la transacción más grande pasa a disco (replslot/, formato en «Formatos en disco») y sus cambios siguientes se
 //     agregan detrás. Al entregarla se recorre su archivo con un búfer fijo y después lo de memoria; el archivo se

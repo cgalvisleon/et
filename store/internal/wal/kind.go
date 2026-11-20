@@ -26,6 +26,11 @@ const (
 	KindLeafVacuum  Kind = 21 // limpieza: quita versiones muertas de una hoja (fase 1B) y congela las visibles (fase 2)
 	KindSetHints    Kind = 22 // marcas de visibilidad: la primera marca tras un checkpoint, con la imagen de la hoja
 	KindSetFrozen   Kind = 23 // frozenXID nuevo en la página meta de un store (fase 2, congelado)
+
+	// Borrado de páginas del árbol (tarea 70, como _bt_pagedel de nbtree).
+	KindMarkHalfDead Kind = 24 // hoja vacía «medio muerta» y su enlace quitado del padre del subárbol
+	KindUnlinkPage   Kind = 25 // página desenganchada de sus hermanas, marcada borrada y apilada en la meta
+	KindRecyclePage  Kind = 26 // página borrada que ya nadie puede ver, de la pila de la meta a la lista de libres
 )
 
 // De overflow (32–39).

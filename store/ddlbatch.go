@@ -231,24 +231,21 @@ func (b *Batch) sees(s *Store) error {
 }
 
 /**
-* waitDDL espera al lote wait que crea o borra name. Si ya lo esperó (waited) y sigue pendiente, ese lote terminó
-* sin resolverlo (el motor quedó cerrado o inutilizable). Un tiempo vencido aborta b. Con b tomado.
+* waitDDL espera al lote wait que crea o borra name, con b.mu suelto (waitOther). Si ya lo esperó (waited) y sigue
+* pendiente, ese lote terminó sin resolverlo (el motor quedó cerrado o inutilizable). Un tiempo vencido o un
+* conflicto aborta b. Con b tomado.
 * @param name string, wait, waited page.XID
-* @return error: ErrStorePending, ErrConflict, ErrTimeout o el fallo del motor
+* @return error: ErrStorePending, ErrConflict, ErrTimeout, por qué terminó el lote o el fallo del motor
 **/
 func (b *Batch) waitDDL(name string, wait, waited page.XID) error {
 	if wait == waited {
 		return fmt.Errorf(MSG_STORE_PENDING, ErrStorePending, name)
 	}
-	if werr := b.e.txs.Wait(wait, b.waitLimit()); werr != nil {
-		err := ErrConflict
-		if b.expired() {
-			err = ErrTimeout
-		}
+	err := b.waitOther(wait)
+	if txError(err) {
 		b.abortLocked(err)
-		return err
 	}
-	return b.e.failed()
+	return err
 }
 
 /**
@@ -297,8 +294,9 @@ func (b *Batch) commitInfo() commitInfo {
 
 /**
 * finishDDL termina un lote con DDL, con ddlMu tomado de punta a punta (el paso 3 del checkpoint guarda el catálogo
-* antes o después, nunca en medio): el registro de confirmación siempre con fsync (los archivos de un store borrado
-* se borran solo con el commit durable) o el de aborto, y después el catálogo.
+* antes o después, nunca en medio): el registro de confirmación siempre con fsync, también con SYNC_ON_WRITE=false y
+* con CommitDeferred (el catálogo que sigue se guarda durable y los archivos de un store borrado se borran: sin el
+* commit durable, un corte dejaría el lote abortado con su DDL hecho), o el de aborto, y después el catálogo.
 * @param commit bool
 * @return error
 **/
@@ -309,7 +307,7 @@ func (b *Batch) finishDDL(commit bool) error {
 	for _, s := range b.drops {
 		delete(b.deltas, s.file)
 	}
-	if err := b.logEnd(commit, false); err != nil {
+	if err := b.logEnd(commit, syncAlways); err != nil {
 		return e.fail(err)
 	}
 	var err error

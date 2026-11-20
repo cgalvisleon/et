@@ -19,11 +19,17 @@ import (
 * cambio o una marca de visibilidad posterior a la copia). Mientras dura la escritura el búfer sigue sucio: así
 * FlushAll lo anota y espera a que termine (d.io) en vez de saltearlo. Un fallo deja la caché inutilizable (o de
 * solo lectura, si es de disco lleno: ver readable); tras él, un búfer sucio devuelve ese fallo y uno limpio, nil.
-* @param d *desc: fijado por quien llama
-* @return error
+* Con try (el reemplazo, cuyo llamador puede tener otras páginas bloqueadas) no espera: si otro tiene la escritura o
+* el contenido del búfer, devuelve errVictimBusy sin escribir (como LWLockConditionalAcquire en BufferAlloc).
+* @param d *desc: fijado por quien llama, try bool: no esperar los bloqueos del búfer
+* @return error: errVictimBusy (solo con try), o el fallo de escritura
 **/
-func (p *pool) flush(d *desc) error {
-	d.io.Lock()
+func (p *pool) flush(d *desc, try bool) error {
+	if !try {
+		d.io.Lock()
+	} else if !d.io.TryLock() {
+		return errVictimBusy
+	}
 	defer d.io.Unlock()
 
 	d.mu.Lock()
@@ -39,9 +45,13 @@ func (p *pool) flush(d *desc) error {
 	tag := d.tag
 	d.mu.Unlock()
 
+	if !try {
+		d.content.RLock()
+	} else if !d.content.TryRLock() {
+		return errVictimBusy // sigue sucio: no se copió ni se escribió nada
+	}
 	buf := p.scratch.Get().(page.Page)
 	defer p.scratch.Put(buf)
-	d.content.RLock()
 	copyPage(buf, d.data)
 	d.content.RUnlock()
 
@@ -115,7 +125,7 @@ func (p *pool) FlushAll(pace func(written, total int)) error {
 	for i, item := range list {
 		d := &p.descs[item.id]
 		if p.pinIfTag(d, item.tag) {
-			err := p.flush(d)
+			err := p.flush(d, false)
 			p.unpin(d)
 			if err != nil {
 				return err
@@ -234,7 +244,7 @@ func (p *pool) bgWriteRound() error {
 		if !p.pinIfReusableDirty(d) {
 			continue
 		}
-		err := p.flush(d)
+		err := p.flush(d, false)
 		p.unpin(d)
 		if err != nil {
 			return err

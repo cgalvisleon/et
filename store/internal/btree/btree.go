@@ -143,6 +143,11 @@ type VacuumOptions struct {
 	// (overflow.Manager.FreeTail con v.Overflow y v.XID). Tiene que poder repetirse tras un corte. nil = las versiones
 	// con desborde no se tocan.
 	Free func(v Version) error
+
+	// NextXID da el próximo xid a asignar (xact.Manager.NextXID): la marca de una página que se borra (como el
+	// safexid de nbtree), leída al desengancharla. Una pasada posterior la recicla cuando su Horizon la supera: ningún
+	// snapshot de antes del borrado sigue abierto. nil = Horizon de esta pasada (pruebas).
+	NextXID func() page.XID
 }
 
 // VacuumStats es lo que hizo una limpieza.
@@ -163,6 +168,12 @@ type VacuumStats struct {
 	// FrozenXID es el menor xid de una versión que quedó sin congelar en las hojas recorridas, acotado por Horizon:
 	// el frozenXID que puede guardar el store si Complete.
 	FrozenXID page.XID
+
+	// Borrado de páginas (tarea 70): hojas marcadas medio muertas, páginas desenganchadas (hojas y padres de un solo
+	// hijo) y páginas borradas devueltas a la lista de libres.
+	HalfDead int
+	Deleted  int
+	Recycled int
 }
 
 // Tree es el árbol de un store.

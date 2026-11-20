@@ -260,8 +260,7 @@ func (e *Engine) dropSlotLocked(name string) error {
 	st.mu.Lock()
 	defer st.mu.Unlock()
 	if s := st.find(name); s != nil {
-		e.removeSlotLocked(s)
-		return e.saveSlotsLocked()
+		return e.dropSaved(s)
 	}
 	return nil
 }
@@ -292,10 +291,26 @@ func (e *Engine) dropSlot(name string) error {
 	if s == nil {
 		return fmt.Errorf(MSG_SLOT_NAME, ErrSlotNotFound, name)
 	}
-	e.removeSlotLocked(s)
-	if err := e.saveSlotsLocked(); err != nil {
+	if err := e.dropSaved(s); err != nil {
 		return e.writeError(err)
 	}
+	return nil
+}
+
+/**
+* dropSaved saca la ranura de la lista, guarda y recién entonces suelta su retención: si no se pudo guardar, la
+* ranura vuelve a la lista con su retención (el archivo todavía la tiene). Con mu.
+* @param s *slot
+* @return error: el de guardar
+**/
+func (e *Engine) dropSaved(s *slot) error {
+	st := &e.slots
+	st.list = slices.DeleteFunc(st.list, func(x *slot) bool { return x == s })
+	if err := e.saveSlotsLocked(); err != nil {
+		st.list = append(st.list, s)
+		return err
+	}
+	s.release()
 	return nil
 }
 
@@ -325,9 +340,10 @@ func (e *Engine) slotsInfo() []SlotInfo {
 
 /**
 * advanceSlot anota que el consumidor de la ranura ya tiene todo hasta confirmed y que necesita el WAL desde restart
-* (0 = confirmed + 1, una réplica física). Queda en memoria (mueve la retención enseguida) y se guarda en el próximo
-* checkpoint o en Close: tras un corte del motor la ranura puede volver al valor del último checkpoint, y el
-* consumidor recibe de nuevo lo que ya tenía (la réplica lo salta por su lsn). Nunca retrocede.
+* (0 = confirmed + 1, una réplica física). Queda en memoria y se guarda en el próximo checkpoint o en Close, salvo
+* que la retención tenga que pasar a otro segmento: entonces se guarda antes de moverla (moveHold). Tras un corte del
+* motor la ranura puede volver al valor guardado, y el consumidor recibe de nuevo lo que ya tenía (la réplica lo
+* salta por su lsn). Nunca retrocede.
 * @param name string, confirmed, restart page.LSN, logical bool: la clase que se espera
 * @return error: ErrSlotNotFound (o de la otra clase), ErrWalRemoved (invalidada), ErrClosed, ErrFailed
 **/
@@ -357,11 +373,38 @@ func (e *Engine) advanceSlot(name string, confirmed, restart page.LSN, logical b
 	s.confirmed = max(s.confirmed, confirmed)
 	s.restart = max(s.restart, min(restart, s.confirmed+1))
 	st.dirty = true
-	seg := s.seg
+	return e.moveHold(s)
+}
+
+/**
+* moveHold lleva la retención de s hasta el segmento de su restart, pero solo después de guardar el archivo de
+* ranuras que lo promete: así lo que se retiene (y lo que el checkpoint recicla) nunca pasa lo guardado, y tras un
+* corte la ranura sigue válida. Guarda solo cuando el segmento cambia (una vez por segmento de avance). Un disco lleno
+* deja la retención donde estaba (dirty sigue; el próximo checkpoint lo reintenta). Con mu.
+* @param s *slot
+* @return error: ErrFailed (el disco lleno no es error para quien avanza)
+**/
+func (e *Engine) moveHold(s *slot) error {
+	seg, err := e.log.SegmentOf(s.restart)
+	if err != nil && !errors.Is(err, wal.ErrRemoved) {
+		return e.fail(err)
+	}
+	if err == nil && s.unhold != nil && seg == s.seg {
+		return nil
+	}
+	if e.slots.dirty {
+		if err := e.saveSlotsLocked(); err != nil {
+			if err = e.writeError(err); isCleanDiskFull(err) {
+				return nil
+			}
+			return err
+		}
+	}
+	old := s.seg
 	if err := s.hold(e.log); err != nil {
 		return e.fail(err)
 	}
-	if s.seg != seg {
+	if s.seg != old {
 		e.wakeWriters() // los frenados por lo que retenía la ranura vuelven a mirar
 	}
 	return nil
@@ -404,9 +447,11 @@ func (e *Engine) enterSlots() error {
 
 /**
 * checkpointSlots es el paso 6 del checkpoint para las ranuras, antes de reciclar: invalida las que retienen más de
-* MAX_SLOT_WAL_KEEP_SIZE (sueltan su retención) y guarda el archivo con los avances, así lo que se recicla después
-* sale de lo guardado. Con ckptMu.
-* @return error: el de guardar (un disco lleno limpio deja todo retenido como estaba)
+* MAX_SLOT_WAL_KEEP_SIZE (sueltan su retención: tras un corte quedarían invalidadas igual), guarda el archivo con los
+* avances y recién entonces mueve las retenciones hasta lo guardado. Como ninguna retención pasa lo guardado
+* (moveHold), lo que se recicla después sale siempre del archivo, aunque un AdvanceSlot llegue en medio. Con ckptMu.
+* @return error: el de guardar; con un disco lleno limpio las retenciones quedan donde estaban (lo guardado) y el
+* reciclaje no las pasa
 **/
 func (e *Engine) checkpointSlots() error {
 	st := &e.slots
@@ -430,6 +475,17 @@ func (e *Engine) checkpointSlots() error {
 	}
 	if err := e.saveSlotsLocked(); err != nil {
 		return e.writeError(err)
+	}
+	moved := false
+	for _, s := range st.list {
+		old := s.seg
+		if err := s.hold(e.log); err != nil {
+			return e.fail(err)
+		}
+		moved = moved || s.seg != old
+	}
+	if moved {
+		e.wakeWriters()
 	}
 	return nil
 }

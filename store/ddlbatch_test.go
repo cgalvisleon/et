@@ -392,6 +392,15 @@ func ddlImage(t testing.TB) diskImage {
 * @return error: el primero
 **/
 func runDDLBatch(e *Engine) error {
+	return runDDLBatchWith(e, false)
+}
+
+/**
+* runDDLBatchWith es runDDLBatch, confirmando con CommitDeferred si deferred.
+* @param e *Engine, deferred bool
+* @return error: el primero
+**/
+func runDDLBatchWith(e *Engine, deferred bool) error {
 	tx := e.NewBatch()
 	defer tx.Rollback()
 	c, err := e.StoreIn(tx, "c")
@@ -413,43 +422,54 @@ func runDDLBatch(e *Engine) error {
 	if err := a.PutIn(tx, "a2", []byte("2")); err != nil {
 		return err
 	}
+	if deferred {
+		return tx.CommitDeferred()
+	}
 	return tx.Commit()
 }
 
 // Un corte en cada operación de disco de un lote con DDL, en los tres modos de crashfs: al reabrir el estado es el
 // de antes o el de después entero (el de después si Commit volvió bien), Count coincide, data/ no tiene archivos
 // huérfanos y Verify queda limpio.
+//
+// La variante «nosync» (SYNC_ON_WRITE=false y CommitDeferred) exige lo mismo: un lote con DDL siempre espera el
+// fsync de su KindCommit, porque el catálogo y el borrado de archivos que le siguen ya son durables (tarea 88).
 func TestDDLBatchCrash(t *testing.T) {
 	img := ddlImage(t)
-	proc := newProc(writeImage(t, img))
-	e := openTest(t, proc, testConfig())
-	proc.killAfter(1<<40, crashfs.LoseUnsynced, 0)
-	mustOK(t, runDDLBatch(e))
-	total := 1<<40 - proc.budget.Load()
-	mustOK(t, e.Close())
-	t.Logf("the DDL batch does %d disk operations", total)
-	modes := map[string]crashfs.Mode{
-		"lose": crashfs.LoseUnsynced, "reorder": crashfs.ReorderUnsynced, "torn": crashfs.TornWrites,
-	}
-	for name, mode := range modes {
-		for cut := int64(1); cut <= total+1; cut++ {
-			t.Run(fmt.Sprintf("%s/%d", name, cut), func(t *testing.T) {
-				crashDDLBatch(t, img, mode, cut)
-			})
+	for _, nosync := range []bool{false, true} {
+		cfg := testConfig()
+		cfg.syncOnWrite = !nosync
+		proc := newProc(writeImage(t, img))
+		e := openTest(t, proc, cfg)
+		proc.killAfter(1<<40, crashfs.LoseUnsynced, 0)
+		mustOK(t, runDDLBatchWith(e, nosync))
+		total := 1<<40 - proc.budget.Load()
+		mustOK(t, e.Close())
+		t.Logf("nosync=%v: the DDL batch does %d disk operations", nosync, total)
+		modes := map[string]crashfs.Mode{
+			"lose": crashfs.LoseUnsynced, "reorder": crashfs.ReorderUnsynced, "torn": crashfs.TornWrites,
+		}
+		for name, mode := range modes {
+			for cut := int64(1); cut <= total+1; cut++ {
+				t.Run(fmt.Sprintf("nosync=%v/%s/%d", nosync, name, cut), func(t *testing.T) {
+					crashDDLBatch(t, img, cfg, nosync, mode, cut)
+				})
+			}
 		}
 	}
 }
 
 /**
 * crashDDLBatch corta el lote de TestDDLBatchCrash tras cut operaciones de disco, reabre y comprueba el estado.
-* @param t *testing.T, img diskImage, mode crashfs.Mode, cut int64
+* @param t *testing.T, img diskImage, cfg config, deferred bool: confirmar con CommitDeferred, mode crashfs.Mode,
+* cut int64
 **/
-func crashDDLBatch(t *testing.T, img diskImage, mode crashfs.Mode, cut int64) {
+func crashDDLBatch(t *testing.T, img diskImage, cfg config, deferred bool, mode crashfs.Mode, cut int64) {
 	base := writeImage(t, img)
 	proc := newProc(base)
-	e := openTest(t, proc, testConfig())
+	e := openTest(t, proc, cfg)
 	proc.killAfter(cut, mode, cut)
-	err := runDDLBatch(e)
+	err := runDDLBatchWith(e, deferred)
 	if proc.budget.Load() > 0 {
 		proc.kill(mode, cut) // el lote terminó antes del corte: el corte llega al final
 	}

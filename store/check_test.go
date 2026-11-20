@@ -458,7 +458,8 @@ func crashRepair(t *testing.T, img diskImage, d damaged, mode crashfs.Mode, cut,
 
 /**
 * checkAfterCrash corre Verify en un motor recién recuperado: solo puede encontrar lo que explica un corte (páginas
-* sin dueño, cadenas huérfanas, archivos huérfanos); si hay, Repair y Verify tiene que dar limpio.
+* sin dueño, cadenas huérfanas, archivos huérfanos, borrados de páginas a medias); si hay, Repair y Verify tiene que
+* dar limpio.
 * @param t testing.TB, e *Engine
 **/
 func checkAfterCrash(t testing.TB, e *Engine) {
@@ -467,7 +468,7 @@ func checkAfterCrash(t testing.TB, e *Engine) {
 	mustOK(t, err)
 	for _, f := range r.Findings {
 		switch f.Kind {
-		case FindLostPage, FindOrphanChain, FindOrphanFile:
+		case FindLostPage, FindOrphanChain, FindOrphanFile, FindHalfDead:
 		default:
 			t.Fatalf("Verify after a crash: %s\n%s", f, r)
 		}

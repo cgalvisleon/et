@@ -41,6 +41,7 @@ type Engine struct {
 	ctl        control.ControlFile
 	catFile    control.CatalogFile
 	hasControl bool            // false en un motor nuevo hasta su primer checkpoint (que crea el control)
+	ctlRedo    atomic.Uint64   // el lsn del punto de rehacer del control guardado (el del último checkpoint terminado)
 	cat        *control.Stores // el catálogo como se guarda: contadores a cat.CountLSN()
 	counts     *counts         // los contadores vivos
 

@@ -74,6 +74,7 @@ func (c *Cursor) Next() ([]Version, bool, error) {
 	if c.done {
 		return nil, false, nil
 	}
+	defer c.t.guard.leave(c.t.guard.enter())
 	var err error
 	if c.opts.Backward {
 		err = c.nextBackward()
@@ -120,7 +121,10 @@ func (c *Cursor) version(e entry) Version {
 
 /**
 * nextForward lee la hoja siguiente hacia adelante: la primera vez baja hasta From; después sigue el enlace derecho
-* anotado al leer la anterior (una partición posterior solo movió a la derecha lo ya leído).
+* anotado al leer la anterior (una partición posterior solo movió a la derecha lo ya leído). Una hoja medio muerta o
+* borrada no tiene entradas: se pasa por ella a su hermana derecha. Las entradas con id menor que el que se está
+* mirando se saltan: si la hoja que siguió a la leída se borró, su espacio de claves pasó a la derecha, y una versión
+* escrita después puede caer ahí con un id ya recorrido (no es visible para un snapshot anterior, pero sí sin snapshot).
 * @return error
 **/
 func (c *Cursor) nextForward() error {
@@ -135,6 +139,9 @@ func (c *Cursor) nextForward() error {
 		var e entry
 		if e, err = n.entryAt(off); err != nil {
 			break
+		}
+		if c.cur != nil && bytes.Compare(e.id(), c.cur) < 0 {
+			continue // ya pasó: una hoja borrada le dejó su espacio de claves a esta (doc.go, «Borrado de páginas»)
 		}
 		if c.cur == nil || !bytes.Equal(e.id(), c.cur) {
 			c.cur, c.decided = append(c.cur[:0], e.id()...), false
@@ -197,6 +204,11 @@ func (c *Cursor) nextBackward() error {
 	if err != nil {
 		return err
 	}
+	if h == nil { // las hojas de la izquierda se borraron después de leer la última
+		c.batch, c.pending = backwardBatch(c.batch[:0], nil, c.pending, true)
+		c.done = true
+		return nil
+	}
 	var hs hints
 	hs.at(h)
 	groups, err := c.pageGroups(n, end-1, &hs)
@@ -216,12 +228,12 @@ func (c *Cursor) nextBackward() error {
 /**
 * firstOrLeft bloquea en compartido la hoja que sigue hacia atrás: la de From la primera vez (o la de más a la
 * derecha), si no la que hoy está a la izquierda de la última leída.
-* @return buffer.Handle, node, page.OffsetNumber: uno más que el último ítem a mirar, error
+* @return buffer.Handle, node: nil si ya no queda ninguna, page.OffsetNumber: uno más que el último ítem a mirar, error
 **/
 func (c *Cursor) firstOrLeft() (buffer.Handle, node, page.OffsetNumber, error) {
 	if c.started {
-		h, n, err := c.t.stepLeft(c.leaf, c.strategy())
-		if err != nil {
+		h, n, ok, err := c.t.stepLeft(c.leaf, c.strategy())
+		if err != nil || !ok {
 			return nil, node{}, 0, err
 		}
 		return h, n, n.maxOff() + 1, nil
@@ -398,22 +410,84 @@ func appendLive(batch []Version, g group) []Version {
 	return batch
 }
 
+// walkLeftHops son los pasos a la derecha desde la hermana anotada antes de volver a mirar la página de partida (como
+// _bt_walk_left): si no aparece, lo más probable es que la página de partida se haya borrado.
+const walkLeftHops = 4
+
 /**
-* stepLeft bloquea en compartido la hoja que hoy está a la izquierda de cur (ya soltada): la hermana anotada, o
-* siguiendo a la derecha desde ella si se partió después de leer cur. Sin borrado de páginas (fase 1) siempre se llega.
+* stepLeft bloquea en compartido la hoja que hoy está a la izquierda de cur (ya soltada), como _bt_walk_left: desde la
+* hermana anotada sigue a la derecha (hasta walkLeftHops pasos) buscando la página no borrada cuyo enlace derecho es
+* cur. Si no aparece, vuelve a cur: si se borró, sigue a su derecha hasta una no borrada (la que heredó su espacio de
+* claves) y busca la izquierda de esa; si no, su enlace izquierdo cambió (la izquierda se partió o se borró) y repite
+* con el nuevo. La página que devuelve puede estar medio muerta (sigue enganchada): no tiene entradas. cur no puede
+* haberse reciclado: el recorrido retiene el horizonte (su snapshot) y cada Next la guarda (doc.go).
 * @param cur node: la hoja leída (sus campos), strategy buffer.Strategy
-* @return buffer.Handle, node, error
+* @return buffer.Handle, node, bool: false si ya no queda ninguna a la izquierda, error
 **/
-func (t *BTree) stepLeft(cur node, strategy buffer.Strategy) (buffer.Handle, node, error) {
-	h, n, err := t.lockNodeWith(cur.o.Prev, buffer.Share, strategy)
-	for err == nil && n.o.Next != cur.blk {
-		if n.rightmost() || n.o.Level != cur.o.Level {
+func (t *BTree) stepLeft(cur node, strategy buffer.Strategy) (buffer.Handle, node, bool, error) {
+	obk, left := cur.blk, cur.o.Prev
+	for left != 0 {
+		h, n, found, err := t.leftFrom(left, obk, cur.o.Level, strategy)
+		if err != nil || found {
+			return h, n, found, err
+		}
+		if obk, left, err = t.reanchor(obk, left, strategy); err != nil {
+			return nil, node{}, false, err
+		}
+	}
+	return nil, node{}, false, nil // las de la izquierda se borraron: no queda nada antes
+}
+
+/**
+* leftFrom sigue a la derecha desde left (hasta walkLeftHops pasos) buscando la página no borrada cuyo enlace derecho
+* es obk; la devuelve bloqueada en compartido.
+* @param left, obk page.BlockNumber, level uint32, strategy buffer.Strategy
+* @return buffer.Handle, node, bool: si la encontró, error
+**/
+func (t *BTree) leftFrom(left, obk page.BlockNumber, level uint32, strategy buffer.Strategy) (buffer.Handle, node, bool, error) {
+	blk := left
+	for hops := 0; ; hops++ {
+		h, n, err := t.lockNodeWith(blk, buffer.Share, strategy)
+		if err != nil {
+			return nil, node{}, false, err
+		}
+		if n.o.Level != level {
 			h.Release()
-			return nil, node{}, corruptAt(cur.blk, "left sibling chain does not reach the page")
+			return nil, node{}, false, corruptAt(blk, "left sibling at level %d, expected %d", n.o.Level, level)
+		}
+		if !n.deleted() && n.o.Next == obk {
+			return h, n, true, nil
 		}
 		next := n.o.Next
 		h.Release()
-		h, n, err = t.lockNodeWith(next, buffer.Share, strategy)
+		if next == 0 || hops >= walkLeftHops {
+			return nil, node{}, false, nil
+		}
+		blk = next
 	}
-	return h, n, err
+}
+
+/**
+* reanchor vuelve a la página de partida cuando su izquierda no apareció: si se borró, la de partida pasa a ser la
+* primera no borrada a su derecha; si no, su enlace izquierdo tiene que haber cambiado.
+* @param obk, left page.BlockNumber: la de partida y la izquierda que se probó, strategy buffer.Strategy
+* @return page.BlockNumber, page.BlockNumber: la de partida y su izquierda nuevas, error
+**/
+func (t *BTree) reanchor(obk, left page.BlockNumber, strategy buffer.Strategy) (page.BlockNumber, page.BlockNumber, error) {
+	h, n, err := t.lockNodeWith(obk, buffer.Share, strategy)
+	if err != nil {
+		return 0, 0, err
+	}
+	for n.deleted() {
+		next := n.o.Next
+		h.Release()
+		if h, n, err = t.lockNodeWith(next, buffer.Share, strategy); err != nil {
+			return 0, 0, err
+		}
+	}
+	defer h.Release()
+	if n.blk == obk && n.o.Prev == left {
+		return 0, 0, corruptAt(obk, "could not find the left sibling %d", left)
+	}
+	return n.blk, n.o.Prev, nil
 }

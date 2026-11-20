@@ -347,21 +347,24 @@ func TestBatchLockTimeout(t *testing.T) {
 }
 
 // TRANSACTION_TIMEOUT: un lote que pasa su tiempo queda abortado (sin retener sus ids) y devuelve ErrTimeout; un
-// snapshot con SnapshotFor se cierra solo, y uno con 0 no vence.
+// snapshot con SnapshotFor se cierra solo, y uno con 0 no vence. Los plazos tienen margen (×4 de los originales, 30–50
+// ms) para una máquina cargada, y la espera de un lote a otro no depende de qué temporizador se dispara primero: el
+// que espera empieza txGap antes, así su plazo termina txGap antes que el del que retiene el id.
 func TestTransactionTimeout(t *testing.T) {
-	e := newTestEngine(t, func(c *config) { c.txTimeout = 50 * time.Millisecond })
+	const timeout, txGap = 200 * time.Millisecond, 100 * time.Millisecond
+	e := newTestEngine(t, func(c *config) { c.txTimeout = timeout })
 	a := mustStore(t, e, "a")
 	tx := e.NewBatch()
 	mustOK(t, a.PutIn(tx, "x", []byte("1")))
-	short, forever, def := e.SnapshotFor(30*time.Millisecond), e.SnapshotFor(0), e.Snapshot()
-	time.Sleep(120 * time.Millisecond)
+	short, forever, def := e.SnapshotFor(timeout*3/5), e.SnapshotFor(0), e.Snapshot()
+	time.Sleep(timeout * 12 / 5)
 
 	done := make(chan error, 1)
 	go func() { done <- a.Put("x", []byte("2")) }()
 	select {
 	case err := <-done:
 		mustOK(t, err)
-	case <-time.After(time.Second):
+	case <-time.After(20 * timeout):
 		t.Fatal("the expired batch still holds x")
 	}
 	if err := a.PutIn(tx, "y", nil); !errors.Is(err, ErrTimeout) {
@@ -381,13 +384,16 @@ func TestTransactionTimeout(t *testing.T) {
 	}
 	mustOK(t, forever.Close())
 
-	// Un lote que espera a otra transacción no pasa su propio tiempo esperando.
+	// Un lote que espera a otra transacción no pasa su propio tiempo esperando: vence esperando aunque el que retiene
+	// el id siga vivo (empezó txGap después).
+	waiter := e.NewBatch()
+	time.Sleep(txGap)
 	holder := e.NewBatch()
 	mustOK(t, a.PutIn(holder, "z", nil))
-	waiter := e.NewBatch()
 	if err := a.PutIn(waiter, "z", nil); !errors.Is(err, ErrTimeout) {
 		t.Fatalf("waiting past the batch time: %v", err)
 	}
+	_ = holder.Rollback() // con la máquina muy cargada pudo vencer también: no importa
 }
 
 // Los snapshots abiertos y los lotes cuentan en el horizonte de la limpieza hasta que terminan.

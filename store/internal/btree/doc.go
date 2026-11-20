@@ -6,8 +6,8 @@
 // Qué hace: buscar la versión que ve una lectura, escribir una versión nueva con su condición comprobada con la hoja
 // bloqueada, partir páginas, crear la raíz, terminar particiones incompletas, la inserción rápida al final (una pista
 // por store: la hoja más a la derecha), recorrer (Cursor, fase 2), poner las marcas de visibilidad, quitar versiones
-// muertas (fase 1B), congelar y llevar el mapa de visibilidad y el frozenXID del store (fase 2), y rehacer sus Kind del
-// WAL. Qué no hace: no espera a otras transacciones (devuelve WaitError y quien llama espera sin páginas bloqueadas),
+// muertas (fase 1B), congelar y llevar el mapa de visibilidad y el frozenXID del store (fase 2), borrar del árbol las
+// hojas vacías y los padres que se quedan sin hijos y reciclar sus páginas (tarea 70), y rehacer sus Kind del WAL. Qué no hace: no espera a otras transacciones (devuelve WaitError y quien llama espera sin páginas bloqueadas),
 // no guarda valores grandes (recibe la overflow.Ref ya escrita), no confirma transacciones. Depende de page, smgr,
 // buffer, fsm (FreeList, VisibilityMap), overflow (Ref), xact (Status, Snapshot) y wal por sus interfaces.
 //
@@ -48,7 +48,9 @@
 //
 // Un pivote (k, sin lsn) manda a la derecha toda versión con id ≥ k; uno (k, lsn) manda a la derecha las versiones
 // de id k con lsn ≤ lsn y todas las de id > k. Como en nbtree, el ítem 1 de una página que no es la de más a la
-// derecha es su clave alta; los datos empiezan en el 2 (en la de más a la derecha, en el 1).
+// derecha es su clave alta; los datos empiezan en el 2 (en la de más a la derecha, en el 1). El downlink de una clave
+// alta es 0, salvo en una hoja medio muerta: ahí anota la cima del subárbol que se borra con ella (0 = la hoja misma),
+// como el «top parent link» del t_tid de la clave alta en nbtree.
 //
 // # Página meta (bloque 0; contenido desde page.HeaderSize, MetaSize = 48)
 //
@@ -56,10 +58,12 @@
 //	 4   4 version    1
 //	 8   4 root       bloque de la raíz
 //	12   4 level      nivel de la raíz
-//	16   4 fastRoot   raíz rápida (la página más baja con un solo hijo por nivel), como btm_fastroot
+//	16   4 fastRoot   raíz rápida, como btm_fastroot: la página de más a la izquierda del nivel más bajo con una
+//	                  sola página; las bajadas a ese nivel o más abajo empiezan ahí (ver «Borrado de páginas»)
 //	20   4 fastLevel
 //	24   4 freeHead   primera página de la lista de libres (fsm); 0 = vacía
-//	28   4 reservado
+//	28   4 deleted    cabeza de la pila de páginas borradas que esperan reciclarse; 0 = vacía (era reservado, en
+//	                  cero: una meta anterior se lee con la pila vacía)
 //	32   8 frozenXID  ninguna versión con xid menor queda sin congelar (fase 2, pregunta 44): nace con
 //	                  Config.FrozenXID y solo sube (KindSetFrozen)
 //	40   8 reservado
@@ -93,6 +97,9 @@
 //	                 2: la antigua hermana derecha (si había)   prev(4) = la derecha nueva
 //	KindInsertPivot  0: el padre                               off(2) + pivote (clave alta de la hija → su hermana nueva)
 //	                 1: la hija (la izquierda de la partición)  vacío: apaga OpaqueIncompleteSplit
+//	                 2: meta (opcional)                        fastRoot(4) fastLevel(4) = el padre: la hija era la de
+//	                                                           más a la izquierda de su nivel y la raíz rápida estaba
+//	                                                           en su nivel o más abajo (sube, como split_only_page)
 //	KindNewRoot      0: la raíz nueva, BlockWillInit            level(4) left(4) + pivote de la derecha; la raíz tiene
 //	                                                           (menos infinito → left) y ese pivote, con OpaqueRoot
 //	                 1: meta                                   root(4) level(4) (la raíz rápida es la misma)
@@ -109,9 +116,39 @@
 //	KindSetHints     0: la hoja (con su imagen: va solo como   count(2) + count × [off(2) flags(4)]: OR de
 //	                    primera marca tras un checkpoint)      EntryXidCommitted / EntryXidAborted; xid 0
 //	KindSetFrozen    0: meta                                   frozenXID(8): solo sube; xid 0
+//	KindMarkHalfDead 0: la hoja                                top(4): la cima del subárbol (0 = la hoja); la hoja
+//	                                                           tiene que estar vacía (solo su clave alta), sin ser la
+//	                                                           de más a la derecha ni la raíz, ni partida a medias;
+//	                                                           pone OpaqueHalfDead, apaga page.FlagAllVisible y anota
+//	                                                           top en el downlink de la clave alta
+//	                 1: el padre del subárbol                  off(2) child(4) right(4): el enlace off apunta a child
+//	                                                           (la cima) y off+1 a right (su hermana derecha); off pasa
+//	                                                           a apuntar a right y se quita off+1. xid 0
+//	KindUnlinkPage   0: la que se borra, BlockWillInit          prev(4) next(4) level(4) safeXID(8) nextDeleted(4)
+//	                                                           flags(2): la deja borrada (abajo) con esos enlaces y
+//	                                                           nivel; flags dice qué bloques opcionales vienen (bit 0
+//	                                                           la izquierda, bit 1 la hoja, bit 2 la raíz rápida en
+//	                                                           la meta); prev ≠ 0 si y solo si viene la izquierda
+//	                 1: la hermana derecha                     prev(4) = prev de la borrada
+//	                 2: meta                                   deleted(4) = la borrada [+ fastRoot(4) fastLevel(4)]
+//	                 3: la hermana izquierda (si prev ≠ 0)     next(4) = next de la borrada
+//	                 4: la hoja medio muerta (si la borrada    top(4): la cima siguiente (el único hijo de la borrada;
+//	                    es un padre)                           0 si ese hijo es la hoja). Los bloques 3 y 4 que no
+//	                                                           vienen no ocupan lugar: el 4 puede ser el tercero
+//	                                                           (blockRole). Hasta cinco bloques (wal.MaxBlocks = 5,
+//	                                                           como XLOG_BTREE_UNLINK_PAGE_META). xid 0
+//	KindRecyclePage  0: meta                                   deleted(4) freeHead(4): saca la página de la pila y la
+//	                                                           pone en la cabeza de la lista de libres
+//	                 1: la página, BlockWillInit                next(4) = la cabeza anterior de la lista: queda libre
+//	                                                           con el formato de fsm (page.OpaqueFree). xid 0
+//
+// Página borrada: page.Init con el espacio especial prev, next (los de sus hermanas al borrarla), level y flags =
+// OpaqueDeleted (más OpaqueLeaf si era una hoja), y un solo ítem de 16 B: safeXID(8) nextDeleted(4) reservado(4).
+// readNode la acepta (checkDeleted: el ítem y next ≠ 0) y una medio muerta (hoja vacía con su clave alta).
 //
 // Cada estado intermedio es un árbol válido: entre KindSplit y su KindInsertPivot (o KindNewRoot) la derecha nueva
-// se alcanza por el enlace de la izquierda. KindNewRoot toca dos niveles (la raíz nueva y la vieja), como el
+// se alcanza por el enlace de la izquierda; entre KindMarkHalfDead y los KindUnlinkPage de su subárbol, la hoja medio
+// muerta y los padres que faltan desenganchar siguen enganchados en sus niveles y se saltan siguiendo a la derecha. KindNewRoot toca dos niveles (la raíz nueva y la vieja), como el
 // XLOG_BTREE_NEWROOT de nbtree (a confirmar: btree/doc.go decía que ningún registro tocaba más de un nivel).
 // Los dos de la ola 5B se rehacen como los demás (imagen sin condiciones, o el delta si pd_lsn < lsn): rehacerlos dos
 // veces deja lo mismo. Las marcas van como KindSetHints en el rango de btree, no como KindPageImage del motor: así el
@@ -125,8 +162,10 @@
 // la hoja sigue siendo la de más a la derecha, sin partición incompleta, con lugar y la clave va después de su
 // primera).
 //
-//   - Bajada (descend): lee la raíz de la meta y baja con una página bloqueada a la vez, en compartido salvo la del
-//     nivel buscado; en cada página, si la clave es ≥ que su clave alta, sigue a la derecha (moveRight). Una bajada
+//   - Bajada (descend): lee la raíz de la meta (o la raíz rápida, si el nivel buscado no está por encima de ella; si
+//     al bloquearla no es una página viva de su nivel y la de más a la izquierda, baja desde la raíz) y baja con una
+//     página bloqueada a la vez, en compartido salvo la del nivel buscado; en cada página, si la clave es ≥ que su
+//     clave alta o la página se está borrando (medio muerta o borrada), sigue a la derecha (moveRight). Una bajada
 //     para escribir que encuentra una página con OpaqueIncompleteSplit la suelta, termina esa partición y repite (como
 //     _bt_moveright con forupdate): así el padre de una partición siempre existe.
 //   - Escritura (Write): busca la posición de (id, MaxLSN) —antes que todas las versiones del id, porque su lsn será el
@@ -143,8 +182,10 @@
 //     hoja entera con bloqueo compartido, la suelta y devuelve sus versiones visibles: entre dos Next no queda nada
 //     fijado ni bloqueado, así quien llama suelta sus propios locks antes de usar lo leído. Hacia atrás, el primer id
 //     de cada hoja queda pendiente hasta leer la anterior (sus versiones más nuevas pueden estar ahí), y para ir a la
-//     izquierda se sigue a la derecha desde la hermana anotada hasta la página cuyo enlace derecho es la recién leída
-//     (como _bt_walk_left, sin borrado de páginas). Opciones: Ring fija las hojas siguientes a la primera con
+//     izquierda se sigue a la derecha desde la hermana anotada hasta la página no borrada cuyo enlace derecho es la
+//     recién leída (como _bt_walk_left: hasta 4 pasos; si no aparece y la recién leída se borró, se sigue a su derecha
+//     hasta una no borrada y se busca la izquierda de esa). Hacia adelante, las versiones de ids que ya pasaron se
+//     saltan (el espacio de claves de una hoja borrada pasa a su derecha). Opciones: Ring fija las hojas siguientes a la primera con
 //     buffer.Ring (un recorrido grande no vacía la caché); KeysOnly no copia los valores; Borrow copia los valores de
 //     la hoja a un búfer del cursor que se reutiliza (valen hasta el próximo Next; solo hacia adelante).
 //   - Exists: Lookup sin copiar el valor.
@@ -182,14 +223,16 @@
 // vieja: la de referencia es la primera confirmada visible para todos (EntryFrozen, o xid < Horizon: toda transacción
 // anterior terminó y todo snapshot la ve); están muertas las de transacciones abortadas y todas las más viejas que la
 // de referencia (las versiones de un id que siguen en la hoja de la derecha heredan la de referencia de la izquierda);
-// la de referencia, si es una lápida y no le queda nada detrás, también se quita, salvo que la clave alta de la hoja
-// sea del mismo id (sus versiones viejas pueden seguir a la derecha: a confirmar, pendiente). Las muertas en línea se
-// quitan; las de desborde se marcan EntryFreeing en el mismo KindLeafVacuum (pregunta 58). Con la hoja ya soltada, Free
+// la de referencia, si es una lápida y no le queda nada detrás, también se quita, salvo que sus versiones viejas sigan
+// a la derecha: que la clave alta de la hoja sea del mismo id y que la primera hoja con entradas a su derecha empiece
+// con él (rightStartsWith); así la lápida se va en la pasada siguiente a la que quitó esas versiones. Las muertas en
+// línea se quitan; las de desborde se marcan EntryFreeing en el mismo KindLeafVacuum (pregunta 58). Con la hoja ya soltada, Free
 // libera cada cadena marcada (overflow.Manager.FreeTail: desde el final y repetible) y un segundo KindLeafVacuum quita
 // esas versiones, buscándolas por su clave (siguiendo a la derecha si una partición las movió). Una versión
 // «liberándose» es invisible para toda lectura y no cuenta para Latest; si un corte (o un error de Free) la deja
-// marcada, la próxima pasada sigue liberando lo que falta de su cadena y la quita. Las hojas no se borran (el borrado
-// de páginas está pendiente); el espacio se reutiliza porque page.DeleteItems cierra los huecos y page.Repair compacta.
+// marcada, la próxima pasada sigue liberando lo que falta de su cadena y la quita. Dentro de una hoja el espacio se
+// reutiliza porque page.DeleteItems cierra los huecos y page.Repair compacta; una hoja que queda vacía se borra del
+// árbol (ver «Borrado de páginas») y no lleva bits del mapa de visibilidad.
 // Quien llama no corre dos limpiezas del mismo store a la vez (el motor las serializa con Store.vacuumMu).
 //
 // # Congelado y mapa de visibilidad (fase 2)
@@ -217,13 +260,72 @@
 // (el menor xid que quedó sin congelar en lo recorrido, acotado por Horizon: el frozenXID que el store puede guardar
 // con SetFrozenXID si Complete). FrozenXID y SetFrozenXID leen y suben el de la meta.
 //
+// # Borrado de páginas (tarea 70)
+//
+// Como _bt_pagedel de nbtree (delete.go). Vacuum, antes de recorrer, recicla (recycle) y termina los borrados a
+// medias que quedaron a la izquierda de la primera hoja con enlace (finishLeftmost); durante el recorrido, una hoja
+// medio muerta se termina (unlinkHalfDead) y una que queda vacía tras limpiarla (y liberar sus cadenas) se borra
+// (deleteLeaf). VacuumStats cuenta HalfDead, Deleted y Recycled.
+//
+//  1. markHalfDead: con la hoja en compartido mira que se pueda borrar (deletableLeaf: hoja vacía, no la de más a la
+//     derecha, no la raíz, sin partición incompleta, no medio muerta), la suelta y mira su hermana izquierda: si su
+//     enlace derecho es la hoja y está partida a medias, la hoja todavía no tiene enlace en el padre
+//     (_bt_leftsib_splitflag). Bloquea la hoja en exclusivo, lo comprueba otra vez, borra su bit del mapa si la página
+//     tiene page.FlagAllVisible, mira en compartido que su hermana derecha no esté medio muerta
+//     (_bt_rightsib_halfdeadflag) y busca el padre del subárbol (subtreeParent, como _bt_lock_subtree_parent):
+//     findParent con la clave alta de la cima y before (llega a la página cuyo rango termina ahí, como pivotsearch);
+//     si la cima es el único enlace de un padre que se puede borrar, el padre pasa a ser la cima y se sube; si es el
+//     último de un padre con más hijos, no se borra; si no, el enlace siguiente tiene que ser su hermana derecha.
+//     Una partición sin terminar en el camino (finishError) hace que no se borre en esta pasada.
+//  2. unlinkHalfDead: repite unlinkStep hasta que la hoja queda borrada. Cada paso desengancha la cima actual (la que
+//     anota la hoja, o la hoja): bloquea la hoja si la cima es otra, la hermana izquierda (desde la anotada, a la
+//     derecha hasta la no borrada que enlaza a la cima), la cima, su hermana derecha y la meta, comprueba los
+//     enlaces y el estado (un padre con un solo enlace; la hoja medio muerta y vacía) y escribe el KindUnlinkPage con
+//     safeXID = VacuumOptions.NextXID() (o Horizon sin él).
+//  3. recycle (al empezar cada pasada): si la página de arriba de la pila tiene safeXID < Horizon, espera a las
+//     operaciones en vuelo (opGuard.drain, hasta 2 s; si no, recicla en otra pasada) y recicla de arriba hacia abajo
+//     mientras se pueda (recycleOne: meta y página en exclusivo, KindRecyclePage).
+//
+// Por qué un lector nunca cae en una página reciclada: una página se recicla solo si (a) no hay operación suelta en
+// vuelo que haya empezado antes (opGuard: dos contadores por época; Lookup, Exists, Write, cada Cursor.Next y
+// VerifyWith entran y salen; drain cambia de época y espera a la anterior) y (b) todo snapshot abierto es posterior a
+// su borrado (safeXID < Horizon): un Cursor entre dos Next no está en opGuard, pero en el motor siempre tiene un
+// snapshot que retiene el horizonte. Un Cursor sin snapshot usado fuera del motor tiene que retener el horizonte de
+// otra forma (las pruebas lo emulan). Mientras no se recicla, una página borrada conserva sus enlaces: quien llega a
+// ella (por un enlace viejo del padre, de una hermana o de la raíz rápida) sigue a la derecha, donde está su espacio de
+// claves.
+//
+// Raíz rápida: newRoot la pone en la raíz nueva; fastRootUp la sube al padre en el KindInsertPivot cuando la hija es
+// la de más a la izquierda de su nivel y la raíz rápida está en su nivel o más abajo; el desenganche la baja a la
+// hermana derecha si quedó sola en su nivel, o la vuelve a la raíz si la borrada era la raíz rápida. Verify comprueba
+// que sea la de más a la izquierda de su nivel. La raíz nunca se borra ni baja de nivel: un árbol vaciado queda con la
+// página de más a la derecha de cada nivel y la raíz rápida en la hoja.
+//
+// Verify (VerifyWith) reconoce un borrado a medias: la hoja medio muerta y cada interna con un solo enlace cuya cadena
+// llega a ella con la cima al nivel de la interna o más arriba no cuentan para las cotas de claves de las siguientes
+// ni para la clave de los enlaces (se busca la hermana izquierda que coincide saltándolas), y cada nivel tiene tantas
+// páginas como enlaces arriba más particiones incompletas más cimas de borrados a medias; empieza cada nivel por su
+// página de más a la izquierda (las cimas quedan a la izquierda del primer enlace); recorre la pila de borradas
+// (VerifyStats.Deleted; cada una a Page) y cuenta las medio muertas (VerifyStats.HalfDead, LeafInfo.HalfDead).
+// FinishDeletes termina los borrados a medias sin limpiar (Repair del motor).
+//
+// Pruebas (delete_test.go): TestPageDeleteRange (borrar un tramo, reciclar, cada bloque con dueño, volver a escribir
+// sin crecer), TestPageDeleteAll (todo: una página por nivel y la raíz rápida en la hoja; volver a llenar la sube),
+// TestPageDeleteRightmostChild, TestPageDeleteCut (corte antes de cada KindUnlinkPage en los tres modos de crashfs),
+// TestPageDeleteCrashRandom (ventana deslizante con limpiezas, corte al azar), TestPageDeleteConcurrent (lectores y
+// recorridos en los dos sentidos con -race mientras se borra y recicla), TestPageDeleteRedoRejects,
+// TestReadDeletedPages; semillas nuevas en FuzzApplyDelta y FuzzReadNode.
+//
 // Toda página del árbol que se bloquea pasa por page.CheckItems (la caché solo verifica la suma; a confirmar: un
 // gancho de la caché al cargar del disco evitaría repetirlo en cada acceso).
 //
 // Bloqueos: como nbtree, la partición, terminar una partición y la raíz nueva fijan páginas con otra bloqueada (la
-// página nueva de fsm, la antigua hermana derecha, la meta, el padre); siempre de izquierda a derecha, de hija a
-// padre, árbol → meta, y nunca se espera a nada entre Reserve y Write, así que expulsar una página sucia (que espera
-// al WAL) no puede cerrar un ciclo (es el orden de store/doc.go, «Orden de los bloqueos»).
+// página nueva de fsm, la antigua hermana derecha, la meta, el padre); el borrado también (la hermana derecha y el
+// padre del subárbol con la hoja; la hoja, la izquierda, la borrada, la derecha y la meta al desenganchar; la meta y
+// la borrada al reciclar); siempre de izquierda a derecha, de hija a padre, árbol → meta, y nunca se espera a nada
+// entre Reserve y Write, así que expulsar una página sucia (que espera al WAL) no puede cerrar un ciclo (es el orden
+// de store/doc.go, «Orden de los bloqueos»). La espera del reciclado a las operaciones en vuelo se hace sin nada
+// bloqueado.
 //
 // Réplica (tarea 46): Config.NoHints apaga las marcas de visibilidad de las lecturas (la réplica no escribe registros
 // propios); DecodeLeafWrite lee de un KindLeafWrite la versión que escribe (el cambio lógico que entrega el flujo de

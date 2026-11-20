@@ -78,6 +78,12 @@ type txBuffer struct {
 	file     vfs.File // nil hasta el primer derrame
 	path     string
 	size     int64
+
+	// DDL en lote: los stores que crea (KindCreateStoreIn) y los que creó y deshizo antes de confirmar (un
+	// KindDropStore de xid 0 de dropOwnCreate o de un disco lleno en createIn): al entregar, sus cambios se saltan.
+	// Crecen con los stores del lote, no con las claves.
+	creates  []smgr.FileNo
+	canceled map[smgr.FileNo]bool
 }
 
 // ChangeReader lee el flujo lógico de una ranura (Changes). No se usa desde varias goroutines a la vez.
@@ -93,9 +99,11 @@ type ChangeReader struct {
 	txs       map[page.XID]*txBuffer
 	memBytes  int
 	workMem   int
-	names     map[smgr.FileNo]string // número de archivo → nombre: crece con los stores, no con las claves
-	dir       string                 // el directorio de derrame
-	err       error                  // un error a mitad de una transacción deja el lector inservible
+	names     map[smgr.FileNo]string   // número de archivo → nombre: crece con los stores, no con las claves
+	creating  map[smgr.FileNo]page.XID // store creado por un lote que todavía no confirmó → su xid
+	ghosts    map[smgr.FileNo]bool     // stores de lotes abortados: su KindDropStore de deshacer no se entrega
+	dir       string                   // el directorio de derrame
+	err       error                    // un error a mitad de una transacción deja el lector inservible
 
 	spilled  int64 // bytes pasados a disco desde que se abrió (pruebas, Stats)
 	peakMem  int   // lo más que tuvo en memoria (pruebas)
@@ -120,7 +128,7 @@ func (e *Engine) changes(name string) (*ChangeReader, error) {
 	r := &ChangeReader{
 		e: e, slot: name, pos: wal.Position{LSN: restart}, confirmed: confirmed, read: restart - 1,
 		txs: map[page.XID]*txBuffer{}, workMem: e.cfg.decodeWorkMem, names: map[smgr.FileNo]string{},
-		dir: filepath.Join(e.dir, spillDirName),
+		creating: map[smgr.FileNo]page.XID{}, ghosts: map[smgr.FileNo]bool{}, dir: filepath.Join(e.dir, spillDirName),
 	}
 	if r.workMem <= 0 {
 		r.workMem = logicalWorkMem
@@ -218,7 +226,13 @@ func (r *ChangeReader) process(rec *wal.Record, fn func(tx TxInfo, c Change) err
 			return 0, fmt.Errorf(MSG_BAD_RECORD, ErrCorrupt, rec.LSN, rec.Kind, "bad store data")
 		}
 		r.names[file] = name
-		return 0, r.add(rec, encodeItem(itemCreate, file, 0, 0, name, nil))
+		if err := r.add(rec, encodeItem(itemCreate, file, 0, 0, name, nil)); err != nil {
+			return 0, err
+		}
+		t := r.tx(rec.XID, rec.LSN)
+		t.creates = append(t.creates, file)
+		r.creating[file] = rec.XID
+		return 0, nil
 	case wal.KindCommit:
 		info, err := decodeCommit(rec.Main)
 		if err != nil {
@@ -285,6 +299,9 @@ func (r *ChangeReader) storeDDL(rec *wal.Record, fn func(tx TxInfo, c Change) er
 		if !ok {
 			return 0, fmt.Errorf(MSG_BAD_RECORD, ErrCorrupt, rec.LSN, rec.Kind, "bad store data")
 		}
+		if rec.Kind == wal.KindDropStore && r.undoesBatchCreate(file) {
+			return 0, nil
+		}
 		c = Change{Op: ChangeCreate, Store: name}
 		r.names[file] = name
 		if rec.Kind == wal.KindDropStore {
@@ -299,6 +316,32 @@ func (r *ChangeReader) storeDDL(rec *wal.Record, fn func(tx TxInfo, c Change) er
 		return 0, err
 	}
 	return 1, nil
+}
+
+/**
+* undoesBatchCreate dice si el KindDropStore (de xid 0) de file deshace un store creado dentro de un lote: uno que el
+* lote todavía abierto creó y borró (dropOwnCreate, o un disco lleno en createIn: sus cambios se cancelan dentro del
+* lote) o uno de un lote que abortó (undoDDL). Ese borrado no es un DDL suelto: el consumidor nunca vio el store.
+* @param file smgr.FileNo
+* @return bool
+**/
+func (r *ChangeReader) undoesBatchCreate(file smgr.FileNo) bool {
+	if xid, ok := r.creating[file]; ok && r.txs[xid] != nil {
+		t := r.txs[xid]
+		if t.canceled == nil {
+			t.canceled = map[smgr.FileNo]bool{}
+		}
+		t.canceled[file] = true
+		delete(r.creating, file)
+		delete(r.names, file)
+		return true
+	}
+	if r.ghosts[file] {
+		delete(r.ghosts, file)
+		delete(r.names, file)
+		return true
+	}
+	return false
 }
 
 /**
@@ -391,6 +434,11 @@ func (r *ChangeReader) spill(t *txBuffer) error {
 func (r *ChangeReader) commit(xid page.XID, lsn page.LSN, drops []smgr.FileNo, fn func(tx TxInfo, c Change) error) (int, error) {
 	t := r.txs[xid]
 	defer r.discard(xid)
+	if t != nil {
+		for _, file := range t.creates {
+			delete(r.creating, file) // confirmados: ya no son de un lote abierto
+		}
+	}
 	if lsn <= r.confirmed || t == nil && len(drops) == 0 {
 		return 0, nil
 	}
@@ -429,6 +477,9 @@ func (r *ChangeReader) replay(t *txBuffer, emit func(Change) error) error {
 		kind, file, a, b, id, data, ok := decodeItem(item)
 		if !ok {
 			return fmt.Errorf(MSG_SPILL, ErrCorrupt)
+		}
+		if t.canceled[file] {
+			return nil // un store que el lote creó y deshizo antes de confirmar
 		}
 		switch kind {
 		case itemChunk:
@@ -517,7 +568,8 @@ func (r *ChangeReader) guard(err error) error {
 }
 
 /**
-* discard saca una transacción del búfer y borra su archivo de derrame.
+* discard saca una transacción del búfer y borra su archivo de derrame. Los stores que creó y no confirmó pasan a
+* ghosts (el registro que los deshace no se entrega).
 * @param xid page.XID
 **/
 func (r *ChangeReader) discard(xid page.XID) {
@@ -526,6 +578,12 @@ func (r *ChangeReader) discard(xid page.XID) {
 		return
 	}
 	delete(r.txs, xid)
+	for _, file := range t.creates {
+		if r.creating[file] == xid { // el lote no confirmó: su KindDropStore de deshacer no se entrega
+			delete(r.creating, file)
+			r.ghosts[file] = true
+		}
+	}
 	r.memBytes -= t.memBytes
 	if t.file != nil {
 		t.file.Close()

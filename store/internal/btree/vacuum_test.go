@@ -103,6 +103,7 @@ func treeBlocks(t testing.TB, tr *BTree) []page.BlockNumber {
 	var out []page.BlockNumber
 	for leftmost := m.root; leftmost != 0; {
 		var child page.BlockNumber
+		leftmost = leftmostOf(t, tr, leftmost)
 		for blk := leftmost; blk != 0; {
 			h, n, err := tr.lockNode(blk, buffer.Share)
 			if err != nil {
@@ -117,6 +118,58 @@ func treeBlocks(t testing.TB, tr *BTree) []page.BlockNumber {
 			h.Release()
 		}
 		leftmost = child
+	}
+	return out
+}
+
+/**
+* leftmostOf va por los enlaces izquierdos hasta la página de más a la izquierda del nivel (las cimas de borrados a
+* medias quedan a la izquierda del primer enlace del padre).
+* @param t testing.TB, tr *BTree, blk page.BlockNumber
+* @return page.BlockNumber
+**/
+func leftmostOf(t testing.TB, tr *BTree, blk page.BlockNumber) page.BlockNumber {
+	t.Helper()
+	for {
+		h, n, err := tr.lockNode(blk, buffer.Share)
+		if err != nil {
+			t.Fatal(err)
+		}
+		prev := n.o.Prev
+		h.Release()
+		if prev == 0 {
+			return blk
+		}
+		blk = prev
+	}
+}
+
+/**
+* deletedBlocks devuelve la pila de páginas borradas desde la meta.
+* @param t testing.TB, tr *BTree
+* @return []page.BlockNumber
+**/
+func deletedBlocks(t testing.TB, tr *BTree) []page.BlockNumber {
+	t.Helper()
+	m, err := tr.readMeta()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out []page.BlockNumber
+	for b := m.deleted; b != 0; {
+		if slices.Contains(out, b) {
+			t.Fatalf("ciclo en la pila de borradas en %d", b)
+		}
+		out = append(out, b)
+		h, n, err := tr.lockNode(b, buffer.Share)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !n.deleted() {
+			t.Fatalf("el bloque %d de la pila de borradas no está borrado", b)
+		}
+		b = deletedInfoOf(n).next
+		h.Release()
 	}
 	return out
 }
@@ -175,8 +228,9 @@ func chainOf(t testing.TB, e *env, ref overflow.Ref) []page.BlockNumber {
 }
 
 /**
-* checkBlocks comprueba que cada bloque del store está exactamente una vez como meta, página del árbol, página libre o
-* página de la cadena de una versión que sigue en las hojas: ni huérfanas ni dobles en la lista de libres.
+* checkBlocks comprueba que cada bloque del store está exactamente una vez como meta, página del árbol, página libre,
+* página borrada que espera reciclarse o página de la cadena de una versión que sigue en las hojas: ni huérfanas ni
+* dobles en la lista de libres.
 * @param t testing.TB, e *env, tr *BTree
 **/
 func checkBlocks(t testing.TB, e *env, tr *BTree) {
@@ -193,6 +247,9 @@ func checkBlocks(t testing.TB, e *env, tr *BTree) {
 	}
 	for _, b := range freeBlocks(t, e) {
 		note(b, "libre")
+	}
+	for _, b := range deletedBlocks(t, tr) {
+		note(b, "borrada")
 	}
 	for _, v := range leafEntries(t, tr) {
 		if v.Flags&EntryOverflow != 0 {
@@ -363,9 +420,19 @@ func TestVacuumModel(t *testing.T) {
 				t.Fatal(err)
 			}
 			checkBlocks(t, e, tr)
+			// La segunda pasada quita las lápidas de referencia que la primera dejó porque las versiones viejas de su id
+			// seguían en la hoja de la derecha (ya se quitaron): quedan exactamente las vivas, y una tercera no quita nada.
 			st2, err := tr.Vacuum(opts)
-			if err != nil || st2.Removed != 0 || st2.Freed != 0 {
+			if err != nil || st2.Freed != 0 {
 				t.Fatalf("segunda pasada: %+v %v", st2, err)
+			}
+			for _, v := range leafEntries(t, tr) {
+				if k := fmt.Sprintf("%s/%d", v.ID, v.LSN); !keep[k] {
+					t.Fatalf("tras la segunda pasada quedó %s (lápida de referencia: %v)", k, anchors[k])
+				}
+			}
+			if st3, err := tr.Vacuum(opts); err != nil || st3.Removed != 0 || st3.Freed != 0 {
+				t.Fatalf("tercera pasada: %+v %v", st3, err)
 			}
 		})
 	}

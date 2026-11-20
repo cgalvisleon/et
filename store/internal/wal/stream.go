@@ -175,7 +175,7 @@ func (w *WAL) placeRaw(at Position, lsn page.LSN, size int64) (*reservation, err
 	next := page.LSN(w.lastLSN.Load()) + 1
 	rotate := at.Segment == w.active.num+1 && at.Offset == 0
 	inPlace := at.Segment == w.active.num && at.Offset == w.active.size
-	if lsn != next || at.LSN != lsn || !rotate && !inPlace || at.Offset+size > w.opts.SegmentSize {
+	if lsn != next || at.LSN != lsn || !rotate && !inPlace || at.Offset+size > w.capacity() {
 		return nil, fmt.Errorf(MSG_APPEND_ORDER, ErrOutOfOrder, lsn, at, w.active.num, w.active.size, next)
 	}
 	if rotate {

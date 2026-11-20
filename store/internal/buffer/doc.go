@@ -49,7 +49,9 @@
 // sucia; corto). Las NumPartitions particiones del mapa se toman solas: buscar en el mapa y fijar el búfer son dos
 // pasos, y si el búfer cambió de página entre medio se repite.
 //
-// Cargar una página sigue BufferAlloc: elegir una víctima (fijada y limpia; si estaba sucia se escribe antes),
+// Cargar una página sigue BufferAlloc: elegir una víctima (fijada y limpia; si estaba sucia se escribe antes, sin
+// esperar sus bloqueos: si otro la fijó y tiene su io o su contenido, se suelta y se elige otra, porque quien pide la
+// página puede tener otras bloqueadas),
 // publicar el tag nuevo en el mapa (si otro ya lo publicó, se usa el suyo), cambiar el tag bajo mu (si alguien fijó
 // la víctima mientras tanto, se busca otra), quitar el tag viejo del mapa y leer fuera de todo lock; quien fija una
 // página que se está cargando espera a que termine. Una lectura fallida (suma mala, bloque inexistente) devuelve el

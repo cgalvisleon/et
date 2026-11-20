@@ -186,10 +186,13 @@ func (b *Batch) rollback() error {
 
 /**
 * abortLocked aborta el lote por err (queda esperando Rollback): sus versiones dejan de contar y los que esperan a
-* su xid siguen. Con b.mu tomado.
+* su xid siguen. Si el lote ya no está activo no hace nada. Con b.mu tomado.
 * @param err error: por qué
 **/
 func (b *Batch) abortLocked(err error) {
+	if b.state != batchActive {
+		return // ya abortó o terminó (p. ej. su temporizador durante una espera): queda el primer motivo
+	}
 	if ferr := b.finishLocked(false, false); ferr != nil && !errors.Is(ferr, ErrClosed) {
 		err = errors.Join(err, ferr)
 	}
@@ -218,7 +221,7 @@ func (b *Batch) finishLocked(commit, deferred bool) error {
 	if b.hasDDL() {
 		return b.finishDDL(commit)
 	}
-	if err := b.logEnd(commit, deferred); err != nil {
+	if err := b.logEnd(commit, modeOf(deferred)); err != nil {
 		return b.e.fail(err)
 	}
 	return nil
@@ -228,10 +231,10 @@ func (b *Batch) finishLocked(commit, deferred bool) error {
 * logEnd escribe el registro de confirmación o aborto y anota el estado, con commitMu en lectura desde antes de
 * reservar hasta anotarlo (el checkpoint no puede dejar el registro antes de su punto de rehacer y el estado fuera
 * del archivo de estados que guarda). Un aborto nunca espera el fsync: sin registro durable, cuenta como abortado.
-* @param commit bool, deferred bool: confirmar sin esperar el fsync
+* @param commit bool, mode syncMode: cuánto espera el fsync de la confirmación
 * @return error
 **/
-func (b *Batch) logEnd(commit, deferred bool) error {
+func (b *Batch) logEnd(commit bool, mode syncMode) error {
 	e := b.e
 	start := time.Now()
 	e.commitMu.RLock()
@@ -256,7 +259,7 @@ func (b *Batch) logEnd(commit, deferred bool) error {
 		return err
 	}
 	if commit {
-		if err := e.syncCommit(lsn, deferred); err != nil {
+		if err := e.syncCommit(lsn, mode); err != nil {
 			return err
 		}
 	}
@@ -282,8 +285,9 @@ func txError(err error) bool {
 
 /**
 * writeIn hace una escritura dentro del lote b: como la suelta, pero con el xid y el snapshot del lote y sin
-* confirmar (Commit = false); lo que suma a Count queda en el lote hasta Commit. Un error de serialización,
-* conflicto, tiempo o disco lleno aborta el lote. Si no escribió, la cadena de desborde que había preparado se libera.
+* confirmar (Commit = false); lo que suma a Count queda en el lote hasta Commit. Si otra transacción en curso tiene el
+* id, la espera sin b.mu, Store.mu, closeMu ni páginas (waitOther) y repite. Un error de serialización, conflicto,
+* tiempo o disco lleno aborta el lote. Si no escribió, la cadena de desborde que había preparado se libera.
 * @param b *Batch, id string, c change
 * @return bool: si escribió, error
 **/
@@ -298,80 +302,102 @@ func (s *Store) writeIn(b *Batch, id string, c change) (bool, error) {
 		return false, err
 	}
 	defer b.mu.Unlock()
-	applied, err := s.writeInLocked(b, id, c)
-	if txError(err) {
-		b.abortLocked(err)
+	for {
+		applied, wait, err := s.writeInRound(b, id, c)
+		if wait != 0 {
+			if err = b.waitOther(wait); err == nil {
+				continue
+			}
+		}
+		if txError(err) {
+			b.abortLocked(err)
+		}
+		return applied, err
 	}
-	return applied, err
 }
 
 /**
-* writeInLocked es writeIn con el lote ya tomado: prepara la versión, la escribe y libera el desborde sin usar.
+* writeInRound es una vuelta de writeIn con el lote tomado: entra al store, prepara la versión, la escribe y libera
+* el desborde sin usar (también si hay que esperar: el store puede vaciarse o borrarse durante la espera).
 * @param b *Batch, id string, c change
-* @return bool, error
+* @return bool: si escribió, page.XID: la transacción a esperar (0 = ninguna), error
 **/
-func (s *Store) writeInLocked(b *Batch, id string, c change) (bool, error) {
+func (s *Store) writeInRound(b *Batch, id string, c change) (bool, page.XID, error) {
 	if err := s.beginWrite(); err != nil {
-		return false, err
+		return false, 0, err
 	}
 	defer s.end()
 	if err := s.pendingFor(b.xid); err != nil {
-		return false, err
+		return false, 0, err
 	}
 	b.noteWrite(s)
 	if err := s.e.admit(); err != nil {
-		return false, err
+		return false, 0, err
 	}
 	w, err := s.prepare(b.xid, id, c)
 	if err != nil {
-		return false, s.e.writeError(err)
+		return false, 0, s.e.writeError(err)
 	}
 	w.Commit, w.UnderLock, w.Snapshot = false, nil, &b.snap
-	applied, err := s.batchLoop(b, id, w)
-	unused := err == nil || txError(err)
+	applied, wait, err := s.batchLeaf(b, id, w)
+	unused := wait != 0 || err == nil || txError(err)
 	if !applied && unused && w.Overflow != nil {
 		if ferr := s.e.chains.Free(s.file, *w.Overflow, b.xid); ferr != nil {
-			return false, s.e.fail(ferr)
+			return false, 0, s.e.fail(ferr)
 		}
 	}
-	return applied, err
+	return applied, wait, err
 }
 
 /**
-* batchLoop escribe la versión del lote; si otra transacción en curso tiene el id, la espera (hasta LOCK_TIMEOUT sin
-* pasar el tiempo del lote) sin páginas bloqueadas y repite. No toma commitMu: las versiones de un lote no confirman
+* batchLeaf intenta una vez escribir la versión del lote. No toma commitMu: las versiones de un lote no confirman
 * nada hasta su KindCommit.
 * @param b *Batch, id string, w btree.Write
-* @return bool: si escribió, error: ErrSerialization, ErrConflict, ErrTimeout, ErrDiskFull o ErrFailed con la causa
+* @return bool: si escribió, page.XID: la transacción en curso que tiene el id (0 = ninguna), error:
+* ErrSerialization, ErrDiskFull o ErrFailed con la causa
 **/
-func (s *Store) batchLoop(b *Batch, id string, w btree.Write) (bool, error) {
-	for {
-		res, err := s.tree.Write(id, w)
-		var wait *btree.WaitError
-		switch {
-		case errors.As(err, &wait):
-			if werr := s.e.txs.Wait(wait.XID, b.waitLimit()); werr != nil {
-				if b.expired() {
-					return false, ErrTimeout
-				}
-				return false, ErrConflict
-			}
-			if err := s.e.failed(); err != nil {
-				return false, err
-			}
-			continue
-		case errors.Is(err, btree.ErrSerialization):
-			return false, ErrSerialization
-		case err != nil:
-			return false, s.e.writeError(err)
-		}
-		if res.Applied {
-			s.e.writes.Add(1)
-			b.wrote = true
-			b.deltas[s.file] += int64(res.CountDelta)
-		}
-		return res.Applied, nil
+func (s *Store) batchLeaf(b *Batch, id string, w btree.Write) (bool, page.XID, error) {
+	res, err := s.tree.Write(id, w)
+	var wait *btree.WaitError
+	switch {
+	case errors.As(err, &wait):
+		return false, wait.XID, nil
+	case errors.Is(err, btree.ErrSerialization):
+		return false, 0, ErrSerialization
+	case err != nil:
+		return false, 0, s.e.writeError(err)
 	}
+	if res.Applied {
+		s.e.writes.Add(1)
+		b.wrote = true
+		b.deltas[s.file] += int64(res.CountDelta)
+	}
+	return res.Applied, 0, nil
+}
+
+/**
+* waitOther espera a la transacción xid (hasta LOCK_TIMEOUT sin pasar el tiempo del lote) con b.mu suelto, como
+* XactLockTableWait de PostgreSQL: así el temporizador del lote, Rollback y las otras operaciones del lote no quedan
+* detrás de la espera. Al volver a tomar b.mu, el lote pudo haber terminado o abortado. Con b.mu tomado (al entrar y
+* al salir) y sin Store.mu, closeMu ni páginas.
+* @param xid page.XID
+* @return error: nil (repetir), ErrConflict, ErrTimeout, por qué terminó el lote o el fallo del motor
+**/
+func (b *Batch) waitOther(xid page.XID) error {
+	limit := b.waitLimit()
+	b.mu.Unlock()
+	werr := b.e.txs.Wait(xid, limit)
+	b.mu.Lock()
+	if err := b.usableLocked(); err != nil {
+		return err
+	}
+	if werr != nil {
+		if b.expired() {
+			return ErrTimeout
+		}
+		return ErrConflict
+	}
+	return b.e.failed()
 }
 
 /**

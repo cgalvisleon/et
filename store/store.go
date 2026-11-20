@@ -184,8 +184,10 @@ func inline(id string, data []byte) bool {
 
 /**
 * write hace una escritura suelta (el orden de un cambio en doc.go): el freno del WAL y la entrada de lugar, su
-* propia transacción, el valor grande en desborde antes que la hoja, la condición con la hoja bloqueada, la espera a
-* otra transacción sin páginas bloqueadas y la confirmación al volver. Un disco lleno antes de escribir la hoja
+* propia transacción, el valor grande en desborde antes que la hoja, la condición con la hoja bloqueada y la
+* confirmación al volver. Si otra transacción en curso tiene el id, la espera (hasta LOCK_TIMEOUT) fuera del store y
+* del motor, sin Store.mu, closeMu ni páginas (como XactLockTableWait de PostgreSQL), y repite desde la entrada: así
+* esa espera no cierra un ciclo con DropStoreIn, DropStore, Empty ni Close. Un disco lleno antes de escribir la hoja
 * devuelve ErrDiskFull sin tocar nada (el desborde ya escrito se libera); otro fallo de escritura deja el motor
 * inutilizable.
 * @param id string, c change
@@ -198,31 +200,60 @@ func (s *Store) write(id string, c change) (bool, error) {
 	if err := s.e.throttle(); err != nil {
 		return false, err
 	}
+	var xid page.XID
+	defer func() {
+		if xid != 0 {
+			s.e.txs.End(xid)
+		}
+	}()
+	for {
+		applied, wait, err := s.writeRound(&xid, id, c)
+		if wait == 0 {
+			return applied, err
+		}
+		if err := s.e.txs.Wait(wait, s.e.cfg.lockTimeout); err != nil {
+			return false, ErrConflict
+		}
+		if err := s.e.failed(); err != nil {
+			return false, err // la otra pudo terminar sin estado porque el motor falló: no repetir sin fin
+		}
+	}
+}
+
+/**
+* writeRound es una vuelta de write con el store tomado: entra, prepara la versión (con su desborde), la escribe y
+* confirma. Si hay que esperar a otra transacción libera el desborde antes de salir (el store puede vaciarse o
+* borrarse durante la espera) y devuelve a quién esperar. La transacción propia se abre en la primera vuelta y sigue
+* la misma en las siguientes (no escribió ninguna hoja).
+* @param xid *page.XID: la transacción de la escritura (0 = abrirla), id string, c change
+* @return bool: si escribió, page.XID: la transacción a esperar (0 = ninguna), error
+**/
+func (s *Store) writeRound(xid *page.XID, id string, c change) (bool, page.XID, error) {
 	if err := s.beginWrite(); err != nil {
-		return false, err
+		return false, 0, err
 	}
 	defer s.end()
 	if err := s.pendingFor(0); err != nil {
-		return false, err
+		return false, 0, err
 	}
 	if err := s.e.admit(); err != nil {
-		return false, err
+		return false, 0, err
 	}
-
-	xid := s.e.txs.Begin()
-	defer s.e.txs.End(xid)
-	w, err := s.prepare(xid, id, c)
+	if *xid == 0 {
+		*xid = s.e.txs.Begin()
+	}
+	w, err := s.prepare(*xid, id, c)
 	if err != nil {
-		return false, s.e.writeError(err)
+		return false, 0, s.e.writeError(err)
 	}
-	applied, err := s.writeLoop(id, w, c.deferred)
-	unused := err == nil || errors.Is(err, ErrConflict) || isCleanDiskFull(err)
+	applied, wait, err := s.writeLeaf(id, w, c.deferred)
+	unused := wait != 0 || err == nil || isCleanDiskFull(err)
 	if !applied && unused && w.Overflow != nil {
-		if ferr := s.e.chains.Free(s.file, *w.Overflow, xid); ferr != nil {
-			return false, s.e.fail(ferr)
+		if ferr := s.e.chains.Free(s.file, *w.Overflow, *xid); ferr != nil {
+			return false, 0, s.e.fail(ferr)
 		}
 	}
-	return applied, err
+	return applied, wait, err
 }
 
 /**
@@ -264,40 +295,33 @@ func (s *Store) countUnderLock(_ page.LSN, delta int) {
 }
 
 /**
-* writeLoop escribe la versión y confirma; si otra transacción en curso tiene el id, la espera (hasta LOCK_TIMEOUT)
-* sin páginas bloqueadas y repite. commitMu va en lectura desde antes de reservar hasta anotar el estado.
+* writeLeaf intenta una vez escribir la versión y confirmarla. commitMu va en lectura desde antes de reservar hasta
+* anotar el estado, y se suelta antes de devolver la transacción a esperar.
 * @param id string, w btree.Write, deferred bool: confirmar sin esperar el fsync del WAL
-* @return bool: si escribió, error: ErrConflict, ErrDiskFull, o ErrFailed con la causa
+* @return bool: si escribió, page.XID: la transacción en curso que tiene el id (0 = ninguna), error: ErrDiskFull, o
+* ErrFailed con la causa
 **/
-func (s *Store) writeLoop(id string, w btree.Write, deferred bool) (bool, error) {
-	for {
-		s.e.commitMu.RLock()
-		res, err := s.tree.Write(id, w)
-		var wait *btree.WaitError
-		if errors.As(err, &wait) {
-			s.e.commitMu.RUnlock()
-			if err := s.e.txs.Wait(wait.XID, s.e.cfg.lockTimeout); err != nil {
-				return false, ErrConflict
-			}
-			if err := s.e.failed(); err != nil {
-				return false, err // la otra pudo terminar sin estado porque el motor falló: no repetir sin fin
-			}
-			continue
-		}
-		if err != nil {
-			s.e.commitMu.RUnlock()
-			return false, s.e.writeError(err) // la hoja no se escribió: un disco lleno limpio no deja nada
-		}
-		if res.Applied {
-			s.e.writes.Add(1)
-			err = s.e.commit(w.XID, res.LSN, deferred)
-		}
+func (s *Store) writeLeaf(id string, w btree.Write, deferred bool) (bool, page.XID, error) {
+	s.e.commitMu.RLock()
+	res, err := s.tree.Write(id, w)
+	var wait *btree.WaitError
+	if errors.As(err, &wait) {
 		s.e.commitMu.RUnlock()
-		if err != nil {
-			return false, s.e.fail(err)
-		}
-		return res.Applied, nil
+		return false, wait.XID, nil
 	}
+	if err != nil {
+		s.e.commitMu.RUnlock()
+		return false, 0, s.e.writeError(err) // la hoja no se escribió: un disco lleno limpio no deja nada
+	}
+	if res.Applied {
+		s.e.writes.Add(1)
+		err = s.e.commit(w.XID, res.LSN, deferred)
+	}
+	s.e.commitMu.RUnlock()
+	if err != nil {
+		return false, 0, s.e.fail(err)
+	}
+	return res.Applied, 0, nil
 }
 
 /**
@@ -309,7 +333,7 @@ func (s *Store) writeLoop(id string, w btree.Write, deferred bool) (bool, error)
 **/
 func (e *Engine) commit(xid page.XID, lsn page.LSN, deferred bool) error {
 	start := time.Now()
-	if err := e.syncCommit(lsn, deferred); err != nil {
+	if err := e.syncCommit(lsn, modeOf(deferred)); err != nil {
 		return err
 	}
 	if err := e.status.SetStatus(xid, xact.StatusCommitted, lsn); err != nil {

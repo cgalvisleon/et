@@ -16,11 +16,13 @@ type segKey struct {
 }
 
 // handle es un descriptor abierto de la caché. refs cuenta quienes lo usan ahora: con refs > 0 no se cierra.
+// dropped: drop lo sacó de la caché mientras estaba en uso; el último release lo cierra.
 type handle struct {
-	key  segKey
-	f    vfs.File
-	refs int
-	elem *list.Element
+	key     segKey
+	f       vfs.File
+	refs    int
+	elem    *list.Element
+	dropped bool
 }
 
 // fileCache es la caché de descriptores de tamaño fijo. Cuando hay más de max abiertos, cierra los menos usados
@@ -94,15 +96,20 @@ func (c *fileCache) acquire(key segKey, name string, create bool) (*handle, erro
 func (c *fileCache) release(h *handle) {
 	c.mu.Lock()
 	h.refs--
+	closeIt := h.dropped && h.refs == 0
 	victims := c.takeVictims()
 	c.mu.Unlock()
 
+	if closeIt {
+		h.f.Close() // sus archivos se borraron: sin fsync
+	}
 	c.closeVictims(victims)
 }
 
 /**
-* drop saca de la caché y cierra, sin fsync, los descriptores de un fork (sus archivos se van a borrar). Nadie debe
-* estar usándolos: quien llama tiene el fork bloqueado en exclusivo.
+* drop saca de la caché y cierra, sin fsync, los descriptores de un fork (sus archivos se van a borrar). Quien llama
+* tiene el fork bloqueado en exclusivo; un descriptor que todavía usa un Sync (tomado antes, con el fork suelto
+* durante el fsync) se cierra en su último release.
 * @param file FileNo, fork Fork
 **/
 func (c *fileCache) drop(file FileNo, fork Fork) {
@@ -111,6 +118,10 @@ func (c *fileCache) drop(file FileNo, fork Fork) {
 	for key, h := range c.open {
 		if key.file == file && key.fork == fork {
 			c.remove(h)
+			if h.refs > 0 {
+				h.dropped = true
+				continue
+			}
 			closing = append(closing, h)
 		}
 	}

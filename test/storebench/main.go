@@ -12,6 +12,8 @@
 //	go run ./test/storebench -n 1000000 -dir d -load=false # reabre y lee lo ya cargado en d (repite la medida de Open)
 //	go run ./test/storebench -n 0 -rate 2s              # solo Put/s durable vs diferido con 1, 8 y 64 escritores
 //	go run ./test/storebench -n 0 -rate 2s -writers 1,8 # otros números de escritores
+//	go run ./test/storebench -crashwal 1024 -dir d      # carga sin Close hasta 1 GB de WAL por rehacer y se mata (kill -9)
+//	go run ./test/storebench -recover -dir d            # Open tras la caída (rehace el WAL), Count, Verify y Close
 package main
 
 import (
@@ -42,7 +44,21 @@ func main() {
 	doLoad := flag.Bool("load", true, "cargar las n claves (false = usar las que ya hay en -dir)")
 	rate := flag.Duration("rate", 0, "si no es 0, mide Put/s durable y diferido durante ese tiempo por medida")
 	writers := flag.String("writers", "1,8,64", "escritores de cada medida de -rate, separados por coma")
+	crashWAL := flag.Int("crashwal", 0, "MB de WAL desde el último checkpoint a los que la carga se mata con SIGKILL, sin Close (exige -dir)")
+	crashCycles := flag.Int("crashcycles", 3, "con -crashwal: checkpoints que se esperan antes de conformarse con el máximo visto")
+	recover := flag.Bool("recover", false, "solo abrir -dir midiendo Open (la recuperación tras -crashwal), Count, Verify y Close")
 	flag.Parse()
+
+	if *crashWAL > 0 || *recover {
+		if *dir == "" {
+			log.Fatal("-crashwal y -recover necesitan -dir")
+		}
+		if *crashWAL > 0 {
+			crashLoad(*dir, int64(*crashWAL)<<20, *crashCycles, *batch, *size)
+		}
+		recoverOpen(*dir)
+		return
+	}
 
 	path := *dir
 	if path == "" {
@@ -105,6 +121,105 @@ func load(path string, n, batch, size int) {
 		}
 	}
 	report("tras cargar")
+	check(engine.Close())
+}
+
+/**
+* crashLoad carga claves en lotes (durables) en un motor nuevo hasta que el WAL por rehacer tras una caída (desde el
+* punto de rehacer del último checkpoint terminado, ver redoTracker) llega a target, y entonces se mata con SIGKILL
+* (kill -9): sin Close ni checkpoint final. Si los checkpoints por volumen (MAX_WAL_SIZE / 1,9) no lo dejan llegar,
+* tras cycles checkpoints se conforma con el 95 % del máximo visto. Nunca vuelve.
+* @param path string, target int64: bytes de WAL, cycles, batch, size int
+**/
+func crashLoad(path string, target int64, cycles, batch, size int) {
+	engine, err := store.Open(path)
+	check(err)
+	keys, err := engine.Store("keys")
+	check(err)
+	value := make([]byte, size)
+	base := engine.Stats().Checkpoints
+	var redo redoTracker
+	var peak int64
+	start := time.Now()
+	for i := 0; ; {
+		tx := engine.NewBatch()
+		for end := i + batch; i < end; i++ {
+			check(keys.PutIn(tx, key(i), value))
+		}
+		check(tx.Commit())
+		st := engine.Stats()
+		done := st.Checkpoints - base
+		redo.observe(st.WALSinceCheckpoint)
+		backlog := redo.backlog(done)
+		peak = max(peak, backlog)
+		if backlog < target && (done < int64(cycles) || backlog < peak*95/100) {
+			continue
+		}
+		fmt.Printf("caída: %d claves en %v, WAL por rehacer ~%d MB (máximo visto %d MB; Stats.WALSinceCheckpoint %d MB), "+
+			"checkpoints durante la carga %d, último %v, WAL %d MB en disco\n", i, since(start), backlog>>20, peak>>20,
+			st.WALSinceCheckpoint>>20, done, st.LastCheckpointTook.Round(time.Millisecond), dirSize(path+"/wal")>>20)
+		report("antes del kill -9")
+		check(syscall.Kill(os.Getpid(), syscall.SIGKILL))
+		select {}
+	}
+}
+
+/**
+* redoTracker estima el WAL que rehace la recuperación: desde el punto de rehacer del último checkpoint TERMINADO.
+* Stats.WALSinceCheckpoint lo mide desde el punto de rehacer vigente, que BeginCheckpoint mueve al EMPEZAR un
+* checkpoint: mientras uno corre, se queda corto. El tracker suma el WAL escrito (los aumentos de WALSinceCheckpoint;
+* cuando baja, empezó otro checkpoint y se cuenta lo del lote anterior: error ≤ un lote) y anota dónde empezó cada
+* checkpoint; el j-ésimo punto de rehacer es el del j-ésimo checkpoint desde Open.
+**/
+type redoTracker struct {
+	written, last, lastDelta int64
+	redos                    []int64 // posición (en bytes escritos) del punto de rehacer de cada checkpoint desde Open
+}
+
+/**
+* observe toma una lectura de Stats.WALSinceCheckpoint (una por lote).
+* @param since int64
+**/
+func (r *redoTracker) observe(since int64) {
+	switch {
+	case r.redos == nil:
+		r.written, r.redos = since, []int64{0}
+	case since >= r.last:
+		r.lastDelta = since - r.last
+		r.written += r.lastDelta
+	default:
+		r.written += r.lastDelta
+		r.redos = append(r.redos, r.written-since)
+	}
+	r.last = since
+}
+
+/**
+* backlog da el WAL escrito desde el punto de rehacer del checkpoint número done (desde Open) ya terminado.
+* @param done int64: Stats.Checkpoints − los de Open
+* @return int64: bytes
+**/
+func (r *redoTracker) backlog(done int64) int64 {
+	return r.written - r.redos[min(int(done), len(r.redos)-1)]
+}
+
+/**
+* recoverOpen abre path midiendo Open (rehace el WAL desde el último checkpoint), muestra Count y Verify, y cierra.
+* @param path string
+**/
+func recoverOpen(path string) {
+	wal := dirSize(path+"/wal") >> 20
+	start := time.Now()
+	engine, err := store.Open(path)
+	check(err)
+	took := time.Since(start)
+	keys, err := engine.Store("keys")
+	check(err)
+	fmt.Printf("Open tras caída: %v (Count %d, WAL en disco %d MB)\n", took.Round(time.Millisecond), keys.Count(), wal)
+	rep, err := engine.Verify()
+	check(err)
+	fmt.Printf("Verify: limpio=%v\n", rep.Clean())
+	report("tras recuperar")
 	check(engine.Close())
 }
 

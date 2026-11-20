@@ -265,3 +265,54 @@ func TestChangesRestart(t *testing.T) {
 	sameModel(t, restart, dumpEngine(t, e))
 	mustOK(t, e.Close())
 }
+
+// TestChangesBatchDDLUndo (tarea 94): el KindDropStore de xid 0 que deshace un store creado dentro de un lote (el
+// mismo lote lo borra con DropStoreIn, o el lote se deshace) no sale como DDL suelto, y los cambios del lote en ese
+// store tampoco: el consumidor termina igual que el motor. Antes el flujo entregaba [drop:x, create:x, put:/k,
+// drop:y] y el consumidor quedaba con un store fantasma "".
+func TestChangesBatchDDLUndo(t *testing.T) {
+	e := openTest(t, crashfs.New(), smallWAL())
+	defer e.Close()
+	_, err := e.CreateLogicalSlot("c")
+	mustOK(t, err)
+	a := mustStore(t, e, "a")
+	r, err := e.Changes("c")
+	mustOK(t, err)
+	defer r.Close()
+
+	tx := e.NewBatch()
+	x, err := e.StoreIn(tx, "x")
+	mustOK(t, err)
+	mustOK(t, x.PutIn(tx, "k", []byte("v")))
+	mustOK(t, x.PutIn(tx, "big", bytes.Repeat([]byte("b"), 20000)))
+	mustOK(t, a.PutIn(tx, "kept", []byte("1")))
+	mustOK(t, e.DropStoreIn(tx, "x"))
+	mustOK(t, tx.Commit())
+
+	tx = e.NewBatch()
+	y, err := e.StoreIn(tx, "y")
+	mustOK(t, err)
+	mustOK(t, y.PutIn(tx, "k", []byte("v")))
+	mustOK(t, tx.Rollback())
+
+	tx = e.NewBatch()
+	z, err := e.StoreIn(tx, "z")
+	mustOK(t, err)
+	mustOK(t, z.PutIn(tx, "k", []byte("z")))
+	mustOK(t, tx.Commit())
+
+	mustOK(t, e.WaitDurable())
+	k := newConsumer()
+	var ops []string
+	_, err = r.Next(0, func(tx TxInfo, c Change) error {
+		ops = append(ops, fmt.Sprintf("%s:%s/%s", c.Op, c.Store, c.ID))
+		return k.apply(tx, c)
+	})
+	mustOK(t, err)
+	sameModel(t, k, dumpEngine(t, e))
+	for _, op := range ops {
+		if strings.Contains(op, ":x/") || strings.Contains(op, ":y/") || strings.Contains(op, ":/") {
+			t.Fatalf("the stream has %s: %v", op, ops)
+		}
+	}
+}

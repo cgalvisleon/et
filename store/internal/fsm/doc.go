@@ -4,9 +4,10 @@
 //
 //   - Lista de páginas libres del fork principal, encadenada desde la página meta (campo freeHead de la meta, ver
 //     btree) por el campo next del espacio especial de cada página libre (marca page.OpaqueFree). Allocate saca la
-//     primera (KindFreePop) o, si la lista está vacía, extiende el archivo; Free la devuelve (KindFreePush). Hoy
-//     solo se liberan páginas de desborde (y las que devuelve Reclaim): las hojas vacías esperan al borrado de
-//     páginas del árbol, pendiente.
+//     primera (KindFreePop) o, si la lista está vacía, extiende el archivo; Free la devuelve (KindFreePush). Se
+//     liberan páginas de desborde, las que devuelve Reclaim y las páginas del árbol borradas: btree las recicla con su
+//     propio registro (KindRecyclePage, que las saca de su pila de borradas y las deja en la cabeza de esta lista con
+//     el mismo formato de página libre; ver btree/doc.go, «Borrado de páginas»).
 //     Como cada store tiene sus archivos, no hay una lista global ni un punto caliente entre stores.
 //   - Mapa de visibilidad (fork smgr.ForkVM, fase 1B/2, pregunta 44): VMBitsPerBlock = 2 bits por bloque del fork
 //     principal —VMAllVisible (todas sus versiones visibles para todos) y VMAllFrozen (todas congeladas)—. Una
@@ -25,7 +26,8 @@
 // # Lista de páginas libres
 //
 // La meta guarda freeHead en el byte page.HeaderSize + 24 (formato completo en btree/doc.go; fsm repite la posición,
-// la magia y el bloque 0 porque no puede importar btree). Una página libre es una página de store vacía
+// la magia y el bloque 0 porque no puede importar btree). Además de KindFreePush y KindFreePop, cambia freeHead el
+// KindRecyclePage de btree (que es su dueño y conoce este formato). Una página libre es una página de store vacía
 // (page.Init con page.OpaqueSize) con espacio especial flags = page.OpaqueFree y next = la siguiente libre (0 = fin).
 // La lista es una pila: Free apila y Allocate saca la cabeza. Una página sacada queda vacía con el espacio especial
 // en cero, bloqueada en exclusivo para quien la pidió, que la inicia en su propio registro con BlockWillInit. Una

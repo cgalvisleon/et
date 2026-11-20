@@ -26,6 +26,7 @@ func (t *BTree) Write(id string, w Write) (Result, error) {
 	}
 	item := encodeEntry([]byte(id), w)
 	k := searchKey([]byte(id))
+	defer t.guard.leave(t.guard.enter())
 	var hs hints
 	defer t.flushHints(&hs)
 	for {

@@ -28,6 +28,7 @@ const (
 	FindFrozen      FindingKind = "frozen"       // una versión sin congelar por debajo del frozenXID del store
 	FindCount       FindingKind = "count"        // Count no coincide con el recorrido (reparable: se corrige)
 	FindStatus      FindingKind = "status"       // el archivo de estados no da el estado de una versión
+	FindHalfDead    FindingKind = "half-dead"    // un borrado de páginas cortado a medias (reparable: se termina)
 )
 
 // Finding es un hallazgo: dónde está y qué pasa.
@@ -46,7 +47,8 @@ type Finding struct {
 type Report struct {
 	Stores      int   // stores revisados
 	Pages       int64 // bloques del fork principal de esos stores
-	TreePages   int64 // páginas del árbol (sin las metas)
+	TreePages   int64 // páginas del árbol enganchadas en sus niveles (sin las metas ni las borradas)
+	Deleted     int64 // páginas borradas del árbol que esperan reciclarse (en la pila de su meta)
 	ChainPages  int64 // páginas de cadenas de desborde vivas
 	FreePages   int64 // páginas en la lista de libres
 	LostPages   int64 // páginas sin dueño, de cadenas huérfanas incluidas
@@ -82,7 +84,7 @@ func (r Report) Pending() int {
 **/
 func (r Report) String() string {
 	var b strings.Builder
-	fmt.Fprintf(&b, MSG_REPORT_TOTALS, r.Stores, r.Pages, r.TreePages, r.ChainPages, r.FreePages, r.LostPages,
+	fmt.Fprintf(&b, MSG_REPORT_TOTALS, r.Stores, r.Pages, r.TreePages, r.Deleted, r.ChainPages, r.FreePages, r.LostPages,
 		r.Entries, r.LiveIDs, r.OrphanFiles)
 	fmt.Fprintf(&b, MSG_REPORT_FINDINGS, r.Total, r.Repaired, r.Irreparable)
 	for _, f := range r.Findings {

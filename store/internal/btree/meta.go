@@ -16,6 +16,7 @@ const (
 	offMetaFastRoot  = page.HeaderSize + 16
 	offMetaFastLevel = page.HeaderSize + 20
 	offMetaFreeHead  = page.MetaOffFreeHead
+	offMetaDeleted   = page.HeaderSize + 28
 	offMetaFrozen    = page.HeaderSize + 32
 
 	// metaVersion es la versión del formato de la meta.
@@ -24,12 +25,16 @@ const (
 
 // meta es lo que el árbol lee de la página meta.
 type meta struct {
-	root  page.BlockNumber
-	level uint32
+	root      page.BlockNumber
+	level     uint32
+	fastRoot  page.BlockNumber // la raíz rápida: la página de más a la izquierda de fastLevel (btm_fastroot)
+	fastLevel uint32
+	deleted   page.BlockNumber // la cabeza de la pila de páginas borradas que esperan reciclarse (0 = vacía)
+	freeHead  page.BlockNumber // la cabeza de la lista de libres (de fsm)
 }
 
 /**
-* readMetaPage lee la raíz de la página meta, comprobando que lo sea (iniciada, magia, versión, page.OpaqueMeta).
+* readMetaPage lee la raíz, la raíz rápida y las pilas de la página meta, comprobando que lo sea (iniciada, magia, versión, page.OpaqueMeta).
 * @param p page.Page
 * @return meta, error: ErrCorrupt
 **/
@@ -40,11 +45,28 @@ func readMetaPage(p page.Page) (meta, error) {
 	if o, err := p.Opaque(); err != nil || o.Flags&page.OpaqueMeta == 0 {
 		return meta{}, corruptAt(MetaBlock, "meta page without OpaqueMeta")
 	}
-	m := meta{root: page.BlockNumber(le.Uint32(p[offMetaRoot:])), level: le.Uint32(p[offMetaLevel:])}
-	if m.root == MetaBlock {
-		return meta{}, corruptAt(MetaBlock, "root is the meta page")
+	m := meta{
+		root:      page.BlockNumber(le.Uint32(p[offMetaRoot:])),
+		level:     le.Uint32(p[offMetaLevel:]),
+		fastRoot:  page.BlockNumber(le.Uint32(p[offMetaFastRoot:])),
+		fastLevel: le.Uint32(p[offMetaFastLevel:]),
+		deleted:   page.BlockNumber(le.Uint32(p[offMetaDeleted:])),
+		freeHead:  page.BlockNumber(le.Uint32(p[offMetaFreeHead:])),
+	}
+	if m.root == MetaBlock || m.fastRoot == MetaBlock {
+		return meta{}, corruptAt(MetaBlock, "root or fast root is the meta page")
 	}
 	return m, nil
+}
+
+/**
+* setMetaFast anota la raíz rápida: la página de más a la izquierda de su nivel por la que pueden empezar las bajadas
+* (la única de su nivel, salvo una partición todavía sin terminar).
+* @param p page.Page, fast page.BlockNumber, level uint32
+**/
+func setMetaFast(p page.Page, fast page.BlockNumber, level uint32) {
+	le.PutUint32(p[offMetaFastRoot:], uint32(fast))
+	le.PutUint32(p[offMetaFastLevel:], level)
 }
 
 /**
@@ -135,15 +157,14 @@ func (t *BTree) SetFrozenXID(frozen page.XID) error {
 }
 
 /**
-* setMetaRoot anota la raíz y su nivel. La raíz rápida es la misma: sin borrado de páginas (fase 2) no hay niveles
-* de un solo hijo que saltar.
+* setMetaRoot anota la raíz y su nivel, y la raíz rápida en la misma (una raíz nueva es la única página de su nivel,
+* como en _bt_newroot).
 * @param p page.Page, root page.BlockNumber, level uint32
 **/
 func setMetaRoot(p page.Page, root page.BlockNumber, level uint32) {
 	le.PutUint32(p[offMetaRoot:], uint32(root))
 	le.PutUint32(p[offMetaLevel:], level)
-	le.PutUint32(p[offMetaFastRoot:], uint32(root))
-	le.PutUint32(p[offMetaFastLevel:], level)
+	setMetaFast(p, root, level)
 }
 
 /**

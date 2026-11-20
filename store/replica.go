@@ -217,14 +217,16 @@ func (e *Engine) pendingEntries(entries []WalEntry) ([]WalEntry, []*wal.Record, 
 
 /**
 * snapshotConflict dice si rehacer rec cambia lo que ve un snapshot abierto: una confirmación (que hace visibles
-* versiones), una limpieza o una liberación de páginas (que quitan versiones que el snapshot podría ver) o un DDL.
+* versiones), una limpieza o una liberación de páginas (que quitan versiones que el snapshot podría ver), el reciclado
+* de una página borrada del árbol (un recorrido abierto puede tener todavía su enlace: como el safexid de
+* XLOG_BTREE_REUSE_PAGE en PostgreSQL) o un DDL.
 * @param rec *wal.Record
 * @return bool
 **/
 func snapshotConflict(rec *wal.Record) bool {
 	switch rec.Kind {
-	case wal.KindCommit, wal.KindLeafVacuum, wal.KindFreePush, wal.KindCreateStore, wal.KindCreateStoreIn,
-		wal.KindDropStore, wal.KindEmptyStore:
+	case wal.KindCommit, wal.KindLeafVacuum, wal.KindFreePush, wal.KindRecyclePage, wal.KindCreateStore,
+		wal.KindCreateStoreIn, wal.KindDropStore, wal.KindEmptyStore:
 		return true
 	case wal.KindLeafWrite:
 		return rec.Flags&wal.FlagCommit != 0

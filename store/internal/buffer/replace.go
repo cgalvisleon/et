@@ -1,6 +1,13 @@
 package buffer
 
-import "sync"
+import (
+	"errors"
+	"runtime"
+	"sync"
+)
+
+// errVictimBusy: la víctima elegida tiene su contenido o su escritura tomados por otro; el reemplazo elige otra.
+var errVictimBusy = errors.New("buffer: victim is locked by another")
 
 // ring es el anillo de los recorridos grandes (Strategy Ring): ringLen búferes que esos recorridos reutilizan en
 // vez de pasar por el clock-sweep, para no vaciar la caché de todos. Es uno por caché, compartido por todos los
@@ -46,24 +53,32 @@ func (r *ring) set(slot int, id int32) {
 
 /**
 * victim devuelve un búfer fijado (pins = 1) y limpio para cargar otra página (ver candidate). Si estaba sucio lo
-* escribe antes, cumpliendo «WAL antes que la página». Con la caché de solo lectura (un fallo de disco lleno) no
-* escribe nada: saltea los sucios, que se quedan en la caché con su cambio, y si en una vuelta entera no encuentra
-* uno limpio devuelve el fallo.
+* escribe antes, cumpliendo «WAL antes que la página». Quien pide la página puede tener otras bloqueadas, así que la
+* escritura de la víctima no espera sus bloqueos: si otro la fijó después de elegirla y tiene su contenido (o su
+* escritura) tomado, la suelta y elige otra (errVictimBusy), como BufferAlloc de PostgreSQL. Con la caché de solo
+* lectura (un fallo de disco lleno) no escribe nada: saltea los sucios, que se quedan en la caché con su cambio, y si
+* en una vuelta entera no encuentra uno limpio devuelve el fallo.
 * @param strategy Strategy
 * @return *desc, error: ErrNoBuffers, o el fallo de escritura
 **/
 func (p *pool) victim(strategy Strategy) (*desc, error) {
-	for skipped := 0; ; skipped++ {
+	for skipped, busy := 0, 0; ; {
 		d, err := p.candidate(strategy)
 		if err != nil {
 			return nil, err
 		}
-		err = p.flush(d)
+		err = p.flush(d, true)
 		if err == nil {
 			return d, nil
 		}
 		p.unpin(d)
-		if !p.readOnly() || skipped >= len(p.descs) {
+		if errors.Is(err, errVictimBusy) {
+			if busy++; busy%len(p.descs) == 0 {
+				runtime.Gosched() // una vuelta entera ocupada: dejar correr a quien tiene los bloqueos
+			}
+			continue
+		}
+		if skipped++; !p.readOnly() || skipped > len(p.descs) {
 			return nil, err
 		}
 	}

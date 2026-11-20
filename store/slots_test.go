@@ -3,6 +3,8 @@ package store
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -223,4 +225,54 @@ func TestSlotPersist(t *testing.T) {
 			mustOK(t, e.Close())
 		})
 	}
+}
+
+// slotsFullFS hace fallar con disco lleno la creación de slots.tmp mientras full está puesto: el guardado del archivo
+// de ranuras no entra y todo lo demás sí.
+type slotsFullFS struct {
+	vfs.FS
+	full atomic.Bool
+}
+
+func (f *slotsFullFS) OpenFile(name string, flag int) (vfs.File, error) {
+	if f.full.Load() && filepath.Base(name) == slotsTemp {
+		return nil, vfs.ErrNoSpace
+	}
+	return f.FS.OpenFile(name, flag)
+}
+
+// TestSlotSavedRetention (tarea 92): un AdvanceSlot cuyo guardado no entra (disco lleno, en AdvanceSlot y en el paso
+// 6 del checkpoint) no mueve la retención, así el checkpoint no recicla lo que el archivo slots guardado todavía
+// promete: tras un corte la ranura sigue válida y su WAL se lee. Antes la retención se movía en memoria, el
+// checkpoint reciclaba igual y la ranura quedaba invalidada al reabrir. Con lugar otra vez, el próximo checkpoint
+// guarda, mueve la retención y recicla.
+func TestSlotSavedRetention(t *testing.T) {
+	base := crashfs.New()
+	proc := newProc(base)
+	fsys := &slotsFullFS{FS: proc}
+	e := openTest(t, fsys, slotConfig())
+	s := mustStore(t, e, "a")
+	writeBurst(t, e, s, "pre", 50)
+	info, err := e.CreateSlot("r1")
+	mustOK(t, err)
+	for i := range 6 {
+		writeBurst(t, e, s, fmt.Sprintf("b%d", i), 300)
+	}
+	fsys.full.Store(true)
+	mustOK(t, e.AdvanceSlot("r1", uint64(e.log.Durable())))
+	writeBurst(t, e, s, "after", 10) // el checkpoint no puede guardar slots
+	readFrom(t, e, info.ConfirmedLSN, false)
+
+	proc.kill(crashfs.LoseUnsynced, 1)
+	closeWithin(t, e, 10*time.Second)
+	e = openTest(t, base, slotConfig())
+	defer e.Close()
+	if got := slotNamed(t, e, "r1"); got.Invalid || got.RestartLSN != info.RestartLSN {
+		t.Fatalf("after the crash the slot is %+v, want valid with RestartLSN %d", got, info.RestartLSN)
+	}
+	readFrom(t, e, info.ConfirmedLSN, false)
+
+	mustOK(t, e.AdvanceSlot("r1", uint64(e.log.Durable())))
+	writeBurst(t, e, mustStore(t, e, "a"), "late", 10)
+	readFrom(t, e, info.ConfirmedLSN, true) // con lugar, se guardó y se recicló
 }

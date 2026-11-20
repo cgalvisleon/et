@@ -32,6 +32,11 @@ func (f osFile) Sync() error {
 	return syncFile(f.File)
 }
 
+// Flush lleva lo escrito al dispositivo sin vaciar su caché (ver Flusher y flushFile en sync_*.go).
+func (f osFile) Flush() error {
+	return flushFile(f.File)
+}
+
 // Size devuelve el largo actual del archivo.
 func (f osFile) Size() (int64, error) {
 	info, err := f.Stat()

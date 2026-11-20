@@ -8,6 +8,10 @@
 // Implementaciones: la real es OS(), sobre el sistema operativo, con Sync durable de verdad (F_FULLFSYNC en macOS,
 // fdatasync en Linux), fsync de directorios y flock para Lock; fuera de unix no hay fsync de directorios ni flock
 // (SyncDir no hace nada y Lock solo crea el archivo). La simulada, que pierde lo que no tuvo fsync, es crashfs.New().
+// Flusher (opcional; FlushFile la usa o cae a Sync) lleva lo escrito al dispositivo y trae sus errores sin vaciar la
+// caché del disco: el fsync simple en macOS (~30 µs contra ~4 ms de F_FULLFSYNC), fdatasync en Linux. No hace nada
+// durable: smgr lo usa al cerrar un descriptor con escrituras sin fsync (tarea 98), y el checkpoint sincroniza de
+// verdad.
 //
 // Disco lleno: IsNoSpace reconoce el disco lleno del sistema operativo (ENOSPC, EDQUOT) y el simulado (ErrNoSpace);
 // el motor lo usa para decidir si un fallo es «disco lleno» (ver store/doc.go, «Disco lleno o lento»).

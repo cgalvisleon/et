@@ -55,11 +55,13 @@ type Change struct {
 	Data  []byte // en put; del llamador
 }
 
-// TxInfo identifica la transacción de un cambio: su xid (0 en un DDL suelto) y el lsn de su confirmación, que crece
-// de una transacción a la siguiente (sirve para descartar repetidos tras un corte del motor).
+// TxInfo identifica la transacción de un cambio: su xid (0 en un DDL suelto), el lsn de su confirmación, que crece
+// de una transacción a la siguiente (sirve para descartar repetidos tras un corte del motor), y su origen
+// (Batch.SetOrigin; 0 = escrito en este motor: una escritura suelta, un DDL suelto o un lote sin origen).
 type TxInfo struct {
 	XID       uint64
 	CommitLSN uint64
+	Origin    uint16
 }
 
 // clases de los cambios guardados en el búfer.
@@ -86,10 +88,13 @@ type txBuffer struct {
 	canceled map[smgr.FileNo]bool
 }
 
-// ChangeReader lee el flujo lógico de una ranura (Changes). No se usa desde varias goroutines a la vez.
+// ChangeReader lee el flujo lógico de una ranura (Changes, ChangesWith) o desde una posición (ChangesFrom). No se usa
+// desde varias goroutines a la vez.
 type ChangeReader struct {
-	e    *Engine
-	slot string
+	e        *Engine
+	slot     string       // "" en un lector sin ranura (ChangesFrom)
+	spillTag string       // el prefijo de sus archivos de derrame: el nombre de la ranura en hexadecimal, o "~n"
+	filter   ChangeFilter // qué cambios salen (ChangesWith, ChangesFrom)
 
 	mu        sync.Mutex
 	pos       wal.Position // el próximo registro a leer
@@ -125,10 +130,25 @@ func (e *Engine) changes(name string) (*ChangeReader, error) {
 	if err != nil {
 		return nil, err
 	}
+	r := e.newReader(name, restart, confirmed, ChangeFilter{})
+	if err := r.removeSpills(); err != nil {
+		return nil, err
+	}
+	return r, nil
+}
+
+/**
+* newReader arma un lector que empieza a leer en restart y entrega lo confirmado después de confirmed, con los
+* nombres de los stores del catálogo de ahora.
+* @param slot string: "" sin ranura, restart, confirmed page.LSN, f ChangeFilter
+* @return *ChangeReader
+**/
+func (e *Engine) newReader(slot string, restart, confirmed page.LSN, f ChangeFilter) *ChangeReader {
 	r := &ChangeReader{
-		e: e, slot: name, pos: wal.Position{LSN: restart}, confirmed: confirmed, read: restart - 1,
-		txs: map[page.XID]*txBuffer{}, workMem: e.cfg.decodeWorkMem, names: map[smgr.FileNo]string{},
-		creating: map[smgr.FileNo]page.XID{}, ghosts: map[smgr.FileNo]bool{}, dir: filepath.Join(e.dir, spillDirName),
+		e: e, slot: slot, spillTag: fmt.Sprintf("%x", slot), filter: f, pos: wal.Position{LSN: restart},
+		confirmed: confirmed, read: restart - 1, txs: map[page.XID]*txBuffer{}, workMem: e.cfg.decodeWorkMem,
+		names: map[smgr.FileNo]string{}, creating: map[smgr.FileNo]page.XID{}, ghosts: map[smgr.FileNo]bool{},
+		dir: filepath.Join(e.dir, spillDirName),
 	}
 	if r.workMem <= 0 {
 		r.workMem = logicalWorkMem
@@ -136,10 +156,7 @@ func (e *Engine) changes(name string) (*ChangeReader, error) {
 	for _, entry := range e.cat.Catalog().Entries {
 		r.names[entry.File] = entry.Name
 	}
-	if err := r.removeSpills(); err != nil {
-		return nil, err
-	}
-	return r, nil
+	return r
 }
 
 /**
@@ -234,11 +251,11 @@ func (r *ChangeReader) process(rec *wal.Record, fn func(tx TxInfo, c Change) err
 		r.creating[file] = rec.XID
 		return 0, nil
 	case wal.KindCommit:
-		info, err := decodeCommit(rec.Main)
+		info, err := decodeCommit(rec.Main, rec.Flags)
 		if err != nil {
 			return 0, fmt.Errorf(MSG_BAD_RECORD, ErrCorrupt, rec.LSN, rec.Kind, err.Error())
 		}
-		return r.commit(rec.XID, rec.LSN, info.drops, fn)
+		return r.commit(rec.XID, rec.LSN, info, fn)
 	case wal.KindAbort:
 		r.discard(rec.XID)
 	case wal.KindCreateStore, wal.KindDropStore, wal.KindEmptyStore:
@@ -274,7 +291,7 @@ func (r *ChangeReader) leafWrite(rec *wal.Record, fn func(tx TxInfo, c Change) e
 	if rec.Flags&wal.FlagCommit == 0 {
 		return 0, nil
 	}
-	return r.commit(rec.XID, rec.LSN, nil, fn)
+	return r.commit(rec.XID, rec.LSN, commitInfo{}, fn)
 }
 
 /**
@@ -309,7 +326,7 @@ func (r *ChangeReader) storeDDL(rec *wal.Record, fn func(tx TxInfo, c Change) er
 			delete(r.names, file)
 		}
 	}
-	if rec.LSN <= r.confirmed {
+	if rec.LSN <= r.confirmed || !r.filter.keepTx(0) || !r.filter.keepStore(c.Store) {
 		return 0, nil
 	}
 	if err := r.guard(fn(TxInfo{CommitLSN: uint64(rec.LSN)}, c)); err != nil {
@@ -404,7 +421,7 @@ func (r *ChangeReader) spill(t *txBuffer) error {
 			return fmt.Errorf(MSG_SPILL, err)
 		}
 		r.nextFile++
-		t.path = filepath.Join(r.dir, fmt.Sprintf("%x-%d.spill", r.slot, r.nextFile))
+		t.path = filepath.Join(r.dir, fmt.Sprintf("%s-%d.spill", r.spillTag, r.nextFile))
 		f, err := r.e.fs.OpenFile(t.path, os.O_RDWR|os.O_CREATE|os.O_TRUNC)
 		if err != nil {
 			return fmt.Errorf(MSG_SPILL, err)
@@ -428,10 +445,11 @@ func (r *ChangeReader) spill(t *txBuffer) error {
 /**
 * commit entrega la transacción xid confirmada en lsn (si es posterior a lo confirmado por la ranura y tiene
 * cambios) y la saca del búfer.
-* @param xid page.XID, lsn page.LSN, drops []smgr.FileNo: los stores que borra al confirmar, fn
+* @param xid page.XID, lsn page.LSN, info commitInfo: los stores que borra al confirmar y su origen, fn
 * @return int: 1 si la entregó, error
 **/
-func (r *ChangeReader) commit(xid page.XID, lsn page.LSN, drops []smgr.FileNo, fn func(tx TxInfo, c Change) error) (int, error) {
+func (r *ChangeReader) commit(xid page.XID, lsn page.LSN, info commitInfo, fn func(tx TxInfo, c Change) error) (int, error) {
+	drops := info.drops
 	t := r.txs[xid]
 	defer r.discard(xid)
 	if t != nil {
@@ -439,14 +457,20 @@ func (r *ChangeReader) commit(xid page.XID, lsn page.LSN, drops []smgr.FileNo, f
 			delete(r.creating, file) // confirmados: ya no son de un lote abierto
 		}
 	}
-	if lsn <= r.confirmed || t == nil && len(drops) == 0 {
+	if lsn <= r.confirmed || t == nil && len(drops) == 0 || !r.filter.keepTx(info.origin) {
+		for _, file := range drops {
+			delete(r.names, file)
+		}
 		return 0, nil
 	}
-	info := TxInfo{XID: uint64(xid), CommitLSN: uint64(lsn)}
+	tx := TxInfo{XID: uint64(xid), CommitLSN: uint64(lsn), Origin: info.origin}
 	sent := false
 	emit := func(c Change) error {
+		if !r.filter.keepStore(c.Store) {
+			return nil
+		}
 		sent = true
-		return r.guard(fn(info, c))
+		return r.guard(fn(tx, c))
 	}
 	if t != nil {
 		if err := r.replay(t, emit); err != nil {
@@ -489,6 +513,10 @@ func (r *ChangeReader) replay(t *txBuffer, emit func(Change) error) error {
 			return emit(Change{Op: ChangeCreate, Store: id})
 		}
 		c := Change{Op: ChangePut, Store: r.names[smgr.FileNo(file)], ID: id, Data: data}
+		if !r.filter.keepID(c.Store, id) {
+			clear(chunks) // los trozos eran de este valor: no se arma
+			return nil
+		}
 		switch {
 		case a == 1:
 			c.Op, c.Data = ChangeDelete, nil
@@ -623,6 +651,9 @@ func (r *ChangeReader) confirm() error {
 	if r.err != nil {
 		return r.err
 	}
+	if r.slot == "" {
+		return fmt.Errorf(MSG_SLOT_NAME, ErrSlotNotFound, "") // sin ranura: la posición la guarda quien lee (Pos)
+	}
 	restart := r.read + 1
 	for _, t := range r.txs {
 		restart = min(restart, t.first)
@@ -656,7 +687,7 @@ func (r *ChangeReader) removeSpills() error {
 	if err != nil {
 		return nil // no hay directorio: nada que borrar
 	}
-	prefix := fmt.Sprintf("%x-", r.slot)
+	prefix := r.spillTag + "-"
 	for _, name := range names {
 		if strings.HasPrefix(name, prefix) && strings.HasSuffix(name, ".spill") {
 			if err := r.e.fs.Remove(filepath.Join(r.dir, name)); err != nil {

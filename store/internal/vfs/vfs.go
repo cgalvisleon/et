@@ -18,6 +18,22 @@ func IsNoSpace(err error) bool {
 	return err != nil && (errors.Is(err, ErrNoSpace) || isNoSpaceErrno(err))
 }
 
+// Flusher es lo opcional de un File que lleva lo escrito al dispositivo y devuelve sus errores sin vaciar la caché del
+// disco (fsync simple en macOS, ~30 µs contra los ~4 ms de F_FULLFSYNC; en Linux lo mismo que Sync). No hace durable
+// nada: sirve para no perder un error de escritura al cerrar un descriptor que después se sincroniza por otro (la
+// caché de descriptores de smgr). Sin él, se usa Sync.
+type Flusher interface {
+	Flush() error
+}
+
+// FlushFile hace Flush de f si lo sabe, si no Sync.
+func FlushFile(f File) error {
+	if fl, ok := f.(Flusher); ok {
+		return fl.Flush()
+	}
+	return f.Sync()
+}
+
 // File es un archivo abierto. Las escrituras no son durables hasta que Sync vuelve sin error.
 type File interface {
 	io.ReaderAt

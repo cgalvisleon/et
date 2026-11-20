@@ -65,6 +65,7 @@ type BTree struct {
 	pool    buffer.Pool
 	sm      smgr.Manager
 	free    fsm.FreeList
+	grower  fsm.Grower // free, si sabe extender antes de hacer falta (nil si no)
 	log     wal.Log
 	status  StatusReader
 	gate    HintGate
@@ -99,8 +100,9 @@ func Open(cfg Config) (*BTree, error) {
 	if cfg.File == 0 || cfg.Pool == nil || cfg.Smgr == nil || cfg.Free == nil || cfg.Log == nil {
 		return nil, ErrConfig
 	}
-	return &BTree{file: cfg.File, pool: cfg.Pool, sm: cfg.Smgr, free: cfg.Free, log: cfg.Log, status: cfg.Status,
-		gate: cfg.HintGate, vm: cfg.VM, noHints: cfg.NoHints}, nil
+	grower, _ := cfg.Free.(fsm.Grower)
+	return &BTree{file: cfg.File, pool: cfg.Pool, sm: cfg.Smgr, free: cfg.Free, grower: grower, log: cfg.Log,
+		status: cfg.Status, gate: cfg.HintGate, vm: cfg.VM, noHints: cfg.NoHints}, nil
 }
 
 /**

@@ -170,18 +170,18 @@ func TestRecordsRoundTrip(t *testing.T) {
 		t.Fatalf("store main = %d %q %v", file, name, ok)
 	}
 	deltas := map[smgr.FileNo]int64{1: 3, 7: -2}
-	got, err := decodeCommit(encodeCommit(5, commitInfo{deltas: deltas}))
+	got, err := decodeCommit(encodeCommit(5, commitInfo{deltas: deltas}), 0)
 	if err != nil || len(got.deltas) != 2 || got.deltas[1] != 3 || got.deltas[7] != -2 || got.creates != nil || got.drops != nil {
 		t.Fatalf("commit = %v %v", got, err)
 	}
 	ddl := encodeCommit(5, commitInfo{deltas: deltas, creates: []smgr.FileNo{4}, drops: []smgr.FileNo{2, 3}})
-	got, err = decodeCommit(ddl)
+	got, err = decodeCommit(ddl, 0)
 	if err != nil || len(got.deltas) != 2 || !slices.Equal(got.creates, []smgr.FileNo{4}) ||
 		!slices.Equal(got.drops, []smgr.FileNo{2, 3}) {
 		t.Fatalf("commit with ddl = %+v %v", got, err)
 	}
 	for _, cut := range []int{len(ddl) - 1, len(ddl) - 4, 12 + 24 + 4} {
-		if _, err := decodeCommit(ddl[:cut]); err == nil {
+		if _, err := decodeCommit(ddl[:cut], 0); err == nil {
 			t.Fatalf("decodeCommit accepted a ddl tail cut at %d", cut)
 		}
 	}
@@ -193,7 +193,24 @@ func TestRecordsRoundTrip(t *testing.T) {
 	if _, ok := decodeCheckpoint([]byte{1}); ok {
 		t.Fatal("decodeCheckpoint accepted a short record")
 	}
-	if _, err := decodeCommit(encodeCommit(5, commitInfo{deltas: deltas})[:20]); err == nil {
+	if _, err := decodeCommit(encodeCommit(5, commitInfo{deltas: deltas})[:20], 0); err == nil {
 		t.Fatal("decodeCommit accepted a short record")
+	}
+	// Con origen (tarea 83): va al final, también tras la cola de DDL, y lo marca wal.FlagOrigin
+	for _, c := range []commitInfo{{deltas: deltas, origin: 7}, {deltas: deltas, creates: []smgr.FileNo{4}, origin: 65535}} {
+		b := encodeCommit(5, c)
+		got, err := decodeCommit(b, commitFlags(c))
+		if err != nil || got.origin != c.origin || len(got.deltas) != 2 || !slices.Equal(got.creates, c.creates) {
+			t.Fatalf("commit with origin = %+v %v", got, err)
+		}
+		if _, err := decodeCommit(b, 0); err == nil {
+			t.Fatal("decodeCommit read an origin tail without FlagOrigin")
+		}
+	}
+	if commitFlags(commitInfo{deltas: deltas}) != 0 {
+		t.Fatal("FlagOrigin without an origin")
+	}
+	if _, err := decodeCommit([]byte{1, 2}, wal.FlagOrigin); err == nil {
+		t.Fatal("decodeCommit accepted a short record with an origin")
 	}
 }

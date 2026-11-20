@@ -28,7 +28,7 @@ const (
 
 // Marcas conocidas: un registro con otras es inválido.
 const (
-	knownFlags      = FlagCommit | FlagCountAdd | FlagCountSub
+	knownFlags      = FlagCommit | FlagCountAdd | FlagCountSub | FlagOrigin
 	knownBlockFlags = BlockHasImage | BlockImageCompressed | BlockWillInit
 )
 

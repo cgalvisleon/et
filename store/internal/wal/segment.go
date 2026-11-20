@@ -2,12 +2,12 @@ package wal
 
 import (
 	"fmt"
+	"github.com/cgalvisleon/et/store/internal/page"
 	"os"
 	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/cgalvisleon/et/store/internal/vfs"
 )
@@ -17,13 +17,12 @@ const segmentExt = ".seg"
 
 // segment es el segmento activo (o el que se está sellando). size es dónde va la próxima reserva y allocated hasta
 // dónde el archivo ya está escrito (con ceros o registros), así que escribir por debajo no pide lugar nuevo en el
-// disco (los dos bajo writeMu); inflight cuenta las escrituras reservadas que no terminaron, para poder sellarlo.
+// disco (los dos bajo writeMu).
 type segment struct {
 	num       uint64
 	file      vfs.File
 	size      int64
 	allocated int64
-	inflight  sync.WaitGroup
 }
 
 // segmentName es el nombre del segmento num: diez dígitos, así el orden alfabético es el numérico.
@@ -75,10 +74,13 @@ func createSegment(fsys vfs.FS, dir string, num uint64) (vfs.File, error) {
 	return file, nil
 }
 
-// seal espera a que terminen las escrituras reservadas y hace fsync: desde aquí el segmento no cambia. Con writeMu
-// tomado, así nadie reserva mientras tanto.
-func (s *segment) seal() error {
-	s.inflight.Wait()
+// seal espera a que todo lo reservado esté escrito en el archivo (las reservas en curso las escriben sus dueños, y lo
+// pendiente se escribe aquí) y hace fsync de s: desde aquí el segmento no cambia. Con writeMu tomado, así nadie
+// reserva mientras tanto.
+func (w *WAL) seal(s *segment) error {
+	if err := w.waitPublished(page.LSN(w.lastLSN.Load())); err != nil {
+		return err
+	}
 	return s.file.Sync()
 }
 

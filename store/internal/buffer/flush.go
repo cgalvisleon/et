@@ -251,7 +251,52 @@ func (p *pool) bgWriteRound() error {
 		}
 		written++
 	}
+	return p.bgWriteDirty()
+}
+
+/**
+* bgWriteDirty es la segunda pasada del escritor de fondo (tarea 97): si las sucias pasan BgWriterDirtyTarget de la
+* caché, escribe las que sobran (hasta BgWriterMaxDirtyPages) aunque estén en uso, salvo las fijadas, siguiendo desde
+* donde quedó la pasada anterior. Sin bloqueos más que los de flush: «WAL antes que la página» lo cumple write.
+* @return error: el fallo de escritura
+**/
+func (p *pool) bgWriteDirty() error {
+	n := uint64(len(p.descs))
+	excess := p.dirty.Load() - int64(float64(n)*BgWriterDirtyTarget)
+	if excess <= 0 {
+		return nil
+	}
+	want := min(excess, BgWriterMaxDirtyPages)
+	start := p.bgHand.Load()
+	written, i := int64(0), uint64(0)
+	for ; i < n && written < want; i++ {
+		d := &p.descs[(start+i)%n]
+		if !p.pinIfDirtyUnpinned(d) {
+			continue
+		}
+		err := p.flush(d, false)
+		p.unpin(d)
+		if err != nil {
+			return err
+		}
+		written++
+	}
+	p.bgHand.Store(start + i)
 	return nil
+}
+
+/**
+* pinIfDirtyUnpinned fija el búfer si está sucio, sin pins y la caché sigue abierta (con cualquier uso).
+* @param d *desc
+* @return bool
+**/
+func (p *pool) pinIfDirtyUnpinned(d *desc) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.state != stateValid || !d.dirty || d.pins != 0 {
+		return false
+	}
+	return p.pinLocked(d)
 }
 
 /**

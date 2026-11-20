@@ -3,6 +3,7 @@ package store
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
 	"slices"
 
 	"github.com/cgalvisleon/et/store/internal/btree"
@@ -39,6 +40,11 @@ func (e *Engine) recover() error {
 			return fmt.Errorf(MSG_BACKUP_UNFINISHED, ErrBackupIncomplete)
 		}
 		if err := e.checkBackupWAL(ctl.Redo, label); err != nil {
+			return err
+		}
+	}
+	if !e.cfg.stopTime.IsZero() {
+		if e.cfg.stopLSN, err = e.timeTarget(ctl, label, restoring); err != nil {
 			return err
 		}
 	}
@@ -173,6 +179,12 @@ func (e *Engine) finishRecovery(r *redoState, end wal.Position) error {
 	if err := r.dropPending(); err != nil {
 		return err
 	}
+	if err := r.dropUninitialized(); err != nil {
+		return err
+	}
+	if err := e.removeUnallocated(); err != nil {
+		return err
+	}
 	next := max(r.nextXID, r.maxXID+1, 1, e.cfg.firstXID)
 	if err := e.status.Recover(next); err != nil {
 		return err
@@ -190,9 +202,10 @@ type redoState struct {
 	countLSN      page.LSN // las confirmaciones con lsn ≥ countLSN suman a los contadores
 	checkpointLSN page.LSN // el registro de checkpoint que tiene que aparecer
 	sawCheckpoint bool
-	nextXID       page.XID // el mayor nextXID de los checkpoints vistos (y del control)
-	maxXID        page.XID // el mayor xid visto en un registro
-	replayed      int      // registros rehechos, sin contar los checkpoints
+	nextXID       page.XID      // el mayor nextXID de los checkpoints vistos (y del control)
+	maxXID        page.XID      // el mayor xid visto en un registro
+	replayed      int           // registros rehechos, sin contar los checkpoints
+	created       []smgr.FileNo // altas sueltas rehechas (no en una réplica): dropUninitialized las revisa
 
 	// Solo en una réplica (OpenReplica), que sigue rehaciendo después de abrir (replica.go).
 	replica bool
@@ -293,7 +306,7 @@ func (r *redoState) backupEnd(rec *wal.Record) error {
 * @return error
 **/
 func (r *redoState) commit(rec *wal.Record) error {
-	info, err := decodeCommit(rec.Main)
+	info, err := decodeCommit(rec.Main, rec.Flags)
 	if err != nil {
 		return fmt.Errorf(MSG_BAD_RECORD, ErrCorrupt, rec.LSN, rec.Kind, err.Error())
 	}
@@ -327,6 +340,31 @@ func (r *redoState) dropFile(file smgr.FileNo) error {
 		r.e.cat.Drop(entry.Name, file)
 	}
 	return r.unlinkUnused(file)
+}
+
+/**
+* removeUnallocated borra, al terminar de rehacer el WAL, los archivos de datos con número ≥ NextFileNo: son de un
+* alta cuyo registro un corte perdió (createStore no espera su fsync para crear los archivos), así que ningún
+* registro durable los nombra. El número se vuelve a dar y openTree igual borraría lo que encontrara.
+* @return error
+**/
+func (e *Engine) removeUnallocated() error {
+	names, err := e.fs.ReadDir(filepath.Join(e.dir, smgr.DataDir))
+	if err != nil {
+		return err
+	}
+	next := e.cat.NextFileNo()
+	seen := map[smgr.FileNo]bool{}
+	for _, name := range names {
+		if file, ok := parseDataName(name); ok && file >= next && !seen[file] {
+			seen[file] = true
+			e.pool.DropFile(file)
+			if err := e.sm.Unlink(file); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 /**
@@ -375,9 +413,36 @@ func (r *redoState) createStore(rec *wal.Record) error {
 		r.e.counts.set(file, 0)
 		if rec.Kind == wal.KindCreateStoreIn {
 			r.e.cat.SetFlags(file, control.FlagPendingCreate)
+		} else if !r.replica {
+			r.created = append(r.created, file)
 		}
 	}
 	return err
+}
+
+/**
+* dropUninitialized borra, al terminar de rehacer el WAL, los stores sueltos dados de alta en lo rehecho cuyo
+* KindInitStore no llegó a ser durable (sin página meta): su Store no volvió bien (handle espera los dos registros),
+* así que nadie lo vio. Como dropPending, sin WAL: el checkpoint de fin de recuperación guarda el catálogo sin ellos.
+* Crece con las altas desde el último checkpoint, no con las claves.
+* @return error
+**/
+func (r *redoState) dropUninitialized() error {
+	for _, file := range r.created {
+		if _, alive := r.e.cat.ByFile(file); !alive {
+			continue
+		}
+		ready, err := r.e.initialized(file)
+		if err != nil {
+			return err
+		}
+		if !ready {
+			if err := r.dropFile(file); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 /**

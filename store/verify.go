@@ -24,7 +24,7 @@ import (
 **/
 func (e *Engine) check(repair bool) (Report, error) {
 	var r Report
-	if rs := e.replica; rs != nil {
+	if rs := e.replica; rs != nil && e.isReplica() {
 		if repair {
 			return r, ErrReadOnly
 		}
@@ -52,7 +52,7 @@ func (e *Engine) check(repair bool) (Report, error) {
 * @return error
 **/
 func (e *Engine) enterCheck() error {
-	if e.replica != nil {
+	if e.isReplica() {
 		return e.enterRead()
 	}
 	return e.enter()

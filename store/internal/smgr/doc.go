@@ -25,7 +25,9 @@
 // primero. Un Extend que hace nacer un archivo hace fsync de los anteriores (ya llenos) antes de crearlo y de data/
 // después: así un corte nunca deja un archivo corto en el medio del fork (lo encontró TestExtendNewFileCrash). Ese
 // fsync va con el fork en exclusivo, una vez por GB de crecimiento: es la única espera a un fsync bajo el candado del
-// fork.
+// fork. Create y Unlink no hacen fsync de data/ (tarea 98 de F-23): lo anotan y lo hace el próximo SyncAll, el del
+// checkpoint, antes de que el punto de rehacer pase su registro; un corte antes lo arregla el WAL (el rehacer crea
+// el archivo que falte, ensureBlock de btree, y vuelve a borrar el que reaparezca).
 // Bloqueos: el fork (RWMutex: exclusivo para Create, Extend y Unlink) → el mutex del gestor y el de la caché, que son
 // hojas.
 package smgr

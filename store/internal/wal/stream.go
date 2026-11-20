@@ -191,7 +191,6 @@ func (w *WAL) placeRaw(at Position, lsn page.LSN, size int64) (*reservation, err
 	seg := w.active
 	seg.size += size
 	w.written.Add(size)
-	seg.inflight.Add(1)
 	w.lastLSN.Store(uint64(lsn))
 	return &reservation{w: w, seg: seg, offset: at.Offset, size: size, lsn: lsn}, nil
 }

@@ -316,3 +316,61 @@ func TestChangesBatchDDLUndo(t *testing.T) {
 		}
 	}
 }
+
+// TestChangesOrigin (tarea 83): el origen de un lote (SetOrigin) sale en TxInfo.Origin, también en un lote con DDL;
+// una escritura suelta y un lote sin origen salen con 0. El origen está en el KindCommit: tras un corte del motor
+// el flujo lo vuelve a dar igual. SetOrigin sobre un lote terminado da ErrTxDone.
+func TestChangesOrigin(t *testing.T) {
+	base := crashfs.New()
+	proc := newProc(base)
+	cfg := smallWAL()
+	e := openTest(t, proc, cfg)
+	_, err := e.CreateLogicalSlot("o")
+	mustOK(t, err)
+	s := mustStore(t, e, "a")
+	b := e.NewBatch()
+	mustOK(t, b.SetOrigin(7))
+	mustOK(t, s.PutIn(b, "from-7", []byte("x")))
+	mustOK(t, b.Commit())
+	if err := b.SetOrigin(1); !errors.Is(err, ErrTxDone) {
+		t.Fatalf("SetOrigin after Commit: %v", err)
+	}
+	mustOK(t, s.Put("local", []byte("y")))
+	b = e.NewBatch()
+	mustOK(t, s.PutIn(b, "plain", []byte("z")))
+	mustOK(t, b.CommitDeferred())
+	b = e.NewBatch()
+	mustOK(t, b.SetOrigin(65535))
+	_, err = e.StoreIn(b, "ddl")
+	mustOK(t, err)
+	mustOK(t, b.Commit())
+	mustOK(t, e.WaitDurable())
+	want := "a:0 from-7:7 local:0 plain:0 ddl:65535" // «a»: el alta suelta del store
+
+	read := func(e *Engine) string {
+		r, err := e.Changes("o")
+		mustOK(t, err)
+		defer r.Close()
+		var got []string
+		_, err = r.Next(0, func(tx TxInfo, c Change) error {
+			name := c.ID
+			if c.Op == ChangeCreate {
+				name = c.Store
+			}
+			got = append(got, fmt.Sprintf("%s:%d", name, tx.Origin))
+			return nil
+		})
+		mustOK(t, err)
+		return strings.Join(got, " ")
+	}
+	if got := read(e); got != want {
+		t.Fatalf("origins %q, want %q", got, want)
+	}
+	proc.kill(crashfs.LoseUnsynced, 1)
+	e.Close()
+	e = openTest(t, newProc(base), cfg)
+	defer e.Close()
+	if got := read(e); got != want {
+		t.Fatalf("origins after a crash %q, want %q", got, want)
+	}
+}

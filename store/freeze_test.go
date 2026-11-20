@@ -356,6 +356,7 @@ func freezeCut(t *testing.T, mode crashfs.Mode, point string) {
 	base := crashfs.New()
 	first := page.XID(3*xact.XidsPerPage - 100)
 	cfg := smallXact(first)
+	cfg.wal.Buffer = 0 // cada registro a su escritura: los cortes cuentan las escrituras del WAL
 	proc := newProc(base)
 	fsys := &hookFS{procFS: proc}
 	e := openTest(t, fsys, cfg)

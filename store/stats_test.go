@@ -194,3 +194,34 @@ func TestStatsConcurrent(t *testing.T) {
 	}
 	mustOK(t, e.Close())
 }
+
+// TestWALSinceCheckpointFinished (tarea 82): Stats.WALSinceCheckpoint mide desde el punto de rehacer del último
+// checkpoint terminado (lo que rehace la recuperación), no desde el del checkpoint en curso: en medio de un
+// checkpoint sigue contando todo lo escrito desde el anterior, y al terminar baja.
+func TestWALSinceCheckpointFinished(t *testing.T) {
+	e := openTest(t, crashfs.New(), testConfig())
+	defer e.Close()
+	s := mustStore(t, e, "a")
+	mustOK(t, e.Checkpoint())
+	for i := range 300 {
+		mustOK(t, s.Put(fmt.Sprintf("k%04d", i), make([]byte, 200)))
+	}
+	before := e.Stats().WALSinceCheckpoint
+	if before < 300*200 {
+		t.Fatalf("WALSinceCheckpoint %d after writing 60 KB", before)
+	}
+	var during int64
+	e.afterStep = func(step int) {
+		if step == 2 {
+			during = e.Stats().WALSinceCheckpoint
+		}
+	}
+	mustOK(t, e.Checkpoint())
+	e.afterStep = nil
+	if during < before {
+		t.Fatalf("during a checkpoint WALSinceCheckpoint went from %d to %d: it measured the one in progress", before, during)
+	}
+	if after := e.Stats().WALSinceCheckpoint; after >= before {
+		t.Fatalf("after the checkpoint WALSinceCheckpoint is %d (was %d)", after, before)
+	}
+}

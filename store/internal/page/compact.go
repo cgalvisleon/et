@@ -60,9 +60,55 @@ func (p Page) CheckItems() error {
 	if err := p.checkLayout(); err != nil {
 		return err
 	}
-	var buf [MaxLines]stored
-	_, _, err := p.storedItems(&buf)
-	return err
+	// Las mismas comprobaciones que storedItems, pero los pisados con un mapa de bits de la página en unidades de
+	// ItemAlign (128 bytes en la pila) en lugar de ordenar: el árbol lo llama en cada bloqueo (tarea 100 de F-23)
+	var used [Size / ItemAlign / 64]uint64
+	for off := FirstOffset; off <= p.MaxOffset(); off++ {
+		id := p.line(off)
+		switch {
+		case id.Flags() == LineRedirect:
+			return corrupt("item %d is a redirect", off)
+		case id.Flags() == LineUnused:
+			if id != 0 {
+				return corrupt("unused item %d is not zero", off)
+			}
+		case !id.HasStorage():
+			if id.Off() != 0 {
+				return corrupt("item %d without storage points to %d", off, id.Off())
+			}
+		default:
+			start, end, err := p.storage(id)
+			if err != nil {
+				return err
+			}
+			if !markUsed(&used, start/ItemAlign, (end+ItemAlign-1)/ItemAlign) {
+				return corrupt("item %d overlaps another", off)
+			}
+		}
+	}
+	return nil
+}
+
+/**
+* markUsed marca las unidades [from, to) en used.
+* @param used *[Size / ItemAlign / 64]uint64, from, to int
+* @return bool: false si alguna ya estaba marcada (dos ítems se pisan)
+**/
+func markUsed(used *[Size / ItemAlign / 64]uint64, from, to int) bool {
+	for u := from; u < to; {
+		w, b := u/64, u%64
+		n := min(64-b, to-u)
+		mask := ^uint64(0)
+		if n < 64 {
+			mask = (uint64(1)<<n - 1) << b
+		}
+		if used[w]&mask != 0 {
+			return false
+		}
+		used[w] |= mask
+		u += n
+	}
+	return true
 }
 
 /**

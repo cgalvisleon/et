@@ -80,6 +80,14 @@
 // bloqueadas pero nunca la meta, y quien llama a Free no puede tener bloqueadas ni la meta ni la página que libera.
 // Allocate bloquea la meta durante todo el cambio: las altas y bajas de un store se serializan en su meta.
 //
+// Grow (tarea 100, interfaz opcional Grower): el árbol lo llama sin páginas bloqueadas antes de partir una hoja. Si la
+// lista de libres está vacía, extiende el archivo con 1/growPart (1/64) de su largo, entre 1 y growMax (16) páginas,
+// con una sola escritura (buffer.Extender.ExtendBy; si la caché no sabe, una página con PinNew), y pone cada página en
+// la lista (KindFreePush, de la última a la primera, con PinZero: nadie más las ve), así la partición saca la suya con
+// Allocate sin extender con la hoja bloqueada. En macOS una escritura a un archivo de datos espera al F_FULLFSYNC en
+// curso del WAL: extender con la hoja de más a la derecha bloqueada frenaba a todos sus escritores. Un corte entre la
+// extensión y los registros deja páginas en ceros fuera del árbol, que Verify cuenta como perdidas y Repair recupera.
+//
 // # Rehacer
 //
 // Redo(pool, sm, rec) rehace un registro de fsm: valida su forma, extiende el fork si el archivo quedó más corto que

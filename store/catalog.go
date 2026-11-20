@@ -31,6 +31,31 @@ func Open(dir string) (*Engine, error) {
 }
 
 /**
+* OpenWith es Open con opciones propias de este motor (Options): lo que no fija sale de las variables de entorno, así
+* un proceso abre varios motores con distinta caché, WAL y tiempos.
+* @param dir string, o Options
+* @return *Engine, error: los de Open
+**/
+func OpenWith(dir string, o Options) (*Engine, error) {
+	return openWith(dir, o, false)
+}
+
+/**
+* OpenAtTime restaura una copia de Backup hasta una hora (recovery_target_time de PostgreSQL): como OpenAt, con el
+* objetivo en el último registro antes del primero con hora posterior a t (una confirmación de lote, un checkpoint o
+* el fin de un respaldo; las escrituras sueltas no llevan hora y van con lo que las rodea). Si nada en el WAL es
+* posterior a t, rehace todo.
+* @param dir string, t time.Time: no antes del fin del respaldo
+* @return *Engine, error: ErrRecoveryTarget (sin backup_label o t antes del fin del respaldo: no cambia nada), los de
+* Open
+**/
+func OpenAtTime(dir string, t time.Time) (*Engine, error) {
+	cfg := envConfig()
+	cfg.stopTime = t
+	return open(vfs.OS(), dir, cfg)
+}
+
+/**
 * OpenAt restaura una copia de Backup hasta el lsn dado (recovery_target_lsn de PostgreSQL): rehace el WAL del
 * respaldo más los segmentos archivados que se agregaron a wal/ hasta el registro de ese lsn inclusive, corta lo que
 * sigue y abre el motor. Lo confirmado después de lsn no está; lo que estaba a medias en lsn queda deshecho.
@@ -153,6 +178,18 @@ func (e *Engine) Checkpoint() error {
 **/
 func (e *Engine) Backup(dir string) (BackupInfo, error) {
 	return e.backup(vfs.OS(), dir)
+}
+
+/**
+* BackupTo es Backup hacia un flujo (un tar, comprimido o cifrado, o una subida a S3): entrega a sink cada archivo
+* de la copia con su largo, sin directorio intermedio. Restaurar es dejar los archivos en un directorio y abrirlo.
+* El marcador backup_label sale dos veces, «en curso» al principio y el final al terminar: el segundo pisa al primero
+* (en un tar, al extraer), así una copia cortada no se puede abrir.
+* @param sink BackupSink
+* @return BackupInfo, error: los de Backup y los de sink (el motor sigue)
+**/
+func (e *Engine) BackupTo(sink BackupSink) (BackupInfo, error) {
+	return e.backupTo(sink)
 }
 
 /**
@@ -472,6 +509,26 @@ func (b *Batch) Commit() error {
 }
 
 /**
+* CommitLSN es el lsn del KindCommit del lote tras un Commit (o CommitDeferred) que escribió: el TxInfo.CommitLSN con
+* que sale en el flujo de cambios. 0 antes de confirmar, si no escribió o si se deshizo.
+* @return uint64
+**/
+func (b *Batch) CommitLSN() uint64 {
+	return b.commitLSNOf()
+}
+
+/**
+* SetOrigin marca el lote con un origen (el nodo de donde vino lo que escribe, en una réplica lógica): va en su
+* KindCommit y sale en TxInfo.Origin del flujo de cambios, para que quien replica no vuelva a publicar lo que aplicó
+* (como replication origins de PostgreSQL). 0 = sin origen (escrito en este motor). Se llama antes de Commit.
+* @param origin uint16
+* @return error: ErrTxDone si el lote ya terminó, o por qué abortó
+**/
+func (b *Batch) SetOrigin(origin uint16) error {
+	return b.setOrigin(origin)
+}
+
+/**
 * CommitDeferred confirma el lote como Commit pero sin esperar el fsync del WAL: se ve enseguida y un corte puede
 * perderlo entero (nunca a medias) hasta que Engine.WaitDurable vuelva.
 * @return error: los de Commit
@@ -727,6 +784,25 @@ func OpenReplica(dir string) (*Engine, error) {
 }
 
 /**
+* OpenReplicaWith es OpenReplica con opciones propias (Options).
+* @param dir string, o Options
+* @return *Engine, error: los de OpenReplica
+**/
+func OpenReplicaWith(dir string, o Options) (*Engine, error) {
+	return openWith(dir, o, true)
+}
+
+/**
+* Promote vuelve primario a la réplica sin cerrarla (failover): deja de aplicar WAL (ApplyWal da ErrNotReplica), lo
+* que seguía en curso en el primario queda abortado, y hace el checkpoint de fin de recuperación. Desde ahí acepta
+* escrituras; las lecturas y snapshots abiertos siguen. Es lo mismo que cerrarla y abrirla con Open, sin cortar.
+* @return error: ErrNotReplica (no es una réplica, o ya la promovieron), ErrClosed, ErrFailed
+**/
+func (e *Engine) Promote() error {
+	return e.promote()
+}
+
+/**
 * WalSince abre un lector del WAL desde el registro siguiente a lsn (el ReplayLSN de la réplica): Next entrega los
 * registros ya durables de a tandas. No retiene el WAL: para eso, una ranura.
 * @param lsn uint64
@@ -831,6 +907,54 @@ func (e *Engine) AdvanceSlot(name string, lsn uint64) error {
 **/
 func (e *Engine) Changes(name string) (*ChangeReader, error) {
 	return e.changes(name)
+}
+
+/**
+* ChangesWith es Changes con un filtro: solo salen los cambios que f deja pasar (por store, por id y por origen).
+* @param name string, f ChangeFilter
+* @return *ChangeReader, error: los de Changes
+**/
+func (e *Engine) ChangesWith(name string, f ChangeFilter) (*ChangeReader, error) {
+	return e.changesWith(name, f)
+}
+
+/**
+* ChangesFrom abre un lector sin ranura desde pos (de ChangeHead o de ChangeReader.Pos, guardada por quien lee): no
+* retiene WAL, así que si el checkpoint ya recicló pos.Restart, Next da ErrWalRemoved. Sirve para eventos en vivo y
+* para copiar a otra base, y anda también en una réplica. Confirm no corre en él (ErrSlotNotFound): se guarda Pos.
+* @param pos ChangePos, f ChangeFilter
+* @return *ChangeReader, error: ErrClosed, ErrFailed
+**/
+func (e *Engine) ChangesFrom(pos ChangePos, f ChangeFilter) (*ChangeReader, error) {
+	return e.changesFrom(pos, f)
+}
+
+/**
+* ChangeHead es la posición actual del flujo, sin esperar a las transacciones en curso: un lector desde ella entrega
+* lo que confirme después (también lo de los lotes que ya estaban escribiendo).
+* @return ChangePos, error: ErrClosed, ErrFailed
+**/
+func (e *Engine) ChangeHead() (ChangePos, error) {
+	return e.changeHead()
+}
+
+/**
+* AdvanceLogicalSlot avanza la ranura lógica name hasta pos sin abrir su lector (quien reparte el flujo guarda la
+* posición de cada consumidor y avanza la ranura al mínimo). Nunca retrocede.
+* @param name string, pos ChangePos
+* @return error: los de AdvanceSlot
+**/
+func (e *Engine) AdvanceLogicalSlot(name string, pos ChangePos) error {
+	return e.advanceLogical(name, pos)
+}
+
+/**
+* Pos es la posición del lector tras lo entregado: ChangesFrom(Pos(), …) sigue sin repetir ni saltar nada, con el
+* mismo filtro. Se pide entre llamadas a Next.
+* @return ChangePos
+**/
+func (r *ChangeReader) Pos() ChangePos {
+	return r.position()
 }
 
 /**

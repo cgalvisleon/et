@@ -62,9 +62,7 @@ func (e *Engine) emptyFiles(name string, old smgr.FileNo) (smgr.FileNo, *btree.B
 	e.counts.remove(old)
 	e.counts.set(file, 0)
 	e.frozen.forget(old)
-	if err := e.storeCatalog(); err != nil {
-		return 0, nil, e.fail(err)
-	}
+	e.catalogChanged()
 	e.pool.DropFile(old)
 	if err := e.unlinkData(old); err != nil {
 		return 0, nil, e.fail(err)

@@ -31,7 +31,7 @@ func testConfig() config {
 		maxWALSize:        1 << 40,
 		lockTimeout:       5 * time.Second,
 		txTimeout:         10 * time.Minute,
-		wal:               wal.Options{SegmentSize: 1 << 20, Spares: 2, Preallocate: true},
+		wal:               wal.Options{SegmentSize: 1 << 20, Spares: 2, Preallocate: true, Buffer: 64 << 10},
 		buffers:           64,
 		checkEvery:        10 * time.Millisecond,
 	}

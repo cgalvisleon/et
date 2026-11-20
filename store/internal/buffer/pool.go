@@ -21,7 +21,9 @@ type pool struct {
 	descs []desc
 	parts [NumPartitions]partition
 	hand  atomic.Uint64 // manecilla del clock-sweep: el próximo búfer a mirar es hand % len(descs)
-	ring  ring
+	// bgHand es donde sigue la segunda pasada del escritor de fondo (la de las sucias en uso)
+	bgHand atomic.Uint64
+	ring   ring
 
 	// extendMu serializa PinNew: NBlocks + Extend de un fork tienen que ir juntos (a confirmar: uno por motor, no
 	// por fork, por simple).
@@ -163,6 +165,31 @@ func (p *pool) extend(file smgr.FileNo, fork smgr.Fork) (*desc, error) {
 		return nil, fmt.Errorf("buffer: extender %d/%d: %w", file, fork, err)
 	}
 	return p.pin(Tag{File: file, Fork: fork, Block: block}, Normal, true)
+}
+
+// Comprobación en compilación de que la caché cumple Extender.
+var _ Extender = (*pool)(nil)
+
+/**
+* ExtendBy agrega n páginas en ceros al final del fork (ver Extender): escribe solo la última, los bloques del medio
+* quedan en ceros.
+* @param file smgr.FileNo, fork smgr.Fork, n int: al menos 1
+* @return page.BlockNumber: la primera página nueva, error
+**/
+func (p *pool) ExtendBy(file smgr.FileNo, fork smgr.Fork, n int) (page.BlockNumber, error) {
+	if err := p.usable(); err != nil {
+		return 0, err
+	}
+	p.extendMu.Lock()
+	defer p.extendMu.Unlock()
+	block, err := p.smgr.NBlocks(file, fork)
+	if err != nil {
+		return 0, fmt.Errorf("buffer: extender %d/%d: %w", file, fork, err)
+	}
+	if err := p.smgr.Extend(file, fork, block+page.BlockNumber(max(n, 1)-1), zeroPage); err != nil {
+		return 0, fmt.Errorf("buffer: extender %d/%d: %w", file, fork, err)
+	}
+	return block, nil
 }
 
 // zeroPage es la página nueva que se escribe al extender. Nadie la cambia.

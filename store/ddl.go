@@ -61,23 +61,45 @@ func (e *Engine) handle(name string, create bool) (*Store, error) {
 		return nil, err
 	}
 	defer e.leave()
+	s, lsn, err := e.handleLocked(name, create)
+	if err != nil || lsn == 0 {
+		return s, err
+	}
+	// El fsync del alta, sin ddlMu: las altas concurrentes comparten uno (group commit). Mientras tanto otros ya ven
+	// el store; lo que confirmen de forma durable cubre el alta, que va antes en el WAL (tarea 98 de F-23)
+	if err := e.log.WaitDurable(lsn); err != nil {
+		return nil, e.fail(err)
+	}
+	return s, nil
+}
+
+/**
+* handleLocked es handle con ddlMu tomado: abre o crea el store sin esperar el fsync del alta.
+* @param name string, create bool
+* @return *Store, page.LSN: el de su KindCreateStore si lo creó (0 si no), error
+**/
+func (e *Engine) handleLocked(name string, create bool) (*Store, page.LSN, error) {
 	e.ddlMu.Lock()
 	defer e.ddlMu.Unlock()
 	s, err := e.openLocked(name)
 	if err != nil || s != nil || !create {
-		return s, err
+		return s, 0, err
 	}
-	if e.replica != nil { // una réplica no crea stores: llegan con el WAL del primario
-		return nil, fmt.Errorf(MSG_STORE_NAME, ErrStoreNotFound, name)
+	if e.isReplica() { // una réplica no crea stores: llegan con el WAL del primario
+		return nil, 0, fmt.Errorf(MSG_STORE_NAME, ErrStoreNotFound, name)
 	}
 	if err := e.writable(); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	entry, err := e.createStore(name, 0)
 	if err != nil {
-		return nil, e.fail(err)
+		return nil, 0, e.fail(err)
 	}
-	return e.openEntry(entry)
+	s, err = e.openEntry(entry)
+	// el alta es durable con su KindInitStore: un Store que volvió bien nunca queda sin página meta tras un corte
+	lsn := e.log.LastLSN()
+	e.ddlLSN.Store(uint64(lsn))
+	return s, lsn, err
 }
 
 /**
@@ -93,7 +115,7 @@ func (e *Engine) openLocked(name string) (*Store, error) {
 	if !ok {
 		return nil, nil
 	}
-	if e.replica != nil && entry.Flags&control.FlagPendingCreate != 0 {
+	if e.isReplica() && entry.Flags&control.FlagPendingCreate != 0 {
 		return nil, fmt.Errorf(MSG_STORE_PENDING, ErrStorePending, name) // lo crea un lote que no confirmó
 	}
 	return e.openEntry(entry)
@@ -131,7 +153,17 @@ func (e *Engine) treeError(err error) error {
 }
 
 /**
-* storeCatalog guarda el catálogo tras un cambio de stores ya durable en el WAL (crear, borrar, vaciar). Con el disco
+* catalogChanged anota que el catálogo de memoria cambió tras un cambio de stores ya durable en el WAL (crear,
+* borrar, vaciar, el DDL de un lote): el guardado queda atrás a propósito (catalogBehind) y lo pone al día el próximo
+* checkpoint (paso 3); si hay un corte antes, la recuperación rehace el cambio desde el WAL. Así un DDL no reescribe
+* el catálogo entero con sus dos fsync (tarea 98 de F-23: 139 KB con 1.590 stores, en cada alta).
+**/
+func (e *Engine) catalogChanged() {
+	e.catalogBehind.Store(true)
+}
+
+/**
+* storeCatalog guarda el catálogo tras un cambio de stores ya durable en el WAL (lo usa la réplica). Con el disco
 * lleno al escribir catalog.tmp (limpio) no falla: el catálogo anterior sigue entero, la recuperación rehace el cambio
 * desde el WAL (como tras un corte antes de guardarlo) y el próximo checkpoint guarda el catálogo antes de reciclar ese
 * WAL.
@@ -159,9 +191,11 @@ func validName(name string) bool {
 }
 
 /**
-* createStore da de alta un store: KindCreateStore en el WAL (durable), después el catálogo. Las páginas las crea
-* openTree. Dentro de un lote (xid ≠ 0) el registro es KindCreateStoreIn con el xid del lote y la entrada queda con
-* FlagPendingCreate hasta el commit. Con ddlMu tomado.
+* createStore da de alta un store: KindCreateStore en el WAL, sin esperar su fsync (lo espera handle sin ddlMu; en un
+* lote, su commit), después el catálogo de memoria (ddlLSN, catalogChanged). Las páginas las crea openTree. Si un
+* corte pierde el registro, los archivos que alcanzaron a crearse tienen un número ≥ NextFileNo y la recuperación los
+* borra (removeUnallocated). Dentro de un lote (xid ≠ 0) el registro es KindCreateStoreIn con el xid del lote y la
+* entrada queda con FlagPendingCreate hasta el commit. Con ddlMu tomado.
 * @param name string, xid page.XID: el lote que lo crea, 0 = suelto
 * @return control.Entry, error
 **/
@@ -174,17 +208,17 @@ func (e *Engine) createStore(name string, xid page.XID) (control.Entry, error) {
 	if xid != 0 {
 		kind, flags = wal.KindCreateStoreIn, control.FlagPendingCreate
 	}
-	if _, err := e.logTxRecord(xid, kind, encodeStoreMain(file, name)); err != nil {
+	lsn, err := e.logTxRecordNoWait(xid, kind, encodeStoreMain(file, name))
+	if err != nil {
 		return control.Entry{}, err
 	}
+	e.ddlLSN.Store(uint64(lsn))
 	if _, err := e.cat.Create(name, file); err != nil {
 		return control.Entry{}, err
 	}
 	e.cat.SetFlags(file, flags)
 	e.counts.set(file, 0)
-	if err := e.storeCatalog(); err != nil {
-		return control.Entry{}, err
-	}
+	e.catalogChanged()
 	return control.Entry{Name: name, File: file}, nil
 }
 
@@ -205,7 +239,7 @@ func (e *Engine) openTree(file smgr.FileNo) (*btree.BTree, error) {
 	if ready {
 		return e.openExisting(cfg)
 	}
-	if e.replica != nil { // su KindInitStore todavía no llegó
+	if e.isReplica() { // su KindInitStore todavía no llegó
 		return nil, fmt.Errorf(MSG_STORE_PENDING, ErrStorePending, fmt.Sprint(file))
 	}
 	if err := e.failed(); err != nil {
@@ -232,7 +266,7 @@ func (e *Engine) openTree(file smgr.FileNo) (*btree.BTree, error) {
 func (e *Engine) treeConfig(file smgr.FileNo) btree.Config {
 	return btree.Config{
 		File: file, Pool: e.pool, Smgr: e.sm, Free: e.free, Log: e.log, Status: e.status, HintGate: &e.hintGate,
-		VM: e.free, FrozenXID: e.txs.OldestActive(), NoHints: e.replica != nil,
+		VM: e.free, FrozenXID: e.txs.OldestActive(), NoHints: e.isReplica(),
 	}
 }
 
@@ -319,7 +353,7 @@ func (e *Engine) dropFiles(entry control.Entry) error {
 }
 
 /**
-* removeFiles saca el store del catálogo (y lo guarda) y borra sus páginas de la caché y sus archivos, con el
+* removeFiles saca el store del catálogo (catalogChanged) y borra sus páginas de la caché y sus archivos, con el
 * registro que lo justifica ya durable (KindDropStore, o el KindCommit de un lote que lo borra). Con ddlMu tomado.
 * @param entry control.Entry
 * @return error
@@ -328,9 +362,7 @@ func (e *Engine) removeFiles(entry control.Entry) error {
 	e.cat.Drop(entry.Name, entry.File)
 	e.counts.remove(entry.File)
 	e.frozen.forget(entry.File)
-	if err := e.storeCatalog(); err != nil {
-		return err
-	}
+	e.catalogChanged()
 	e.pool.DropFile(entry.File)
 	return e.unlinkData(entry.File)
 }

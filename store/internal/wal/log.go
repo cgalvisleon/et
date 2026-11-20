@@ -15,7 +15,7 @@ import (
 )
 
 // WAL es el log abierto para escribir; implementa Log y Reader. Cada bloque de campos lo protege el lock de su
-// comentario. Orden de los locks: writeMu → pubMu, writeMu → syncMu, syncMu → pubMu; nunca al revés.
+// comentario. Orden de los locks: writeMu → drainMu → pubMu, writeMu → syncMu, syncMu → pubMu; nunca al revés.
 type WAL struct {
 	fs   vfs.FS
 	dir  string // <motor>/wal
@@ -40,16 +40,29 @@ type WAL struct {
 	forceFrom page.LSN
 	holds     map[uint64]int
 
-	// pubMu: qué escrituras terminaron.
-	pubMu     sync.Mutex
-	pubCond   *sync.Cond
-	finished  map[page.LSN]bool // lsn escritos por encima de published, esperando a los anteriores
-	failure   error             // primer error de escritura o fsync: el WAL queda inutilizable
-	published atomic.Uint64     // todos los lsn ≤ published están escritos; se escribe con pubMu
+	// pubMu: qué registros esperan escribirse y cuáles ya están en el archivo.
+	pubMu   sync.Mutex
+	pubCond *sync.Cond
+	// pending: registros ya sellados (Write) que todavía no están en el archivo, por lsn; pendingBytes su largo.
+	// Se escriben en tandas contiguas (drain): un pwrite por tanda en lugar de uno por registro (tarea 100).
+	pending      map[page.LSN]*reservation
+	pendingBytes int64
+	wanted       page.LSN      // el mayor lsn que alguien espera ver escrito (waitPublished): mientras pase a published, Write escribe enseguida
+	failure      error         // primer error de escritura o fsync: el WAL queda inutilizable
+	published    atomic.Uint64 // todos los lsn ≤ published están escritos en el archivo; se escribe con pubMu
 
-	// syncMu: qué está en disco.
+	// drainMu: una tanda de escritura a la vez (drain); scratch es su búfer, de tamaño fijo (maxRun).
+	drainMu sync.Mutex
+	scratch []byte
+
+	// syncMu: qué está en disco; lo toma solo el líder del fsync (WaitDurable), rotate y Close.
 	syncMu  sync.Mutex
 	durable atomic.Uint64 // todos los lsn ≤ durable tienen fsync; se escribe con syncMu
+
+	// leadMu: quién hace el fsync del group commit. syncing es el aviso del fsync en curso (se cierra al terminar),
+	// nil si no hay ninguno. Se toma corto y sin otro lock.
+	leadMu  sync.Mutex
+	syncing chan struct{}
 
 	// syncs mide cada fsync de WaitDurable (el del group commit), de tamaño fijo y solo con atómicos.
 	syncs metric.Histogram
@@ -117,13 +130,13 @@ func Open(fsys vfs.FS, dir string, opts Options, redo Position, fn func(rec *Rec
 		allocated = end.Offset // el resto lo preasigna Room (o la primera reserva que lo necesite)
 	}
 	w := &WAL{
-		fs:       fsys,
-		dir:      walDir,
-		opts:     opts,
-		active:   &segment{num: end.Segment, file: file, size: end.Offset, allocated: allocated},
-		sizes:    sizes,
-		maxNum:   nums[len(nums)-1],
-		finished: map[page.LSN]bool{},
+		fs:      fsys,
+		dir:     walDir,
+		opts:    opts,
+		active:  &segment{num: end.Segment, file: file, size: end.Offset, allocated: allocated},
+		sizes:   sizes,
+		maxNum:  nums[len(nums)-1],
+		pending: map[page.LSN]*reservation{},
 	}
 	w.pubCond = sync.NewCond(&w.pubMu)
 	w.activeNum.Store(end.Segment)
@@ -180,27 +193,100 @@ func (r *reservation) End() Position {
 	return Position{Segment: r.seg.num, Offset: r.offset + r.size, LSN: r.lsn + 1}
 }
 
-// Write completa el lsn y el crc, escribe el registro en su lugar y lo publica. Se llama una vez.
+// Write completa el lsn y el crc y deja el registro en espera de escribirse (pending). Lo escribe enseguida, junto
+// con los que esperan detrás de él, salvo que el WAL tenga búfer (Options.Buffer), lo pendiente no llegue a él y
+// nadie espere el registro: entonces queda para la próxima tanda (la de WaitDurable, la del sellado o la de otro
+// Write). Nunca espera a otra reserva: si falta un registro anterior, la tanda la escribe su dueño. Se llama una vez.
 func (r *reservation) Write() error {
 	if r.written {
 		return fmt.Errorf(MSG_WRITTEN_TWICE, r.lsn)
 	}
 	r.written = true
 	sealRecord(r.buf, r.lsn)
-
-	err := r.w.Failed()
-	if err == nil {
-		if _, err = r.seg.file.WriteAt(r.buf, r.offset); err != nil {
-			r.w.fail(err)
-		}
-	}
-	r.seg.inflight.Done()
-	r.buf = nil
-	if err != nil {
+	w := r.w
+	w.pubMu.Lock()
+	if w.failure != nil {
+		err := w.failure
+		w.pubMu.Unlock()
 		return failedError(err)
 	}
-	r.w.publish(r.lsn)
-	return nil
+	w.pending[r.lsn] = r
+	w.pendingBytes += r.size
+	lazy := w.opts.Buffer > 0 && w.pendingBytes < w.opts.Buffer && w.wanted <= page.LSN(w.published.Load())
+	w.pubMu.Unlock()
+	if lazy {
+		return nil
+	}
+	return w.drain()
+}
+
+// maxRun es el largo máximo de una tanda de drain (un pwrite).
+const maxRun = 1 << 20
+
+// drain escribe en el archivo los registros pendientes que siguen a published, en tandas contiguas del mismo
+// segmento de hasta maxRun bytes, y avanza published tras cada una. Para en el primer hueco (una reserva que su dueño
+// todavía no escribió): no espera a nadie. Un error de escritura deja el WAL inutilizable.
+func (w *WAL) drain() error {
+	w.drainMu.Lock()
+	defer w.drainMu.Unlock()
+	for {
+		run := w.nextRun()
+		if len(run) == 0 {
+			return nil
+		}
+		if err := w.writeRun(run); err != nil {
+			w.fail(err)
+			return failedError(err)
+		}
+		w.pubMu.Lock()
+		w.published.Store(uint64(run[len(run)-1].lsn))
+		w.pubCond.Broadcast()
+		w.pubMu.Unlock()
+	}
+}
+
+// nextRun saca de pending la tanda contigua que sigue a published (vacía si hay un hueco o el WAL falló). Con
+// drainMu tomado.
+func (w *WAL) nextRun() []*reservation {
+	w.pubMu.Lock()
+	defer w.pubMu.Unlock()
+	if w.failure != nil {
+		return nil
+	}
+	var run []*reservation
+	size := int64(0)
+	for next := page.LSN(w.published.Load()) + 1; ; next++ {
+		r := w.pending[next]
+		if r == nil || len(run) > 0 && (size+r.size > maxRun || r.seg != run[0].seg ||
+			r.offset != run[len(run)-1].offset+run[len(run)-1].size) {
+			break
+		}
+		delete(w.pending, next)
+		w.pendingBytes -= r.size
+		run = append(run, r)
+		size += r.size
+	}
+	return run
+}
+
+// writeRun escribe una tanda contigua con un solo pwrite. Con drainMu tomado.
+func (w *WAL) writeRun(run []*reservation) error {
+	first := run[0]
+	buf := first.buf
+	if len(run) > 1 {
+		if w.scratch == nil {
+			w.scratch = make([]byte, maxRun)
+		}
+		buf = w.scratch[:0]
+		for _, r := range run {
+			buf = append(buf, r.buf...)
+		}
+	}
+	_, err := first.seg.file.WriteAt(buf, first.offset)
+	for _, r := range run {
+		r.buf = nil
+	}
+	return err
 }
 
 // Reserve codifica rec, y bajo writeMu comprueba las imágenes contra el punto de rehacer vigente (ErrNeedImage),
@@ -262,7 +348,6 @@ func (w *WAL) allocate(size int64) (*segment, int64, error) {
 	offset := seg.size
 	seg.size += size
 	w.written.Add(size)
-	seg.inflight.Add(1)
 	return seg, offset, nil
 }
 
@@ -276,7 +361,7 @@ func (w *WAL) rotate() error {
 		}
 	}
 	old := w.active
-	if err := old.seal(); err != nil {
+	if err := w.seal(old); err != nil {
 		w.fail(err)
 		return failedError(err)
 	}
@@ -307,23 +392,14 @@ func (w *WAL) rotate() error {
 	return old.file.Close()
 }
 
-// publish avisa que lsn ya está escrito y avanza published sobre todos los contiguos que hayan terminado.
-func (w *WAL) publish(lsn page.LSN) {
-	w.pubMu.Lock()
-	defer w.pubMu.Unlock()
-	w.finished[lsn] = true
-	next := page.LSN(w.published.Load()) + 1
-	for w.finished[next] {
-		delete(w.finished, next)
-		next++
-	}
-	w.published.Store(uint64(next - 1))
-	w.pubCond.Broadcast()
-}
-
 // Published es el mayor lsn tal que todos los anteriores están escritos.
 func (w *WAL) Published() page.LSN {
 	return page.LSN(w.published.Load())
+}
+
+// LastLSN es el último lsn reservado (puede no estar escrito todavía).
+func (w *WAL) LastLSN() page.LSN {
+	return page.LSN(w.lastLSN.Load())
 }
 
 // Durable es el mayor lsn tal que todos los anteriores tienen fsync.
@@ -331,8 +407,19 @@ func (w *WAL) Durable() page.LSN {
 	return page.LSN(w.durable.Load())
 }
 
-// waitPublished espera a que todas las escrituras hasta lsn estén escritas; falla si el WAL falló antes.
+// waitPublished espera a que todos los registros hasta lsn estén escritos en el archivo: anota lsn como esperado
+// (así cada Write escribe enseguida) y escribe lo pendiente; si falta una reserva que su dueño no escribió, espera
+// a que lo haga. Falla si el WAL falló.
 func (w *WAL) waitPublished(lsn page.LSN) error {
+	if w.Published() >= lsn {
+		return nil
+	}
+	w.pubMu.Lock()
+	w.wanted = max(w.wanted, lsn)
+	w.pubMu.Unlock()
+	if err := w.drain(); err != nil {
+		return err
+	}
 	w.pubMu.Lock()
 	defer w.pubMu.Unlock()
 	for w.Published() < lsn && w.failure == nil {
@@ -344,9 +431,10 @@ func (w *WAL) waitPublished(lsn page.LSN) error {
 	return nil
 }
 
-// WaitDurable vuelve cuando todo hasta lsn tiene fsync. Quien llega sin que su lsn esté confirmado hace un fsync que
-// confirma todo lo publicado hasta ese momento, y los que esperaban detrás ya no necesitan otro (group commit). Un
-// fsync fallido deja el WAL inutilizable y no se reintenta.
+// WaitDurable vuelve cuando todo hasta lsn tiene fsync (group commit). Un solo líder a la vez hace el fsync, que
+// confirma todo lo publicado al empezar; los demás esperan su aviso (un canal que se cierra al terminar, así se
+// despiertan todos a la vez y no uno tras otro en una cola de syncMu, tarea 100 de F-23) y, si su lsn quedó fuera,
+// el primero en llegar es el líder del fsync siguiente. Un fsync fallido deja el WAL inutilizable y no se reintenta.
 func (w *WAL) WaitDurable(lsn page.LSN) error {
 	if w.Durable() >= lsn {
 		return nil
@@ -357,21 +445,48 @@ func (w *WAL) WaitDurable(lsn page.LSN) error {
 	if err := w.waitPublished(lsn); err != nil {
 		return err
 	}
+	for {
+		if w.Durable() >= lsn {
+			return nil
+		}
+		w.leadMu.Lock()
+		if w.syncing != nil {
+			done := w.syncing
+			w.leadMu.Unlock()
+			<-done
+			continue
+		}
+		done := make(chan struct{})
+		w.syncing = done
+		w.leadMu.Unlock()
+		err := w.syncPublished()
+		w.leadMu.Lock()
+		w.syncing = nil
+		w.leadMu.Unlock()
+		close(done)
+		if err != nil {
+			return err
+		}
+	}
+}
 
+// syncPublished hace el fsync del segmento activo, que confirma todo lo publicado hasta ese momento, y sube durable.
+// Lo llama solo el líder de WaitDurable; syncMu lo separa de rotate y Close, que cambian o cierran el activo.
+func (w *WAL) syncPublished() error {
 	w.syncMu.Lock()
 	defer w.syncMu.Unlock()
-	if w.Durable() >= lsn {
-		return nil
-	}
 	if w.closed.Load() {
 		return ErrClosed
 	}
 	if err := w.Failed(); err != nil {
 		return failedError(err)
 	}
-	// target se lee con syncMu tomado: el fsync confirma todo lo publicado mientras se esperaba el turno. Los
-	// segmentos anteriores al activo ya se sellaron con su fsync (ver rotate).
+	// target se lee con syncMu tomado: el fsync confirma todo lo publicado hasta ahora. Los segmentos anteriores al
+	// activo ya se sellaron con su fsync (ver rotate).
 	target := w.published.Load()
+	if target <= w.durable.Load() {
+		return nil
+	}
 	start := time.Now()
 	err := w.active.file.Sync()
 	w.syncs.Since(start)
@@ -581,7 +696,7 @@ func (w *WAL) Close() error {
 	if w.closed.Load() {
 		return nil
 	}
-	err := w.active.seal()
+	err := w.seal(w.active)
 	if err != nil {
 		w.fail(err)
 	}

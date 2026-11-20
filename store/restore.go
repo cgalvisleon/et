@@ -109,6 +109,9 @@ func (b *backupRun) writeLabel(l backupLabel) error {
 	if err == nil && l.endLSN != 0 {
 		b.count(backupLabelSize)
 	}
+	if err == nil {
+		return b.sendSmall(backupLabelName)
+	}
 	return destError(err)
 }
 
@@ -181,6 +184,65 @@ func (e *Engine) removeBackupLabel() error {
 		return err
 	}
 	return e.fs.SyncDir(e.dir)
+}
+
+/**
+* timeTarget traduce el objetivo por hora de OpenAtTime a un lsn, sin escribir nada: recorre el WAL desde el punto de
+* rehacer del control y para en el primer registro con hora posterior a cfg.stopTime (KindCommit, KindCheckpoint,
+* KindBackupEnd); el objetivo es el registro anterior, nunca antes del fin del respaldo. Sin registros posteriores,
+* el último del WAL.
+* @param ctl control.Control, l backupLabel, restoring bool
+* @return page.LSN, error: ErrRecoveryTarget
+**/
+func (e *Engine) timeTarget(ctl control.Control, l backupLabel, restoring bool) (page.LSN, error) {
+	if !restoring {
+		return 0, fmt.Errorf(MSG_TARGET_NO_BACKUP, ErrRecoveryTarget)
+	}
+	limit := e.cfg.stopTime.UnixNano()
+	errFound := errors.New("time target found")
+	var target page.LSN
+	end, err := wal.NewReader(e.fs, e.dir).Scan(ctl.Redo, func(rec *wal.Record) error {
+		if at, ok := recordTime(rec); ok && at > limit {
+			target = rec.LSN - 1
+			return errFound
+		}
+		return nil
+	})
+	switch {
+	case errors.Is(err, errFound):
+	case err != nil:
+		return 0, fmt.Errorf(MSG_TARGET_WAL, ErrRecoveryTarget, end.LSN, err)
+	default:
+		target = end.LSN - 1
+	}
+	if low := max(l.endLSN, ctl.CheckpointLSN); target < low {
+		return 0, fmt.Errorf(MSG_TARGET_TIME_EARLY, ErrRecoveryTarget, e.cfg.stopTime, low)
+	}
+	return target, nil
+}
+
+/**
+* recordTime es la hora de un registro que la lleva (los primeros 8 bytes de KindCommit y KindCheckpoint; el último
+* campo de KindBackupEnd), en nanosegundos Unix.
+* @param rec *wal.Record
+* @return int64, bool: false si el registro no lleva hora
+**/
+func recordTime(rec *wal.Record) (int64, bool) {
+	switch rec.Kind {
+	case wal.KindCommit:
+		if len(rec.Main) >= 8 {
+			return int64(le.Uint64(rec.Main)), true
+		}
+	case wal.KindCheckpoint:
+		if info, ok := decodeCheckpoint(rec.Main); ok {
+			return info.time, true
+		}
+	case wal.KindBackupEnd:
+		if len(rec.Main) >= 24 {
+			return int64(le.Uint64(rec.Main[16:])), true
+		}
+	}
+	return 0, false
 }
 
 /**

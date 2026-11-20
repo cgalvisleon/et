@@ -32,3 +32,8 @@ func syncFile(f *os.File) error {
 	}
 	return nil
 }
+
+// flushFile en Linux es syncFile: fdatasync ya es lo mínimo que trae los errores.
+func flushFile(f *os.File) error {
+	return syncFile(f)
+}

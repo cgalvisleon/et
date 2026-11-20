@@ -68,6 +68,15 @@ func (f guardFile) Sync() error {
 }
 
 /**
+* Flush lleva lo escrito al dispositivo (vfs.Flusher) y anota si falló: un error de escritura cuenta como un fsync
+* fallido.
+* @return error
+**/
+func (f guardFile) Flush() error {
+	return f.g.note(vfs.FlushFile(f.File))
+}
+
+/**
 * note anota un fsync fallido y devuelve err tal cual.
 * @param err error
 * @return error

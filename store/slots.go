@@ -175,7 +175,7 @@ func (e *Engine) createSlot(name string, logical bool) (SlotInfo, error) {
 	if !validSlotName(name) {
 		return SlotInfo{}, fmt.Errorf(MSG_SLOT_NAME, ErrSlotLimit, name)
 	}
-	if logical && e.replica != nil {
+	if logical && e.isReplica() {
 		return SlotInfo{}, ErrReadOnly
 	}
 	if err := e.enterSlots(); err != nil {

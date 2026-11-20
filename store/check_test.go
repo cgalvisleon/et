@@ -199,11 +199,15 @@ func buildDamaged(t testing.TB, base crashfs.FS, irreparable bool) damaged {
 		}
 		d.chainPage = v.Overflow.First
 	}
+	gone := mustStore(t, e, "gone").file // su número queda debajo de NextFileNo sin store: el huérfano de abajo
+	mustOK(t, e.DropStore("gone"))
 	mustOK(t, e.Checkpoint())
 	mustOK(t, e.Close())
 
 	cutFreeList(t, base, d.okFile)
 	editPage(t, base, vmPath(d.okFile), 0, true, func(p page.Page) { p[page.HeaderSize] |= 1 }) // bits del bloque 0
+	writeFile(t, base, filepath.Join(testDir, smgr.DataDir, fmt.Sprintf("%010d.0001", gone)), make([]byte, page.Size))
+	// uno con número ≥ NextFileNo es de un alta que nunca llegó a ser durable: Open lo borra (removeUnallocated)
 	writeFile(t, base, filepath.Join(testDir, smgr.DataDir, "0000000099.0001"), make([]byte, page.Size))
 	if irreparable {
 		editPage(t, base, dataPath(d.badFile), d.badLeaf, false, func(p page.Page) { p[4000] ^= 0xff })

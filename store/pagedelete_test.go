@@ -167,6 +167,7 @@ func TestPageDeleteVerifyRepair(t *testing.T) {
 	cfg := testConfig()
 	cfg.buffers = 24
 	cfg.walWriterDelay = time.Millisecond
+	cfg.wal.Buffer = 0 // cada registro a su escritura: los cortes caen entre los pasos del borrado
 	e := openTest(t, base, cfg)
 	s := mustStore(t, e, "w")
 	want := map[string]string{}
@@ -262,7 +263,9 @@ func crashVacuum(t *testing.T, img diskImage, cfg config, want map[string]string
 // la tercera.
 func TestDiskSteadyState(t *testing.T) {
 	cfg := smallWAL()
-	cfg.vacuumEvery, cfg.vacuumWrites = 5*time.Millisecond, 0
+	// la limpieza de fondo va por tiempo: 2 ms la mantiene al ritmo de las escrituras (con 5 ms quedaba atrás desde
+	// que el WAL junta sus escrituras, tarea 100, y el pico de la ventana pasaba de 1,5)
+	cfg.vacuumEvery, cfg.vacuumWrites = 2*time.Millisecond, 0
 	cfg.checkpointTimeout = 50 * time.Millisecond
 	cfg.buffers = 512
 	e := openTest(t, crashfs.New(), cfg)

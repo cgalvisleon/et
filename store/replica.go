@@ -55,6 +55,19 @@ type replicaState struct {
 	snapMu    sync.Mutex
 	snaps     map[*Snapshot]struct{} // snapshots abiertos: crece con la concurrencia
 	conflicts atomic.Int64           // snapshots cancelados por un conflicto con el aplicador
+
+	// promoted: Promote la volvió primario sin cerrarla (tarea 85). Desde ahí el motor no es una réplica
+	// (isReplica); el puntero e.replica no cambia nunca, así nadie lo lee a medio escribir.
+	promoted atomic.Bool
+}
+
+/**
+* isReplica dice si el motor es una réplica: abierto con OpenReplica y sin promover.
+* @return bool
+**/
+func (e *Engine) isReplica() bool {
+	rs := e.replica
+	return rs != nil && !rs.promoted.Load()
 }
 
 /**
@@ -139,7 +152,7 @@ func (e *Engine) startReplica(r *redoState, end wal.Position) error {
 * @return uint64
 **/
 func (e *Engine) replayLSN() uint64 {
-	if e.replica == nil {
+	if !e.isReplica() {
 		return 0
 	}
 	return e.replica.applied.Load()
@@ -156,16 +169,19 @@ func (e *Engine) replayLSN() uint64 {
 * @return error: ErrNotReplica, ErrWalGap, ErrCorrupt (un registro inválido), ErrClosed, ErrFailed
 **/
 func (e *Engine) applyWal(entries []WalEntry) error {
-	rs := e.replica
-	if rs == nil {
+	if !e.isReplica() {
 		return ErrNotReplica
 	}
+	rs := e.replica
 	if err := e.enterSlots(); err != nil {
 		return err
 	}
 	defer e.leave()
 	rs.applyMu.Lock()
 	defer rs.applyMu.Unlock()
+	if rs.promoted.Load() {
+		return ErrNotReplica // la promovieron mientras esperaba
+	}
 
 	todo, recs, err := e.pendingEntries(entries)
 	if err != nil || len(todo) == 0 {
@@ -298,7 +314,7 @@ func isDDL(rec *wal.Record) bool {
 	case wal.KindCreateStore, wal.KindCreateStoreIn, wal.KindDropStore, wal.KindEmptyStore:
 		return true
 	case wal.KindCommit:
-		info, err := decodeCommit(rec.Main)
+		info, err := decodeCommit(rec.Main, rec.Flags)
 		return err == nil && len(info.creates)+len(info.drops) > 0
 	}
 	return false

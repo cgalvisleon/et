@@ -140,16 +140,22 @@ func decodeEmptyMain(b []byte) (smgr.FileNo, smgr.FileNo, string, bool) {
 	return old, file, string(b[emptyMainHeader:]), true
 }
 
-// commitInfo son los datos principales de un KindCommit: lo que suma a Count de cada store y el DDL del lote.
+// commitInfo son los datos principales de un KindCommit: lo que suma a Count de cada store, el DDL del lote y su
+// origen.
 type commitInfo struct {
 	deltas  map[smgr.FileNo]int64
 	creates []smgr.FileNo // stores que el lote creó: dejan de estar pendientes
 	drops   []smgr.FileNo // stores que el lote borra: salen del catálogo y se borran sus archivos
+	origin  uint16        // el origen del lote (Batch.SetOrigin); 0 = escrito en este motor
 }
+
+// commitOriginSize es el largo del origen al final de un KindCommit con wal.FlagOrigin (tarea 83).
+const commitOriginSize = 2
 
 /**
 * encodeCommit arma los datos de un KindCommit: la hora, lo que la transacción suma a Count de cada store (fase 1B:
 * los lotes; las operaciones sueltas no lo usan) y, si el lote hizo DDL, la cola con los stores creados y borrados.
+* Con origen (c.origin ≠ 0) le sigue origin(2) y el registro lleva wal.FlagOrigin (commitFlags).
 * @param time int64, c commitInfo
 * @return []byte
 **/
@@ -159,7 +165,7 @@ func encodeCommit(time int64, c commitInfo) []byte {
 	if ddl > 0 {
 		size += commitDDLHeader + 4*ddl
 	}
-	b := make([]byte, size)
+	b := make([]byte, size, size+commitOriginSize)
 	le.PutUint64(b[0:], uint64(time))
 	le.PutUint32(b[8:], uint32(len(c.deltas)))
 	off := commitMainHeader
@@ -168,25 +174,62 @@ func encodeCommit(time int64, c commitInfo) []byte {
 		le.PutUint64(b[off+4:], uint64(delta))
 		off += commitStoreSize
 	}
-	if ddl == 0 {
-		return b
+	if ddl > 0 {
+		le.PutUint32(b[off:], uint32(len(c.creates)))
+		le.PutUint32(b[off+4:], uint32(len(c.drops)))
+		off += commitDDLHeader
+		for _, file := range append(slices.Clone(c.creates), c.drops...) {
+			le.PutUint32(b[off:], uint32(file))
+			off += 4
+		}
 	}
-	le.PutUint32(b[off:], uint32(len(c.creates)))
-	le.PutUint32(b[off+4:], uint32(len(c.drops)))
-	off += commitDDLHeader
-	for _, file := range append(slices.Clone(c.creates), c.drops...) {
-		le.PutUint32(b[off:], uint32(file))
-		off += 4
+	if c.origin != 0 {
+		b = le.AppendUint16(b, c.origin)
 	}
 	return b
 }
 
 /**
-* decodeCommit lee lo que un KindCommit suma a Count de cada store y su cola de DDL (si la tiene).
-* @param b []byte
+* commitFlags son las marcas del registro de un KindCommit con c: wal.FlagOrigin si lleva origen.
+* @param c commitInfo
+* @return wal.Flags
+**/
+func commitFlags(c commitInfo) wal.Flags {
+	if c.origin != 0 {
+		return wal.FlagOrigin
+	}
+	return 0
+}
+
+/**
+* decodeCommit lee lo que un KindCommit suma a Count de cada store, su cola de DDL (si la tiene) y su origen (con
+* wal.FlagOrigin).
+* @param b []byte: los datos del registro, flags wal.Flags: sus marcas
 * @return commitInfo, error: con detalle si no tiene la forma del formato
 **/
-func decodeCommit(b []byte) (commitInfo, error) {
+func decodeCommit(b []byte, flags wal.Flags) (commitInfo, error) {
+	origin := uint16(0)
+	if flags&wal.FlagOrigin != 0 {
+		if len(b) < commitMainHeader+commitOriginSize {
+			return commitInfo{}, fmt.Errorf("commit data has %d bytes with an origin", len(b))
+		}
+		origin = le.Uint16(b[len(b)-commitOriginSize:])
+		b = b[:len(b)-commitOriginSize]
+		if origin == 0 {
+			return commitInfo{}, fmt.Errorf("commit origin is 0 with FlagOrigin")
+		}
+	}
+	c, err := decodeCommitBody(b)
+	c.origin = origin
+	return c, err
+}
+
+/**
+* decodeCommitBody lee la parte de un KindCommit sin el origen: las sumas a Count y la cola de DDL.
+* @param b []byte
+* @return commitInfo, error
+**/
+func decodeCommitBody(b []byte) (commitInfo, error) {
 	if len(b) < commitMainHeader {
 		return commitInfo{}, fmt.Errorf("commit data has %d bytes", len(b))
 	}

@@ -19,15 +19,22 @@ type Options struct {
 	// «Preasignación» en doc.go). El motor lo usa siempre; las pruebas del paquete, según el caso.
 	Preallocate bool
 
+	// Buffer, si no es 0, es cuántos bytes de registros sellados pueden esperar en memoria antes de escribirse
+	// (WAL_BUFFERS, como wal_buffers de PostgreSQL): Write los deja pendientes y se escriben juntos, con un pwrite por
+	// tanda, en WaitDurable, al sellar o cuando lo pendiente llega a Buffer. 0 = cada Write escribe enseguida.
+	Buffer int64
+
 	// StopLSN, si no es 0, es el objetivo de la recuperación de Open (recovery_target_lsn de PostgreSQL): el
 	// recorrido termina tras el registro de ese lsn y lo que sigue se corta como una cola inválida.
 	StopLSN page.LSN
 }
 
 // EnvOptions lee las opciones de WAL_SEGMENT_SIZE (MB, mínimo 1) y MAX_WAL_SIZE (MB): se guardan como repuesto los
-// segmentos que llenan la mitad de MAX_WAL_SIZE (a confirmar), al menos uno. Siempre con preasignación.
+// segmentos que llenan la mitad de MAX_WAL_SIZE (a confirmar), al menos uno, y WAL_BUFFERS (KB, 1024 por omisión; 0 =
+// sin búfer). Siempre con preasignación.
 func EnvOptions() Options {
 	segment := max(envar.GetInt64("WAL_SEGMENT_SIZE", 128), MinSegmentSize>>20) << 20
 	maxWAL := max(envar.GetInt64("MAX_WAL_SIZE", 1024), 1) << 20
-	return Options{SegmentSize: segment, Spares: int(max(maxWAL/2/segment, 1)), Preallocate: true}
+	buffer := max(envar.GetInt64("WAL_BUFFERS", 1024), 0) << 10
+	return Options{SegmentSize: segment, Spares: int(max(maxWAL/2/segment, 1)), Preallocate: true, Buffer: buffer}
 }

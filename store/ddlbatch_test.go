@@ -292,20 +292,28 @@ func TestStoreInSameName(t *testing.T) {
 	}
 }
 
-// Borrar un store en el que escribe otro lote abierto da ErrBusy; cuando ese lote termina, sí. Mientras un lote lo
-// borra, las escrituras de otros lotes en él dan ErrStorePending y otro DropStoreIn espera: si el primero confirma,
+// Borrar un store en el que escribe otro lote abierto espera a que ese lote termine (pregunta 73, tarea 86): hasta
+// LOCK_TIMEOUT y después ErrBusy sin abortar el lote; si termina antes, borra. Mientras un lote lo borra, las
+// escrituras de otros lotes en él dan ErrStorePending y otro DropStoreIn espera: si el primero confirma,
 // ErrSerialization.
 func TestDropStoreInBusy(t *testing.T) {
-	e := newTestEngine(t, nil)
+	e := newTestEngine(t, func(cfg *config) { cfg.lockTimeout = 200 * time.Millisecond })
 	s := mustStore(t, e, "s")
 	mustOK(t, s.Put("k", []byte("v")))
 	writer, dropper := e.NewBatch(), e.NewBatch()
 	mustOK(t, s.PutIn(writer, "w", []byte("1")))
+	start := time.Now()
 	if err := e.DropStoreIn(dropper, "s"); !errors.Is(err, ErrBusy) {
 		t.Fatalf("DropStoreIn of a store another batch wrote = %v, want ErrBusy", err)
 	}
-	mustOK(t, writer.Commit())
-	mustOK(t, e.DropStoreIn(dropper, "s"))
+	if took := time.Since(start); took < 150*time.Millisecond {
+		t.Fatalf("DropStoreIn gave up after %v, before LOCK_TIMEOUT", took)
+	}
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		writer.Commit()
+	}()
+	mustOK(t, e.DropStoreIn(dropper, "s")) // espera al escritor y borra
 
 	other := e.NewBatch()
 	if err := s.PutIn(other, "o", []byte("1")); !errors.Is(err, ErrStorePending) {
@@ -570,4 +578,32 @@ func concurrentDDL(e *Engine, name string, w, i int) error {
 		return tx.Rollback()
 	}
 	return tx.Commit()
+}
+
+// TestStoreInAfterUnseenDrop (pregunta 74, tarea 86): un lote más viejo que el que borró un store (no ve el borrado)
+// no puede crear otro con el mismo nombre: ErrSerialization; uno que empieza después sí. El motor olvida el nombre
+// cuando ya no queda ningún lote que no vea el borrado.
+func TestStoreInAfterUnseenDrop(t *testing.T) {
+	e := newTestEngine(t, nil)
+	mustStore(t, e, "x")
+	old := e.NewBatch()
+	mustOK(t, mustStore(t, e, "other").PutIn(old, "k", []byte("v"))) // empieza antes del borrado
+	dropper := e.NewBatch()
+	mustOK(t, e.DropStoreIn(dropper, "x"))
+	mustOK(t, dropper.Commit())
+	if _, err := e.StoreIn(old, "x"); !errors.Is(err, ErrSerialization) {
+		t.Fatalf("StoreIn of a store dropped after the batch started = %v, want ErrSerialization", err)
+	}
+	_ = old.Rollback()
+	fresh := e.NewBatch()
+	_, err := e.StoreIn(fresh, "x")
+	mustOK(t, err)
+	mustOK(t, fresh.Commit())
+	e.ddlMu.Lock()
+	e.pruneDrops()
+	left := len(e.droppedNames)
+	e.ddlMu.Unlock()
+	if left != 0 {
+		t.Fatalf("%d dropped names still remembered with no old batch open", left)
+	}
 }

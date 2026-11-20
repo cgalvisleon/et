@@ -66,6 +66,7 @@ type config struct {
 	archive           bool          // WAL_ARCHIVE: archivo continuo del WAL (retiene los segmentos hasta SetArchived)
 	archiveMaxSize    int64         // WAL_ARCHIVE_MAX_SIZE, en bytes: tope del WAL retenido por el archivo (0 = sin tope: frena)
 	stopLSN           page.LSN      // objetivo de la recuperación de OpenAt (0 = rehacer todo el WAL)
+	stopTime          time.Time     // objetivo por hora de OpenAtTime (cero = ninguno): se traduce a stopLSN
 	slotKeepSize      int64         // MAX_SLOT_WAL_KEEP_SIZE, en bytes: tope del WAL que retiene una ranura (0 = sin tope: frena)
 	replica           bool          // OpenReplica: el motor es una réplica de solo lectura que aplica el WAL del primario
 	conflictDelay     time.Duration // replicaConflictDelay (las pruebas lo acortan)

@@ -24,7 +24,7 @@ type Stats struct {
 	CacheWritten int64 // páginas escritas al disco (checkpoint, escritor de fondo, reemplazo)
 
 	// WAL y checkpoints
-	WALSinceCheckpoint int64         // bytes de WAL desde el punto de rehacer del último checkpoint
+	WALSinceCheckpoint int64         // bytes de WAL desde el punto de rehacer del último checkpoint terminado: lo que rehace la recuperación
 	LSN                uint64        // todo lsn ≤ LSN está escrito en el WAL
 	DurableLSN         uint64        // todo lsn ≤ DurableLSN tiene fsync
 	Checkpoints        int64         // checkpoints hechos (también el que cierra la recuperación de Open)
@@ -156,7 +156,7 @@ func (e *Engine) stats() Stats {
 		CacheMisses:  cache.Misses,
 		CacheWritten: cache.Written,
 
-		WALSinceCheckpoint: e.log.SizeSince(e.log.RedoPoint()),
+		WALSinceCheckpoint: e.walBacklog(), // desde el último checkpoint terminado, no el que está en curso (tarea 82)
 		LSN:                uint64(e.log.Published()),
 		DurableLSN:         uint64(e.log.Durable()),
 		Checkpoints:        m.checkpoints.Load(),
@@ -262,7 +262,7 @@ func (e *Engine) statsLoop(interval time.Duration, fn func(Stats), quit chan str
 * @param st *Stats
 **/
 func (e *Engine) replicationStats(st *Stats) {
-	if rs := e.replica; rs != nil {
+	if rs := e.replica; rs != nil && e.isReplica() {
 		st.Replica, st.ReplayLSN = true, rs.applied.Load()
 		st.RecoveryConflicts = rs.conflicts.Load()
 	}

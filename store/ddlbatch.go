@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"time"
 
 	"github.com/cgalvisleon/et/store/internal/control"
 	"github.com/cgalvisleon/et/store/internal/page"
@@ -30,6 +31,7 @@ func (e *Engine) storeIn(b *Batch, name string) (*Store, error) {
 		return nil, err
 	}
 	defer b.mu.Unlock()
+	b.noteFirst()
 	var waited page.XID
 	waitedDrop := false
 	for {
@@ -64,7 +66,7 @@ func (e *Engine) storeInLocked(b *Batch, name string, waitedDrop bool) (*Store, 
 		return nil, 0, false, err
 	}
 	if s == nil {
-		if waitedDrop {
+		if waitedDrop || e.droppedUnseen(b, name) {
 			return nil, 0, false, ErrSerialization // lo borró un lote que confirmó después de que b empezó
 		}
 		s, err = e.createIn(b, name)
@@ -103,6 +105,7 @@ func (e *Engine) createIn(b *Batch, name string) (*Store, error) {
 		}
 		return nil, err
 	}
+	e.ddlLSN.Store(uint64(e.log.LastLSN())) // el catálogo que guarde un checkpoint tiene también su KindInitStore
 	s := &Store{e: e, name: name, file: entry.File, tree: tree, creator: b.xid}
 	e.handles[name] = s
 	b.creates = append(b.creates, s)
@@ -124,10 +127,20 @@ func (e *Engine) dropStoreIn(b *Batch, name string) error {
 		return err
 	}
 	defer b.mu.Unlock()
+	b.noteFirst()
 	var waited page.XID
 	waitedDrop := false
+	var busySince time.Time
 	for {
 		wait, drop, err := e.dropStoreInLocked(b, name, waitedDrop)
+		if errors.Is(err, errWritersBusy) {
+			if busySince.IsZero() {
+				busySince = time.Now()
+			}
+			if err = b.waitWriters(busySince, name); err == nil {
+				continue
+			}
+		}
 		if wait == 0 {
 			if txError(err) {
 				b.abortLocked(err)
@@ -188,12 +201,83 @@ func (b *Batch) markDrop(s *Store) error {
 		others--
 	}
 	if others > 0 {
-		return fmt.Errorf(MSG_BUSY_WRITERS, ErrBusy, others, s.name)
+		return errWritersBusy
 	}
 	s.dropper = b.xid
 	b.drops = append(b.drops, s)
 	b.wrote = true
 	return nil
+}
+
+/**
+* rememberDrop anota que el lote xid borró el store name al confirmar (pregunta 74). Con ddlMu tomado.
+* @param name string, xid page.XID
+**/
+func (e *Engine) rememberDrop(name string, xid page.XID) {
+	e.pruneDrops()
+	if e.droppedNames == nil {
+		e.droppedNames = map[string]page.XID{}
+	}
+	e.droppedNames[name] = xid
+}
+
+/**
+* droppedUnseen dice si name lo borró un lote confirmado que el snapshot de b no ve: para b el store existía, así que
+* crearlo de nuevo sería un error de serialización. Con ddlMu tomado.
+* @param b *Batch, name string
+* @return bool
+**/
+func (e *Engine) droppedUnseen(b *Batch, name string) bool {
+	e.pruneDrops()
+	xid, ok := e.droppedNames[name]
+	return ok && !b.snap.Visible(xid, xact.StatusCommitted)
+}
+
+/**
+* pruneDrops olvida los borrados que ya ven todos: el xid del lote que borró es menor que el más viejo en curso (todo
+* snapshot abierto empezó después de que confirmara). Con ddlMu tomado.
+**/
+func (e *Engine) pruneDrops() {
+	if len(e.droppedNames) == 0 {
+		return
+	}
+	oldest := e.txs.OldestActive()
+	for name, xid := range e.droppedNames {
+		if xid < oldest {
+			delete(e.droppedNames, name)
+		}
+	}
+}
+
+// errWritersBusy: markDrop encontró otros lotes abiertos que escribieron en el store; dropStoreIn los espera.
+var errWritersBusy = errors.New("store: other open batches wrote in the store")
+
+// writersPoll es la pausa más larga entre dos miradas de waitWriters.
+const writersPoll = 10 * time.Millisecond
+
+/**
+* waitWriters espera, con b.mu suelto, a que terminen los otros lotes que escribieron en el store name (pregunta 73:
+* como el bloqueo de un DROP en PostgreSQL), mirando cada vez más espaciado hasta writersPoll, y como mucho
+* LOCK_TIMEOUT desde since (sin pasar el tiempo del lote). Con b.mu tomado al entrar y al salir.
+* @param since time.Time: cuándo empezó a esperar, name string
+* @return error: nil (volver a mirar), ErrBusy al vencer, por qué terminó el lote o el fallo del motor
+**/
+func (b *Batch) waitWriters(since time.Time, name string) error {
+	limit := b.waitLimit()
+	if time.Since(since) >= limit {
+		if b.expired() {
+			return ErrTimeout
+		}
+		return fmt.Errorf(MSG_BUSY_WRITERS, ErrBusy, name)
+	}
+	pause := min(max(time.Since(since)/4, time.Millisecond), writersPoll, limit-time.Since(since))
+	b.mu.Unlock()
+	time.Sleep(pause)
+	b.mu.Lock()
+	if err := b.usableLocked(); err != nil {
+		return err
+	}
+	return b.e.failed()
 }
 
 /**
@@ -282,7 +366,7 @@ func (b *Batch) hasDDL() bool {
 * @return commitInfo
 **/
 func (b *Batch) commitInfo() commitInfo {
-	c := commitInfo{deltas: b.deltas}
+	c := commitInfo{deltas: b.deltas, origin: b.origin}
 	for _, s := range b.creates {
 		c.creates = append(c.creates, s.file)
 	}
@@ -337,6 +421,7 @@ func (b *Batch) applyDDL() error {
 		s.mu.Unlock()
 	}
 	for _, s := range b.drops {
+		e.rememberDrop(s.name, b.xid)
 		s.markDropped()
 		delete(e.handles, s.name)
 		if err := e.removeFiles(control.Entry{Name: s.name, File: s.file}); err != nil {
@@ -344,7 +429,7 @@ func (b *Batch) applyDDL() error {
 		}
 	}
 	if len(b.drops) == 0 {
-		return e.storeCatalog()
+		e.catalogChanged()
 	}
 	return nil
 }

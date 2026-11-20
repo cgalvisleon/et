@@ -19,7 +19,7 @@ import (
 * @return error
 **/
 func (e *Engine) checkpoint(state control.State, spread bool) error {
-	if e.replica != nil {
+	if e.isReplica() {
 		return e.restartpoint(state)
 	}
 	e.ckptMu.Lock()
@@ -91,7 +91,7 @@ func (e *Engine) checkpointLocked(state control.State, spread bool) (checkpointI
 **/
 func (e *Engine) checkpointNow() error {
 	enter := e.enter
-	if e.replica != nil {
+	if e.isReplica() {
 		enter = e.enterSlots
 	}
 	if err := enter(); err != nil {
@@ -201,6 +201,10 @@ func (e *Engine) saveCatalog(counts map[smgr.FileNo]int64, redoLSN page.LSN) err
 		}
 	}
 	e.cat.SetCountLSN(redoLSN)
+	// el catálogo nunca guarda un alta cuyo registro no es durable (createStore no espera su fsync)
+	if err := e.log.WaitDurable(page.LSN(e.ddlLSN.Load())); err != nil {
+		return err
+	}
 	if err := e.catFile.Save(e.cat.Catalog()); err != nil {
 		return err
 	}

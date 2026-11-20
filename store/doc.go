@@ -186,7 +186,9 @@
 //	KindCheckpoint        1  redoSegment(8) redoOffset(8) redoLSN(8) nextXID(8) oldestActiveXID(8) time(8)
 //	KindCommit            2  time(8) storeCount(4), storeCount × [fileNo(4) delta(8, con signo)] y, solo si el lote
 //	                         hizo DDL, la cola createCount(4) dropCount(4), createCount × fileNo(4), dropCount ×
-//	                         fileNo(4) (sin cola = sin DDL: los registros viejos se leen igual)
+//	                         fileNo(4) (sin cola = sin DDL: los registros viejos se leen igual); con wal.FlagOrigin
+//	                         en las marcas del registro, origin(2) al final, después de la cola (Batch.SetOrigin,
+//	                         tarea 83; nunca 0: sin origen no se escribe)
 //	KindAbort             3  nada
 //	KindPageImage         4  reservado: no se escribe (las marcas de visibilidad van como KindSetHints de btree)
 //	KindCreateStore       5  fileNo(4) nameLen(2) name
@@ -248,7 +250,9 @@
 //
 //	// Motor
 //	func Open(dir string) (*Engine, error)                     // control + WAL desde el último checkpoint; restaura una copia
+//	func OpenWith(dir string, o Options) (*Engine, error)      // Open con opciones propias (tarea 84; cero = la variable)
 //	func OpenAt(dir string, lsn uint64) (*Engine, error)       // restaura una copia de Backup hasta lsn (PITR)
+//	func OpenAtTime(dir string, t time.Time) (*Engine, error)  // hasta el último registro antes del primero con hora > t
 //	func (e *Engine) Close() error                             // checkpoint final
 //	func (e *Engine) Store(name string) (*Store, error)        // abre el store, o lo crea si no existe
 //	func (e *Engine) DropStore(name string) error
@@ -264,6 +268,8 @@
 //	func (b *Batch) Commit() error
 //	func (b *Batch) CommitDeferred() error                     // Commit sin esperar el fsync
 //	func (b *Batch) Rollback() error
+//	func (b *Batch) SetOrigin(origin uint16) error             // va en su KindCommit y sale en TxInfo.Origin (tarea 83)
+//	func (b *Batch) CommitLSN() uint64                         // el lsn de su KindCommit, tras confirmar
 //	func (e *Engine) Snapshot() *Snapshot                      // tiempo máximo TRANSACTION_TIMEOUT
 //	func (e *Engine) SnapshotFor(timeout time.Duration) *Snapshot // tiempo propio; 0 = sin tiempo máximo
 //	func (v *Snapshot) Close() error
@@ -322,12 +328,15 @@
 //
 //	// Respaldo y archivo continuo
 //	func (e *Engine) Backup(dir string) (BackupInfo, error)    // copia en caliente; Open(dir) restaura
+//	func (e *Engine) BackupTo(sink BackupSink) (BackupInfo, error) // lo mismo hacia un flujo (un tar), archivo por archivo
 //	func (e *Engine) PendingArchive() ([]WALSegment, error)    // sellados sin archivar, hasta 256
 //	func (e *Engine) SetArchived(seg uint64) error
 //	func (e *Engine) SwitchWAL() (uint64, error)               // sella el segmento activo
 //
 //	// Replicación (ver «Replicación»)
 //	func OpenReplica(dir string) (*Engine, error)              // una copia de Backup como réplica de solo lectura
+//	func OpenReplicaWith(dir string, o Options) (*Engine, error)
+//	func (e *Engine) Promote() error                           // la réplica pasa a primario sin cerrarla (tarea 85)
 //	func (e *Engine) WalSince(lsn uint64) (*WalReader, error)  // el WAL durable desde lsn + 1, del disco
 //	func (r *WalReader) Next(maxBytes int) ([]WalEntry, error)
 //	func (e *Engine) ApplyWal(entries []WalEntry) error        // en la réplica; ApplyWalEntry, uno solo
@@ -337,7 +346,12 @@
 //	func (e *Engine) Slots() []SlotInfo
 //	func (e *Engine) AdvanceSlot(name string, lsn uint64) error
 //	func (e *Engine) Changes(slot string) (*ChangeReader, error)
+//	func (e *Engine) ChangesWith(slot string, f ChangeFilter) (*ChangeReader, error) // con filtro (store, id, origen)
+//	func (e *Engine) ChangesFrom(pos ChangePos, f ChangeFilter) (*ChangeReader, error) // sin ranura, desde pos
+//	func (e *Engine) ChangeHead() (ChangePos, error)           // la posición actual, sin esperar a los lotes abiertos
+//	func (e *Engine) AdvanceLogicalSlot(name string, pos ChangePos) error
 //	func (r *ChangeReader) Next(maxTx int, fn func(tx TxInfo, c Change) error) (int, error)
+//	func (r *ChangeReader) Pos() ChangePos                     // tras lo entregado: ChangesFrom(Pos(), …) sigue
 //	func (r *ChangeReader) Confirm() error
 //	func (r *ChangeReader) Close() error
 //
@@ -411,6 +425,12 @@
 //	WAL_ARCHIVE_MAX_SIZE     0            MB que puede retener el archivo; 0 = sin tope (frena a los escritores)
 //	MAX_SLOT_WAL_KEEP_SIZE   4096         MB de WAL que puede retener una ranura antes de invalidarse (pregunta 48);
 //	                                      0 = sin tope (la ranura frena a los escritores, como el archivo)
+//	WAL_BUFFERS              1024         KB de registros sellados que esperan en memoria antes de escribirse
+//	                                      (wal_buffers; tarea 100); 0 = una escritura por registro
+//
+// OpenWith y OpenReplicaWith (tarea 84) toman las mismas de un Options: un campo en cero deja la variable, uno
+// negativo apaga lo que 0 apaga (WALWriterDelay, VacuumInterval, TransactionTimeout, ArchiveMaxMB, SlotKeepMB,
+// WALBuffersKB). Así un proceso abre varios motores con distinta caché, WAL y tiempos.
 //
 // Constantes, sin variable: archivos de datos de 1 GB, CHECKPOINT_COMPLETION_TARGET = 0,9, FREEZE_MIN_AGE = 0,
 // FREEZE_TABLE_AGE = un archivo de estados (134.217.728 xids; ver «Congelado y truncado del archivo de estados»), el
@@ -710,7 +730,10 @@
 //   - Consultar el estado de una transacción (xact) con una hoja bloqueada en compartido puede leer el disco o esperar
 //     al WAL (como clog en PostgreSQL); con un bloqueo exclusivo, igual.
 //   - Dentro de un búfer: io (escritura al disco) → contenido → encabezado.
-//   - Página (bloqueo de contenido) → writeMu → pubMu; writeMu → syncMu; syncMu → pubMu. Nunca writeMu → página.
+//   - Página (bloqueo de contenido) → writeMu → drainMu → pubMu; writeMu → syncMu; syncMu → pubMu; leadMu (quién hace
+//     el fsync del group commit) es una hoja. Nunca writeMu → página. Partir una hoja pide antes su página nueva con
+//     la hoja suelta (fsm.Grow, tarea 100): la extensión del archivo no va con páginas del árbol bloqueadas.
+//   - Promote (tarea 85): ckptMu → applyMu → replayMu → ddlMu, el orden del restartpoint y del aplicador.
 //   - Nunca se espera a otra transacción (xact.Manager.Wait) ni a un fsync con una página bloqueada. Un pin sí se puede
 //     tener mientras tanto. El fsync del checkpoint (smgr Sync) va con el candado del fork suelto, así una extensión
 //     (fsm.Allocate → PinNew → smgr Extend, con páginas del árbol bloqueadas) no lo espera. La excepción documentada:
@@ -1151,7 +1174,8 @@
 //	grupo          campos                                         de dónde sale
 //	caché          CacheSize, CachePages, CacheDirty, CacheHits,  buffer.Pool.Stats (Used = búferes con página;
 //	               CacheMisses, CacheWritten                      sube al dar un búfer vacío, baja en DropFile)
-//	WAL            WALSinceCheckpoint, LSN, DurableLSN            wal.SizeSince(RedoPoint), Published, Durable
+//	WAL            WALSinceCheckpoint, LSN, DurableLSN            walBacklog (desde el último checkpoint terminado,
+//	                                                              tarea 82), Published, Durable
 //	checkpoints    Checkpoints, LastCheckpoint,                   contados al terminar el paso 7 (también el que
 //	               LastCheckpointTook                             cierra la recuperación; uno de fondo se reparte)
 //	limpieza       WritesSinceVacuum, Vacuums, PagesDeleted,      Engine.writes menos su valor al empezar la última
@@ -1571,8 +1595,77 @@
 // A confirmar (tarea 46): esperar a los snapshots de la réplica en vez de llevar las transacciones en curso del
 // primario; replicaConflictDelay y logicalWorkMem como constantes; los avances de una ranura se guardan en el
 // checkpoint (entrega al menos una vez tras un corte del primario); 16 ranuras de hasta 64 bytes; la réplica no
-// archiva ni admite ranuras lógicas; no hay réplica síncrona (el primario no espera a la réplica al confirmar) ni
-// filtros por store en el flujo lógico; Sync de josefina (gancho en proceso) se arma sobre Changes.
+// archiva ni admite ranuras lógicas; no hay réplica síncrona (el primario no espera a la réplica al confirmar); Sync
+// de josefina (gancho en proceso) se arma sobre Changes.
+//
+// Flujo por posición y filtro (tarea 75, changes.go): ChangePos{Restart, Confirmed} es una posición del flujo (se lee
+// desde Restart y se salta lo confirmado hasta Confirmed). ChangesWith(ranura, f) y ChangesFrom(pos, f) aplican un
+// ChangeFilter: Origin por transacción (TxInfo.Origin), Store por cambio, ID por cambio antes de armar un valor en
+// desborde. ChangesFrom no usa ranura: no retiene WAL (ErrWalRemoved si ya se recicló), anda en una réplica, sus
+// archivos de derrame se llaman «~n-…» y Confirm da ErrSlotNotFound; quien lee guarda Pos() (Restart = el primer
+// registro de la transacción más vieja en su búfer, o lo leído + 1; Confirmed = lo leído) y AdvanceLogicalSlot(nombre,
+// pos) lleva una ranura lógica a una posición sin abrir su lector. ChangeHead no espera a los lotes abiertos: cada lote
+// anota en su primera escritura (writeIn, storeIn, dropStoreIn: noteFirst) una cota de su primer registro (el último
+// lsn reservado + 1, wal.LastLSN) en headState, un mapa acotado por los lotes abiertos, y la saca al terminar, después
+// de su registro final; ChangeHead da Restart = el menor de esas cotas (o el último reservado + 1) y Confirmed = el
+// último reservado, todo bajo headState.mu. Batch.CommitLSN es el TxInfo.CommitLSN de su transacción.
+//
+// Origen (tarea 83): Batch.SetOrigin(n) guarda n en el lote; su KindCommit lleva wal.FlagOrigin y origin(2) al final
+// (formato en «Formatos en disco»), y el flujo lo da en TxInfo.Origin. Un nodo multi de josefina marca lo que aplica
+// por replicación con el nodo de donde vino y filtra por origen lo que publica.
+//
+// Ranuras y topología (tarea 76): alcanzan las 16 de siempre, con una lógica por nodo origen (leída por todos los
+// vecinos con ChangesFrom desde su posición, y avanzada al mínimo de ellas con AdvanceLogicalSlot) más una física por
+// réplica del modo single (TestSlotTopology).
+//
+// Promote (tarea 85, promote.go): con ckptMu → applyMu → replayMu termina la recuperación como Open (dropPending,
+// syncHandles, horizonte del archivo de estados con status.Recover y el próximo xid), marca replicaState.promoted —el
+// puntero e.replica no cambia nunca, así nadie lo lee a medio escribir; todo pregunta isReplica()—, arranca la limpieza
+// de fondo y, con ckptMu todavía tomado, hace el checkpoint de fin de recuperación (checkpointLocked, con su
+// KindCheckpoint). ApplyWal da ErrNotReplica desde ahí; los snapshots abiertos siguen; los stores abiertos antes
+// siguen sin marcas de visibilidad (NoHints) hasta reabrir el motor.
+//
+// # Muchos stores y DDL en lote (tareas 86 y 98)
+//
+// Alta suelta (Store): bajo ddlMu se escribe KindCreateStore sin esperar su fsync, se da de alta en el catálogo de
+// memoria y se crea el árbol (KindInitStore); ddlLSN queda en el último lsn reservado; ya sin ddlMu, handle espera el
+// fsync hasta ahí (las altas concurrentes comparten uno; mientras tanto otros ya ven el store, y lo que confirmen de
+// forma durable cubre el alta, que va antes en el WAL). Un alta en un lote (StoreIn) no espera: la cubre el commit.
+// El catálogo ya no se guarda en cada DDL (catalogChanged → catalogBehind): lo guarda el paso 3 del checkpoint, que
+// antes espera el fsync de ddlLSN, así el catálogo guardado nunca tiene un alta que no es durable; la réplica sigue
+// guardándolo tras cada DDL que rehace (storeCatalog). smgr.Create y smgr.Unlink no hacen fsync de data/: lo hace
+// SyncAll en el checkpoint, antes de que el punto de rehacer pase su registro. Al recuperar: los stores sueltos dados
+// de alta en lo rehecho sin página meta (su KindInitStore no llegó a ser durable: su Store no volvió bien) se borran
+// sin WAL (dropUninitialized, como dropPending), y los archivos de datos con número ≥ NextFileNo (de un alta cuyo
+// registro se perdió) también (removeUnallocated). La caché de descriptores de smgr cierra uno con escrituras sin
+// fsync con vfs.FlushFile (fsync simple en macOS) en lugar de F_FULLFSYNC. Medido: 1.590 altas, de 17,5 a 4,4 ms
+// cada una; el checkpoint que sigue, de 10 a 1,2 s (TestManyStoresBench, STORE_BENCH=1).
+//
+// DropStoreIn sobre un store en el que escribieron otros lotes abiertos (pregunta 73) los espera con el lote suelto,
+// mirando cada vez más espaciado (hasta 10 ms), hasta LOCK_TIMEOUT sin pasar el tiempo del lote; después ErrBusy, sin
+// abortarlo. Los stores que borró un lote confirmado se recuerdan con su xid (droppedNames, con ddlMu) mientras quede
+// un snapshot que no ve el borrado (pregunta 74; se olvidan cuando el xid es menor que OldestActive): StoreIn de un
+// lote más viejo con ese nombre da ErrSerialization en lugar de crear otro.
+//
+// # Respaldo hacia un flujo y por hora (tarea 77)
+//
+// BackupTo(sink) hace los mismos pasos que Backup, pero cada archivo va a sink.File(nombre, largo) una vez y entero
+// (lo que pide un tar), con «/» y relativo a la copia; el catálogo, el control y backup_label se arman en un disco en
+// memoria (crashfs.New) con el mismo código y se entregan después. El marcador sale «en curso» al principio y el final
+// al terminar: al extraer un tar el segundo pisa al primero, y una copia cortada no abre (ErrBackupIncomplete).
+// OpenAtTime(dir, t) traduce la hora a un lsn sin escribir nada (timeTarget): recorre el WAL desde el punto de rehacer
+// del control y el objetivo es el registro anterior al primero con hora posterior a t (KindCommit y KindCheckpoint en
+// sus primeros 8 bytes, KindBackupEnd en el último campo; recordTime); sin registros posteriores, el último del WAL;
+// antes del fin del respaldo, ErrRecoveryTarget.
+//
+// # Escritor de fondo y escrituras concurrentes (tareas 97 y 100)
+//
+// El escritor de fondo de la caché limpia también, en una segunda pasada, las sucias que pasan la mitad de la caché
+// aunque estén en uso (buffer, «BgWriterDirtyTarget»). Las confirmaciones durables concurrentes comparten el fsync y
+// los registros salen del búfer del WAL por tandas (wal, «Búfer del WAL y group commit»); partir una hoja pide antes su
+// página (fsm.Grow); page.CheckItems no ordena. Medido en josefina (test/bench, 100 workers): de 3.283 a 5.448
+// escrituras/s con p50 de 13,8 a 8,0 ms (Pebble, el mismo día: 5.270–5.504 y 8,3–8,5 ms); test/startup de 35.216 a
+// ~75.000 docs/s (Pebble 84.495). El límite que queda es el fsync (F_FULLFSYNC ~4 ms en macOS).
 //
 // # Diseño recursivo
 //

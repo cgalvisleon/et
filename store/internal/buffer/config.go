@@ -19,6 +19,14 @@ const (
 
 	// BgWriterMaxPages es el tope de páginas que escribe el escritor de fondo por ronda (bgwriter_lru_maxpages).
 	BgWriterMaxPages = 100
+
+	// BgWriterDirtyTarget: con más de esta fracción de la caché sucia, el escritor de fondo escribe también páginas
+	// en uso (sin pins), no solo las que el reemplazo usaría ya: sin reemplazo la manecilla no gira y las sucias
+	// quedaban hasta el próximo checkpoint (la presión «dirty» en 0,9; tarea 97 de F-23).
+	BgWriterDirtyTarget = 0.5
+
+	// BgWriterMaxDirtyPages es el tope de esa segunda pasada por ronda (8 MB cada BgWriterDelay).
+	BgWriterMaxDirtyPages = 1000
 )
 
 // Errores de la caché. Se comparan con errors.Is.

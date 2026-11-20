@@ -48,6 +48,10 @@ type Batch struct {
 	creates []*Store
 	drops   []*Store
 	written map[*Store]struct{}
+
+	origin     uint16   // SetOrigin: va en su KindCommit (0 = sin origen)
+	firstNoted bool     // ya anotó la cota de su primer registro (headState, ChangeHead)
+	commitLSN  page.LSN // el lsn de su KindCommit, tras confirmar (CommitLSN)
 }
 
 /**
@@ -167,6 +171,31 @@ func (b *Batch) commit(deferred bool) error {
 }
 
 /**
+* commitLSNOf es el lsn del KindCommit del lote tras un Commit que escribió (0 antes, sin escrituras o deshecho).
+* @return uint64
+**/
+func (b *Batch) commitLSNOf() uint64 {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return uint64(b.commitLSN)
+}
+
+/**
+* setOrigin guarda el origen del lote para su KindCommit.
+* @param origin uint16
+* @return error: ErrTxDone, o por qué abortó
+**/
+func (b *Batch) setOrigin(origin uint16) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if err := b.usableLocked(); err != nil {
+		return err
+	}
+	b.origin = origin
+	return nil
+}
+
+/**
 * rollback deshace el lote: un KindAbort si escribió, abortada en el archivo de estados y End. Deshacer un lote que
 * abortó solo no hace nada más; deshacer uno terminado devuelve ErrTxDone.
 * @return error
@@ -208,6 +237,7 @@ func (b *Batch) abortLocked(err error) {
 func (b *Batch) finishLocked(commit, deferred bool) error {
 	b.state = batchDone
 	b.e.timers.stop(b.timer)
+	defer b.forgetFirst() // el último: después del registro final
 	defer b.e.closeTxn(&b.e.metrics.openBatches)
 	defer b.e.txs.End(b.xid) // después de resolver el DDL: quien espera al lote ya ve el catálogo final
 	defer b.forgetWrites()
@@ -243,7 +273,9 @@ func (b *Batch) logEnd(commit bool, mode syncMode) error {
 	var underLock func(page.LSN)
 	status := xact.StatusAborted
 	if commit {
-		rec.Kind, rec.Main, status = wal.KindCommit, encodeCommit(time.Now().UnixNano(), b.commitInfo()), xact.StatusCommitted
+		info := b.commitInfo()
+		rec.Kind, rec.Flags, rec.Main = wal.KindCommit, commitFlags(info), encodeCommit(time.Now().UnixNano(), info)
+		status = xact.StatusCommitted
 		underLock = func(page.LSN) {
 			for file, delta := range b.deltas {
 				e.counts.add(file, delta)
@@ -259,6 +291,7 @@ func (b *Batch) logEnd(commit bool, mode syncMode) error {
 		return err
 	}
 	if commit {
+		b.commitLSN = lsn
 		if err := e.syncCommit(lsn, mode); err != nil {
 			return err
 		}
@@ -302,6 +335,7 @@ func (s *Store) writeIn(b *Batch, id string, c change) (bool, error) {
 		return false, err
 	}
 	defer b.mu.Unlock()
+	b.noteFirst()
 	for {
 		applied, wait, err := s.writeInRound(b, id, c)
 		if wait != 0 {

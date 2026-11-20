@@ -53,6 +53,7 @@ const (
 	FlagCommit   Flags = 1 << 0 // el registro confirma su transacción (operación suelta)
 	FlagCountAdd Flags = 1 << 1 // la escritura agregó un id vivo (había lápida o nada)
 	FlagCountSub Flags = 1 << 2 // la escritura quitó un id vivo (lápida sobre una versión viva)
+	FlagOrigin   Flags = 1 << 3 // KindCommit: los datos terminan con el origen del lote (2 bytes; Batch.SetOrigin)
 )
 
 // BlockFlags son las marcas de una referencia a bloque.

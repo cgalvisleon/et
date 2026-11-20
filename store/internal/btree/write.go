@@ -29,6 +29,7 @@ func (t *BTree) Write(id string, w Write) (Result, error) {
 	defer t.guard.leave(t.guard.enter())
 	var hs hints
 	defer t.flushHints(&hs)
+	grow := t.grower != nil
 	for {
 		h, n, rootLevel, err := t.leafForWrite(k, len(item))
 		var fe *finishError
@@ -41,7 +42,7 @@ func (t *BTree) Write(id string, w Write) (Result, error) {
 		if err != nil {
 			return Result{}, err
 		}
-		res, done, err := t.writeLeaf(h, n, k, item, w, rootLevel, &hs)
+		res, done, err := t.writeLeaf(h, n, k, item, w, rootLevel, &hs, &grow)
 		if err != nil || done {
 			return res, err
 		}
@@ -91,9 +92,10 @@ func (t *BTree) tryFastLeaf(k key, size int) (buffer.Handle, node, bool) {
 * @param h buffer.Handle, n node: la hoja, bloqueada en exclusivo
 * @param k key: searchKey(id), item []byte: la entrada sin lsn, w Write, rootLevel uint32
 * @param hs *hints: las marcas de visibilidad que se ponen al mirar las versiones
-* @return Result, bool: false si la hoja se partió y hay que volver a bajar, error
+* @param grow *bool: si todavía puede soltar la hoja para extender el archivo antes de partirla (una vez por Write)
+* @return Result, bool: false si la hoja se partió (o se soltó para extender) y hay que volver a bajar, error
 **/
-func (t *BTree) writeLeaf(h buffer.Handle, n node, k key, item []byte, w Write, rootLevel uint32, hs *hints) (Result, bool, error) {
+func (t *BTree) writeLeaf(h buffer.Handle, n node, k key, item []byte, w Write, rootLevel uint32, hs *hints, grow *bool) (Result, bool, error) {
 	pos, err := n.lowerBound(k)
 	if err != nil {
 		h.Release()
@@ -111,6 +113,13 @@ func (t *BTree) writeLeaf(h buffer.Handle, n node, k key, item []byte, w Write, 
 		return Result{}, true, nil
 	}
 	if !fits(n.p, len(item)) {
+		if *grow {
+			// La página nueva de la partición se pide antes, con la hoja suelta: extender el archivo es lento y con
+			// la hoja de más a la derecha bloqueada frenaba a todos los escritores (tarea 100 de F-23)
+			*grow = false
+			h.Release()
+			return Result{}, false, t.grower.Grow(t.file, w.XID)
+		}
 		atEnd := n.rightmost() && pos > n.maxOff()
 		return Result{}, false, t.splitAndFinish(h, n, atEnd, w.XID)
 	}

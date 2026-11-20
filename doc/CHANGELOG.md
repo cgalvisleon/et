@@ -478,3 +478,80 @@ Los hallazgos crítico y altos de `doc/review-store-2026-11-20.md`, más el de l
 - **94 (alto, R1):** el flujo lógico no entrega como DDL suelto el `KindDropStore` de xid 0 que deshace un `StoreIn`: cancela el store dentro de su lote (o lo descarta si el lote abortó). Prueba: `TestChangesBatchDDLUndo`.
 - **95:** «control: redo point lsn X, the engine's is Y» tras un checkpoint cortado por disco lleno era un **falso positivo de `Verify`**: el paso 1 mueve el punto de rehacer vigente del WAL (como `RedoRecPtr`) y el disco lleno en los pasos 2–3 deja el control en el checkpoint anterior; las imágenes se deciden contra un punto posterior al de la recuperación (sobran, no faltan) y no se recicla nada. `Verify` compara ahora el control con el del último checkpoint terminado (`Engine.ctlRedo`) y exige que el vigente del WAL no sea anterior. Prueba: `TestVerifyAfterCutCheckpoint`.
 - **Corridas:** `go test -p 1 -count=1 ./store/...` y con `-race` en verde, medidas con `/usr/bin/time -l` (RSS máx. 733 MB y 1,0 GB); 60 s de `FuzzOpenDamaged`, `FuzzRecoverSegment`, `FuzzDecodeRecord` y `FuzzRecordRoundTrip` sin fallas.
+
+### Rendimiento de escritura (tarea 100)
+
+Con josefina sobre el motor, las escrituras durables concurrentes iban más lentas que con Pebble. Medido con pprof (CPU, bloqueo y mutex) en el servidor de `test/bench` y con `TestGroupCommitBench` (`STORE_BENCH=1`, `groupcommit_test.go`: escritores concurrentes con un documento y su índice, ops/s y confirmaciones por fsync). El group commit no era el costo: cada fsync ya cubría ~22 confirmaciones con 50 escritores y la espera del fsync por documento era la misma que en Pebble (4,8 contra 4,6 ms). El costo estaba en tres lugares:
+
+- **La partición de la hoja de más a la derecha extendía el archivo con la hoja bloqueada.** Con ids ordenados por tiempo (los `jid` de josefina) todos escriben en esa hoja; en macOS una escritura a un archivo de datos espera al `F_FULLFSYNC` en curso del WAL (medido: 1,4 ms de media), así cada partición frenaba a todos los escritores (300 s de espera en mutex en 60 s). Ahora `btree.writeLeaf`, si la hoja no tiene lugar, la suelta y pide antes la página (`fsm.Manager.Grow`, interfaz opcional `fsm.Grower`): con la lista de libres vacía, extiende el archivo de una vez con 1/64 de su largo (1 a 16 páginas, `buffer.Extender.ExtendBy`, una sola escritura) sin nada bloqueado, pone cada página en la lista (`KindFreePush`) y la partición la saca con `Allocate`. Un corte entre la extensión y los registros deja páginas en ceros que Verify cuenta como perdidas y Repair recupera, como antes un corte a media partición.
+- **Un `pwrite` por registro del WAL** (73 % de la CPU de la carga masiva: ~20 µs cada uno en APFS). Nuevo búfer del WAL (`WAL_BUFFERS`, KB, 1024 por omisión; `wal.Options.Buffer`): `Write` sella el registro y lo deja en `pending`; se escribe por tandas contiguas de hasta 1 MB con un solo `pwrite` (`drain`) cuando alguien lo espera (`waitPublished`: `WaitDurable`, el sellado, `Close`), cuando lo pendiente llega al búfer o cuando ya hay alguien esperando (`wanted`). Un `Write` nunca espera a otra reserva: si falta un registro anterior, lo escribe su dueño. `published` es ahora «escrito en el archivo»; el sellado espera a que todo lo reservado esté escrito (reemplaza el `inflight` del segmento). Las pruebas del motor corren con búfer (64 KB); las de cortes que cuentan escrituras del WAL (`TestFreezeCrashCuts`, `TestPageDeleteVerifyRepair`) con `Buffer = 0`.
+- **`page.CheckItems` en cada bloqueo de una página** ordenaba los ítems y ponía en cero 12 KB de pila (16 % de la CPU de la carga). Ahora marca las unidades de 8 bytes en un mapa de bits de 128 bytes; `FuzzVerify` compara su veredicto con el de `storedItems`.
+- De paso, `WAL.WaitDurable` tiene un líder del fsync a la vez y los demás esperan un canal que se cierra (antes, una cola en `syncMu` que se despertaba de a uno); medido igual, se queda por simple.
+
+| Medida (misma Mac, 2026-11-20) | store antes | store después | Pebble |
+|---|---:|---:|---:|
+| `test/bench` 60 s, 100 workers: escrituras/s | 3.283 | 5.448 | 5.270–5.504 |
+| ídem, p50 de una escritura | 13,8 ms | 8,0 ms | 8,3–8,5 ms |
+| ídem, lecturas/s | 66.856 | 66.384 | 57.214–62.243 |
+| `test/startup -docs 1000000`: carga | 35.216 docs/s | 74.283–77.702 docs/s | 84.495 docs/s |
+
+El 8.648 de Pebble anotado en la tarea era de otro día (el fsync de la Mac variaba); hoy un `F_FULLFSYNC` tarda ~4 ms y los dos motores quedan en ~5.400 escrituras/s: el límite es el fsync (dos por escritura de media con escritores sincronizados: el que está en curso y el siguiente). La carga masiva queda un 10 % por debajo de Pebble (lo que queda es CPU del árbol por documento).
+
+### Marca de origen en el lote (tarea 83)
+
+- `Batch.SetOrigin(origin uint16) error` (antes de `Commit`; `ErrTxDone` si terminó) y `TxInfo.Origin` en el flujo de cambios (0 = escrito en este motor: suelto, DDL suelto o lote sin origen).
+- **Formato:** un `KindCommit` con origen lleva la marca nueva `wal.FlagOrigin` (bit 3 de las marcas del registro) y `origin(2)` al final de sus datos, también tras la cola de DDL; sin origen no cambia nada (los registros viejos se leen igual). `decodeCommit(main, flags)`; `commitFlags`.
+- Pruebas: `TestRecordsRoundTrip` (origen con y sin DDL, sin la marca no se lee, corto), `TestChangesOrigin` (lote con origen, suelto, lote sin origen, lote con DDL; el mismo flujo tras un corte `LoseUnsynced`).
+
+### Muchos stores (tarea 98)
+
+Medido con `TestManyStoresBench` (`STORE_BENCH=1`): 1.590 altas sueltas de nombres del largo de los de josefina.
+
+| | antes | después |
+|---|---:|---:|
+| 1.590 `Store(name)` seguidos | 27,9 s (17,5 ms cada uno) | 7,0 s (4,4 ms: un fsync del WAL) |
+| el checkpoint que sigue | 10,0 s | 1,2 s |
+
+- El catálogo ya no se reescribe entero en cada DDL (crear, borrar, vaciar, el DDL de un lote): `catalogChanged` lo deja atrás a propósito (`catalogBehind`) y lo guarda el checkpoint (paso 3), que antes espera el fsync de la última alta (`ddlLSN`): el catálogo guardado nunca tiene un alta que no es durable. La recuperación ya rehacía los cambios de stores desde el WAL. La réplica sigue guardándolo tras cada DDL que rehace.
+- `smgr.Create` y `smgr.Unlink` no hacen fsync de `data/`: lo hace `SyncAll` (el checkpoint), antes de que el punto de rehacer pase su registro; un corte antes lo arregla el WAL (el rehacer crea el archivo que falte y vuelve a borrar el que reaparezca).
+- La caché de descriptores de smgr, al cerrar uno con escrituras sin fsync, usa `vfs.FlushFile` (fsync simple en macOS, 34 µs, contra los 4 ms de `F_FULLFSYNC`): sirve para no perder un error de escritura, y el archivo sigue marcado para el fsync de verdad del checkpoint. Con más de 256 stores cada alta cerraba uno y pagaba un `F_FULLFSYNC`.
+- El fsync del alta se espera sin `ddlMu` (`handle` → `handleLocked`): las altas concurrentes lo comparten; una en un lote (`StoreIn`) no lo espera (lo cubre el commit). Si un corte pierde el registro de un alta, los archivos que alcanzaron a crearse tienen un número ≥ `NextFileNo` y la recuperación los borra (`removeUnallocated`).
+- El catálogo por partes no hizo falta: 139 KB por checkpoint (cada 5 min) no se nota.
+- Pruebas: `TestCreateStoresCrash` (altas desde 4 goroutines con checkpoints en medio y un corte en una operación de disco al azar, 3 modos × 4 semillas: los stores que volvieron bien siguen con lo escrito, Verify limpio), `TestRemoveUnallocated`, `TestCreateExistsNBlocks` y `TestUnlink` (smgr) ajustadas, `TestVerifyRepairDamage` con su huérfano debajo de `NextFileNo`, `TestDiskFullCrash` (Open con el disco lleno da `ErrDiskFull` también si tiene que recrear un archivo).
+
+### Flujo de cambios por store y posición por consumidor (tarea 75)
+
+- `ChangePos{Restart, Confirmed}`, `ChangeFilter{Store, ID, Origin}` (`changes.go`), `Engine.ChangesWith(slot, f)`, `Engine.ChangesFrom(pos, f)` (sin ranura: no retiene WAL, `ErrWalRemoved` si ya se recicló, anda en una réplica; `Confirm` da `ErrSlotNotFound`), `Engine.ChangeHead()`, `ChangeReader.Pos()`, `Engine.AdvanceLogicalSlot(name, pos)`, `Batch.CommitLSN()`.
+- `ChangeHead` sin esperar a los lotes abiertos: cada lote anota, en su primera escritura (`noteFirst`, en `writeIn`, `storeIn` y `dropStoreIn`), una cota de su primer registro (el último lsn reservado + 1; `wal.LastLSN`) en `headState` (un mapa acotado por los lotes abiertos) y la saca al terminar, después de su registro final; `Confirmed` es el último lsn reservado. El filtro de id se mira antes de armar un valor en desborde; el de origen por transacción; el de store por cambio.
+- Pruebas: `TestChangesFilter`, `TestChangesFromPos` (desde la cabeza con un lote que ya escribía, en dos partes con `Pos` y reabriendo el motor, `CommitLSN` = `TxInfo.CommitLSN`, `AdvanceLogicalSlot`, una posición reciclada), `TestChangesFromReplica`.
+
+### Ranuras frente a la topología de josefina (tarea 76)
+
+- Verificado: con una ranura lógica por nodo origen, leída por los vecinos con `ChangesFrom` desde su posición y avanzada al mínimo con `AdvanceLogicalSlot`, más una física por réplica del modo single, alcanzan las 16 ranuras. Sin cambio de formato. Prueba: `TestSlotTopology` (tres vecinos, uno atrasado que sigue leyendo tras los checkpoints; la ranura 17 da `ErrSlotLimit`).
+
+### Opciones por motor (tarea 84)
+
+- `store.Options` (`options.go`: `CacheMB`, `WALSegmentMB`, `MaxWALMB`, `WALBuffersKB`, `SyncOnWrite`, `CheckpointTimeout`, `LockTimeout`, `TransactionTimeout`, `WALWriterDelay`, `VacuumInterval`, `VacuumThreshold`, `Archive`, `ArchiveMaxMB`, `SlotKeepMB`), `OpenWith(dir, o)` y `OpenReplicaWith(dir, o)`. Un campo en cero toma su variable de entorno; uno negativo apaga lo que 0 apaga. Pruebas: `TestOptionsApply`, `TestOpenWith` (dos motores con cachés distintas en el mismo proceso, una réplica con sus opciones).
+
+### Promover una réplica sin cerrarla (tarea 85)
+
+- `Engine.Promote()` (`promote.go`): con `ckptMu` → `applyMu` → `replayMu` termina la recuperación como `Open` (borra los stores de lotes sin confirmar, `syncHandles`, horizonte del archivo de estados y próximo xid), marca `replicaState.promoted` (el puntero `e.replica` no cambia nunca; todas las preguntas pasan por `isReplica()`), arranca la limpieza de fondo y hace el checkpoint de fin de recuperación. Los snapshots abiertos siguen; los stores abiertos antes no ponen marcas de visibilidad hasta reabrir. Prueba: `TestPromote` (lote en curso del primario abortado, store pendiente borrado, snapshot de antes, escrituras sueltas y en lote, Verify limpio y un corte con reapertura por `Open`).
+
+### DDL en lote: espera a los escritores y nombres borrados (tarea 86)
+
+- **Pregunta 73:** `DropStoreIn` sobre un store en el que escribieron otros lotes abiertos los espera, con el lote suelto y mirando cada vez más espaciado (hasta 10 ms), hasta `LOCK_TIMEOUT` (sin pasar el tiempo del lote), y después `ErrBusy` sin abortar el lote. Prueba: `TestDropStoreInBusy`.
+- **Pregunta 74:** el motor recuerda los stores que borró un lote confirmado (`droppedNames`, con ddlMu) mientras quede un lote o snapshot que no ve el borrado (se olvidan cuando el xid del que borró es menor que `OldestActive`): un `StoreIn` de un lote más viejo con ese nombre da `ErrSerialization`. Prueba: `TestStoreInAfterUnseenDrop`.
+
+### El escritor de fondo limpia sin reemplazo (tarea 97)
+
+- Segunda pasada de `bgWriteRound` (`bgWriteDirty`): con más de `BgWriterDirtyTarget` (la mitad) de la caché sucia, escribe las que sobran, hasta `BgWriterMaxDirtyPages` (1.000) por ronda, aunque estén en uso, salvo las fijadas, desde `bgHand`. Sin reemplazo la manecilla no giraba y la presión `dirty` quedaba en 0,9 hasta el checkpoint. Prueba: `TestBgWriterDirtyTarget`.
+
+### Respaldo hacia un flujo y restauración por hora (tarea 77)
+
+- `BackupSink` (`File(name, size) (io.WriteCloser, error)`) y `Engine.BackupTo(sink)`: los mismos pasos de `Backup`, cada archivo entregado una vez con su largo (lo que pide un tar), sin directorio intermedio; el catálogo, el control y el marcador se arman en un disco en memoria con el mismo código. El marcador sale «en curso» primero y el final al terminar (el segundo pisa al primero al extraer): una copia cortada no abre (`ErrBackupIncomplete`).
+- `OpenAtTime(dir, t)`: el objetivo es el registro anterior al primero con hora posterior a `t` (`KindCommit`, `KindCheckpoint`, `KindBackupEnd`; `recordTime`); las escrituras sueltas no llevan hora y van con lo que las rodea. Sin registros posteriores rehace todo; antes del fin del respaldo, `ErrRecoveryTarget`.
+- Pruebas: `TestBackupTo` (tar en memoria, restauración, Verify limpio; un respaldo cortado no abre), `TestOpenAtTime` (dos tandas de lotes con una hora en medio y los segmentos archivados: llega a la primera y no más).
+
+### `Stats.WALSinceCheckpoint` real (tarea 82)
+
+- Ahora es `walBacklog()`: desde el punto de rehacer del último checkpoint terminado (lo que rehace la recuperación), no desde el del checkpoint en curso. Prueba: `TestWALSinceCheckpointFinished`.

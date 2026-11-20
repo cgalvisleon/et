@@ -30,6 +30,15 @@ type FreeList interface {
 	Free(file smgr.FileNo, block page.BlockNumber, xid page.XID) error
 }
 
+// Grower es lo opcional de una FreeList que extiende el archivo antes de hacer falta (fsm.Manager lo cumple): el
+// árbol lo llama sin páginas bloqueadas antes de partir una hoja, así la extensión (un pwrite que en macOS espera al
+// F_FULLFSYNC en curso de otro archivo) no queda con la hoja bloqueada (tarea 100 de F-23).
+type Grower interface {
+	// Grow, si la lista de libres de file está vacía, agrega una página al final del archivo y la pone en la lista
+	// (KindFreePush). Quien llama no tiene páginas bloqueadas.
+	Grow(file smgr.FileNo, xid page.XID) error
+}
+
 // VisibilityMap es el mapa de visibilidad de los stores (fase 1B/2).
 type VisibilityMap interface {
 	// Get devuelve los bits de block; un bloque fuera del mapa no tiene bits.

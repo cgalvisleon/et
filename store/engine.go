@@ -67,9 +67,12 @@ type Engine struct {
 	// que todavía no se puede reciclar (lo que mira el freno de los escritores, ver space.go).
 	doneWAL atomic.Int64
 
-	// catalogBehind: un cambio de stores no pudo guardar el catálogo por disco lleno (storeCatalog); el guardado
-	// quedó atrás del de memoria hasta el próximo guardado (el del checkpoint, a más tardar).
+	// catalogBehind: el catálogo guardado quedó atrás del de memoria hasta el próximo guardado (el del checkpoint):
+	// un cambio de stores ya no lo guarda (catalogChanged, tarea 98), o no pudo por disco lleno (storeCatalog).
 	catalogBehind atomic.Bool
+	// ddlLSN: el último lsn de un alta de un store (su KindCreateStore o KindCreateStoreIn y su KindInitStore), que se
+	// escribe sin esperar su fsync; el checkpoint lo espera antes de guardar el catálogo (saveCatalog). Con ddlMu.
+	ddlLSN atomic.Uint64
 
 	// sigMu y ckptDone: los escritores frenados esperan en ckptDone, que se cierra al terminar cada checkpoint.
 	sigMu    sync.Mutex
@@ -111,6 +114,12 @@ type Engine struct {
 	replayed int // registros rehechos por Open, sin contar los checkpoints (pruebas, regla 2)
 
 	frozen frozenXIDs // el frozenXID de cada store leído y el del control al abrir (ver frozen.go)
+	heads  headState  // la cota del primer registro de cada lote que escribe (ChangeHead, changes.go)
+
+	// droppedNames: los stores que borró un lote confirmado, con su xid, mientras quede abierto un snapshot que no
+	// ve ese borrado (pregunta 74, tarea 86): un lote más viejo no puede crear uno con el mismo nombre. Crece con los
+	// borrados en lote durante la vida de los lotes viejos, no con las claves. Con ddlMu.
+	droppedNames map[string]page.XID
 
 	timers timers // los temporizadores de los lotes y snapshots abiertos: Close los detiene
 
@@ -171,6 +180,9 @@ func open(base vfs.FS, dir string, cfg config) (*Engine, error) {
 		frozen:  frozenXIDs{files: map[smgr.FileNo]page.XID{}},
 	}
 	if err := e.recover(); err != nil {
+		if vfs.IsNoSpace(err) && !errors.Is(err, ErrDiskFull) {
+			err = fmt.Errorf(MSG_DISK_FULL, ErrDiskFull, err) // p. ej. rehacer un archivo que el corte se llevó
+		}
 		return nil, errors.Join(err, e.closeResources())
 	}
 	e.bg.Add(1)
@@ -243,7 +255,7 @@ func (e *Engine) enter() error {
 		e.closeMu.RUnlock()
 		return ErrClosed
 	}
-	if e.replica != nil {
+	if e.isReplica() {
 		e.closeMu.RUnlock()
 		return ErrReadOnly
 	}
@@ -362,6 +374,19 @@ func (e *Engine) readError(err error) error {
 **/
 func (e *Engine) logRecord(kind wal.Kind, main []byte) (page.LSN, error) {
 	return e.logTxRecord(0, kind, main)
+}
+
+/**
+* logTxRecordNoWait escribe un registro del motor sin bloques con el xid de xid y no espera su fsync.
+* @param xid page.XID, kind wal.Kind, main []byte
+* @return page.LSN del registro, error
+**/
+func (e *Engine) logTxRecordNoWait(xid page.XID, kind wal.Kind, main []byte) (page.LSN, error) {
+	res, err := e.log.Reserve(&wal.Record{XID: xid, Kind: kind, Main: main}, nil)
+	if err != nil {
+		return 0, err
+	}
+	return res.LSN(), res.Write()
 }
 
 /**

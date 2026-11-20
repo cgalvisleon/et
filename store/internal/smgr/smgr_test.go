@@ -74,8 +74,14 @@ func TestCreateExistsNBlocks(t *testing.T) {
 	if err := m.Create(1, ForkMain); err != nil {
 		t.Fatal(err)
 	}
-	if fs.dirSyncs.Load() != before+1 {
-		t.Fatal("Create no hizo fsync de data/")
+	if fs.dirSyncs.Load() != before {
+		t.Fatal("Create hizo fsync de data/: lo hace SyncAll")
+	}
+	if err := m.SyncAll(); err != nil || fs.dirSyncs.Load() != before+1 {
+		t.Fatalf("SyncAll tras Create no hizo fsync de data/: %v", err)
+	}
+	if err := m.SyncAll(); err != nil || fs.dirSyncs.Load() != before+1 {
+		t.Fatalf("SyncAll sin cambios hizo fsync de data/: %v", err)
 	}
 	if err := m.Create(1, ForkMain); err != nil { // idempotente
 		t.Fatal(err)
@@ -400,8 +406,8 @@ func TestUnlink(t *testing.T) {
 	if err := m.Unlink(1); err != nil {
 		t.Fatal(err)
 	}
-	if fs.dirSyncs.Load() != dirSyncs+1 {
-		t.Fatal("Unlink no hizo fsync de data/")
+	if err := m.SyncAll(); err != nil || fs.dirSyncs.Load() != dirSyncs+1 {
+		t.Fatalf("SyncAll tras Unlink no hizo un fsync de data/: %v", err)
 	}
 	names, err := fs.ReadDir(filepath.Join(dir, "data"))
 	if err != nil {

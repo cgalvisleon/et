@@ -74,6 +74,8 @@
 // guardan sus datos desde el byte 32 hasta pd_lower (SetLower). Aun sobre punteros dañados ningún método entra en
 // pánico ni lee fuera de la página: Item revisa los límites de cada ítem y las funciones que cambian la página
 // validan el encabezado y el ítem que tocan; quien lee del disco una página de ítems puede llamar a CheckItems.
+// CheckItems no ordena (el árbol lo llama en cada bloqueo, tarea 100): marca las unidades de ItemAlign de cada ítem en
+// un mapa de bits de la página de 128 bytes en la pila; FuzzVerify compara su veredicto con el de storedItems.
 //
 // Decisiones a confirmar: LineRedirect se trata como daño (no se usa); un puntero libre debe estar en cero; AddItem
 // no prende FlagPageFull (lo decide quien llama); los bytes de alineación de cada ítem quedan en cero.

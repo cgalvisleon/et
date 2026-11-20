@@ -781,3 +781,29 @@ func TestVictimBusySkipped(t *testing.T) {
 		t.Fatal("block 0 should have been replaced instead of the busy victim")
 	}
 }
+
+// TestBgWriterDirtyTarget (tarea 97): sin reemplazo (la manecilla no gira y las páginas tienen uso), el escritor de
+// fondo igual baja las sucias hasta BgWriterDirtyTarget de la caché, sin tocar las fijadas.
+func TestBgWriterDirtyTarget(t *testing.T) {
+	e := newOSEnv(t, 16)
+	bg := e.openPool(t, 16, 5*time.Millisecond)
+	e.pool = bg
+	for i := range 14 {
+		e.newBlock(t, 1, page.XID(i+1))
+	}
+	pinned, err := bg.Pin(tag1(0), Normal)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pinned.Release()
+	deadline := time.Now().Add(5 * time.Second)
+	for bg.Stats().Dirty > 8 {
+		if time.Now().After(deadline) {
+			t.Fatalf("el escritor de fondo no bajó las sucias: %+v", bg.Stats())
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if d := bg.Stats().Dirty; d < 1 {
+		t.Fatalf("escribió la página fijada: %d sucias", d)
+	}
+}

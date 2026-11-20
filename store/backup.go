@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/cgalvisleon/et/store/internal/control"
+	"github.com/cgalvisleon/et/store/internal/crashfs"
 	"github.com/cgalvisleon/et/store/internal/page"
 	"github.com/cgalvisleon/et/store/internal/smgr"
 	"github.com/cgalvisleon/et/store/internal/vfs"
@@ -39,6 +40,13 @@ type BackupInfo struct {
 	Files         int           // archivos copiados (control, catálogo, datos, estados, segmentos del WAL, marcador)
 	Bytes         int64         // bytes copiados (sin contar el catálogo)
 	Took          time.Duration // duración
+}
+
+// BackupSink recibe los archivos de un respaldo hacia un flujo (BackupTo), de a uno y con su largo, como pide un
+// tar: name es relativo a la copia, con «/» («catalog», «data/0000000001.0001», «wal/0000000003.seg»). Restaurar es
+// dejar los archivos en un directorio y abrirlo (Open, OpenAt, OpenAtTime u OpenReplica).
+type BackupSink interface {
+	File(name string, size int64) (io.WriteCloser, error)
 }
 
 // backups es el estado de los respaldos en curso de un motor (puede haber varios a la vez).
@@ -125,6 +133,7 @@ type backupRun struct {
 	e    *Engine
 	dst  vfs.FS
 	dir  string
+	sink BackupSink // BackupTo: los archivos van a sink, no a dst (nil en Backup)
 	buf  []byte
 	info BackupInfo
 
@@ -167,6 +176,32 @@ func (e *Engine) backup(dst vfs.FS, dir string) (BackupInfo, error) {
 }
 
 /**
+* backupTo es backup hacia un flujo (tarea 77): los mismos pasos, cada archivo entregado a sink de a uno con su largo
+* (lo que pide un tar), sin directorio intermedio. Los archivos chicos (catálogo, control, marcador) se arman en un
+* disco en memoria con el mismo código que en Backup. El marcador sale dos veces: «en curso» primero y el final al
+* terminar (como en un tar, el segundo pisa al primero; una copia cortada no se puede abrir).
+* @param sink BackupSink
+* @return BackupInfo, error: los de Backup y los de sink
+**/
+func (e *Engine) backupTo(sink BackupSink) (BackupInfo, error) {
+	started := time.Now()
+	if err := e.enter(); err != nil {
+		return BackupInfo{}, err
+	}
+	e.bg.Add(1)
+	e.leave()
+	defer e.bg.Done()
+
+	b := &backupRun{e: e, dst: crashfs.New(), dir: "/backup", sink: sink, buf: make([]byte, backupChunk)}
+	defer b.finish()
+	if err := b.run(); err != nil {
+		return BackupInfo{}, fmt.Errorf(MSG_BACKUP, "sink", err)
+	}
+	b.info.Took = time.Since(started)
+	return b.info, nil
+}
+
+/**
 * run hace los pasos del respaldo en orden.
 * @return error
 **/
@@ -202,6 +237,12 @@ func (b *backupRun) alive() error {
 * @return error
 **/
 func (b *backupRun) prepare() error {
+	if b.sink != nil {
+		if err := b.dst.MkdirAll(b.dir); err != nil { // el disco en memoria de los archivos chicos
+			return err
+		}
+		return b.writeLabel(backupLabel{})
+	}
 	if err := b.dst.MkdirAll(b.dir); err != nil {
 		return destError(err)
 	}
@@ -280,6 +321,9 @@ func (b *backupRun) copyData() error {
 	b.e.backupStep("start")
 	if err := control.NewCatalogFile(b.dst, b.dir).Save(b.cat); err != nil {
 		return destError(err)
+	}
+	if err := b.sendSmall(control.CatalogFileName); err != nil {
+		return err
 	}
 	b.count(0)
 	for _, name := range b.data {
@@ -384,6 +428,9 @@ func (b *backupRun) finishDest() error {
 	if err := control.NewControlFile(b.dst, b.dir).Create(c); err != nil {
 		return destError(err)
 	}
+	if err := b.sendSmall(control.FileName); err != nil {
+		return err
+	}
 	b.count(2 * control.CopySize)
 	return b.writeLabel(backupLabel{redo: b.ckpt.redo, checkpointLSN: b.ckptLSN, endLSN: b.endLSN,
 		time: b.ckpt.time})
@@ -458,6 +505,9 @@ func (b *backupRun) copyFile(rel string, limit int64, pages bool) error {
 	if pages {
 		size -= size % page.Size
 	}
+	if b.sink != nil {
+		return b.sendFile(rel, src, size)
+	}
 	out, err := b.dst.OpenFile(filepath.Join(b.dir, rel), os.O_RDWR|os.O_CREATE|os.O_EXCL)
 	if err != nil {
 		return destError(err)
@@ -476,10 +526,10 @@ func (b *backupRun) copyFile(rel string, limit int64, pages bool) error {
 /**
 * copyRange copia los primeros size bytes de src a out con el búfer fijo. Si src termina antes (no pasa: los
 * archivos no se acortan), copia lo que hay.
-* @param src, out vfs.File, size int64
+* @param src vfs.File, out io.WriterAt, size int64
 * @return int64: bytes copiados, error
 **/
-func (b *backupRun) copyRange(src, out vfs.File, size int64) (int64, error) {
+func (b *backupRun) copyRange(src vfs.File, out io.WriterAt, size int64) (int64, error) {
 	var off int64
 	for off < size {
 		if err := b.alive(); err != nil {
@@ -509,8 +559,69 @@ func (b *backupRun) copyRange(src, out vfs.File, size int64) (int64, error) {
 * @return error
 **/
 func (b *backupRun) syncDest(sub string) error {
+	if b.sink != nil {
+		return nil // el flujo es del llamador
+	}
 	return destError(b.dst.SyncDir(filepath.Join(b.dir, sub)))
 }
+
+/**
+* sendFile entrega a sink los primeros size bytes de src como rel (con «/», relativo a la copia), por tramos de
+* backupChunk.
+* @param rel string, src vfs.File, size int64
+* @return error
+**/
+func (b *backupRun) sendFile(rel string, src vfs.File, size int64) error {
+	out, err := b.sink.File(filepath.ToSlash(rel), size)
+	if err != nil {
+		return destError(err)
+	}
+	n, err := b.copyRange(src, writerAt{out}, size)
+	if err == nil && n != size {
+		err = fmt.Errorf(MSG_BACKUP_SHORT_FILE, rel, n, size)
+	}
+	if cerr := out.Close(); err == nil {
+		err = destError(cerr)
+	}
+	b.count(n)
+	return err
+}
+
+/**
+* sendSmall entrega a sink el archivo name que se armó en el disco en memoria (catálogo, control, marcador). Sin
+* sink no hace nada.
+* @param name string
+* @return error
+**/
+func (b *backupRun) sendSmall(name string) error {
+	if b.sink == nil {
+		return nil
+	}
+	src, err := b.dst.OpenFile(filepath.Join(b.dir, name), os.O_RDONLY)
+	if err != nil {
+		return err
+	}
+	defer src.Close()
+	size, err := src.Size()
+	if err != nil {
+		return err
+	}
+	out, err := b.sink.File(name, size)
+	if err != nil {
+		return destError(err)
+	}
+	_, err = b.copyRange(src, writerAt{out}, size)
+	if cerr := out.Close(); err == nil {
+		err = destError(cerr)
+	}
+	return err
+}
+
+// writerAt adapta un io.Writer a la escritura secuencial de copyRange (los desplazamientos llegan en orden).
+type writerAt struct{ w io.Writer }
+
+// WriteAt escribe p a continuación (copyRange da los tramos en orden).
+func (w writerAt) WriteAt(p []byte, _ int64) (int, error) { return w.w.Write(p) }
 
 /**
 * count suma un archivo copiado a BackupInfo.

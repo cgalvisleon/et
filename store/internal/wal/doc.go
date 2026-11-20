@@ -45,7 +45,8 @@
 //	 12   4 totalLen   largo total, ≤ MaxRecordSize
 //	 16   8 xid        transacción del registro; 0 si no tiene (checkpoint, página entera por marcas)
 //	 24   1 kind       Kind
-//	 25   1 flags      FlagCommit, FlagCountAdd, FlagCountSub
+//	 25   1 flags      FlagCommit (bit 0), FlagCountAdd (1), FlagCountSub (2), FlagOrigin (3: un KindCommit cuyos
+//	                   datos terminan con origin(2), Batch.SetOrigin; tarea 83)
 //	 26   1 blockCount referencias a bloques que siguen, ≤ MaxBlocks
 //	 27   1 reservado
 //	 28   4 mainLen    largo de los datos principales
@@ -142,6 +143,22 @@
 // arma el Record (con la imagen previa si page.LSN < RedoPoint().LSN), llama a Reserve —que bajo writeMu vuelve a
 // decidir la página entera contra el punto de rehacer vigente y devuelve ErrNeedImage si falta una, toma el lsn y el
 // lugar, y llama a underLock—, aplica el cambio con ese lsn, suelta la página y llama a Write.
+//
+// # Búfer del WAL y group commit (tarea 100)
+//
+// Write sella el registro (lsn y crc) y lo deja en pending (por lsn, bajo pubMu). Los pendientes se escriben por
+// tandas (drain, bajo drainMu, una a la vez): la tanda contigua que sigue a published, del mismo segmento y de hasta
+// maxRun = 1 MB, sale con un solo pwrite y published avanza hasta su último lsn. Con Options.Buffer = 0 cada Write
+// hace drain enseguida; con Buffer (WAL_BUFFERS, 1 MB en el motor) Write deja el registro pendiente salvo que lo
+// pendiente llegue a Buffer o que alguien espere un lsn mayor que published (wanted). drain para en el primer hueco
+// (una reserva que su dueño no escribió todavía): nunca espera a otra reserva; el dueño del hueco, al escribirlo, ve
+// wanted y sigue la tanda. waitPublished(lsn) anota wanted, hace drain y espera en pubCond. published es entonces
+// «escrito en el archivo» (Published, Stats.LSN): Read, Locate y los lectores del motor nunca pasan Durable.
+// WaitDurable(lsn): waitPublished y después el fsync del activo, que hace un solo líder a la vez (leadMu, syncing): el
+// fsync cubre todo lo publicado al empezar, y los que esperaban (un canal que se cierra al terminar, así se despiertan
+// todos a la vez) vuelven si su lsn quedó cubierto o el primero en llegar es el líder del siguiente. El sellado de un
+// segmento (rotate, Close) espera con waitPublished a que todo lo reservado esté escrito antes de su fsync. Orden:
+// writeMu → drainMu → pubMu; leadMu es una hoja; syncMu lo toman el líder, rotate y Close.
 //
 // # Réplica
 //

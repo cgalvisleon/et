@@ -45,11 +45,14 @@ type manager struct {
 	blocksPerFile page.BlockNumber // BlocksPerFile; las pruebas usan menos para cambiar de archivo sin escribir 1 GB
 	files         *fileCache
 
-	mu     sync.Mutex
-	forks  map[forkKey]*forkState
-	dirty  map[segKey]struct{} // archivos escritos desde su último fsync
-	failed error               // primer fsync fallido: desde ahí todo devuelve este error
-	closed bool
+	mu    sync.Mutex
+	forks map[forkKey]*forkState
+	dirty map[segKey]struct{} // archivos escritos desde su último fsync
+	// dirDirty: Create o Unlink cambiaron data/ desde su último fsync; lo hace SyncAll (el checkpoint), no cada
+	// alta o baja: hasta el checkpoint el WAL rehace el archivo que falte o el borrado (tarea 98 de F-23)
+	dirDirty bool
+	failed   error // primer fsync fallido: desde ahí todo devuelve este error
+	closed   bool
 }
 
 /**
@@ -83,7 +86,7 @@ func open(fs vfs.FS, dir string, maxFiles int, blocksPerFile page.BlockNumber) (
 }
 
 /**
-* Create crea el primer archivo vacío del fork (idempotente) y hace fsync de data/.
+* Create crea el primer archivo vacío del fork (idempotente); el fsync de data/ lo hace SyncAll.
 * @param file FileNo, fork Fork
 * @return error
 **/
@@ -103,9 +106,7 @@ func (m *manager) Create(file FileNo, fork Fork) error {
 		return fmt.Errorf("smgr: crear %s: %w", m.segName(key), err)
 	}
 	m.files.release(h)
-	if err := m.syncDataDir(); err != nil {
-		return err
-	}
+	m.markDirDirty()
 	st.exists = true
 	st.nblocks = 0
 	return nil
@@ -297,11 +298,25 @@ func (m *manager) SyncAll() error {
 			return err
 		}
 	}
+	m.mu.Lock()
+	dirDirty := m.dirDirty
+	m.dirDirty = false
+	m.mu.Unlock()
+	if dirDirty {
+		return m.syncDataDir()
+	}
 	return nil
 }
 
+// markDirDirty anota que data/ cambió (un archivo nació o se borró) y espera el fsync de SyncAll.
+func (m *manager) markDirDirty() {
+	m.mu.Lock()
+	m.dirDirty = true
+	m.mu.Unlock()
+}
+
 /**
-* Unlink borra todos los archivos de todos los forks del store y hace fsync de data/. Idempotente.
+* Unlink borra todos los archivos de todos los forks del store; el fsync de data/ lo hace SyncAll. Idempotente.
 * @param file FileNo
 * @return error
 **/
@@ -314,10 +329,10 @@ func (m *manager) Unlink(file FileNo) error {
 		}
 		removed = removed || did
 	}
-	if !removed {
-		return nil
+	if removed {
+		m.markDirDirty()
 	}
-	return m.syncDataDir()
+	return nil
 }
 
 /**
@@ -606,15 +621,17 @@ func (m *manager) syncHandles(handles []*handle) error {
 	return err
 }
 
-// evict cierra un descriptor que la caché expulsó. Si el archivo tiene escrituras sin fsync, antes hace fsync por ese
-// mismo descriptor (tras cerrarlo, un error de escritura del sistema podría perderse). No quita la marca de sucio: el
-// próximo Sync lo vuelve a sincronizar, así un Sync que corre a la vez no vuelve antes de tiempo.
+// evict cierra un descriptor que la caché expulsó. Si el archivo tiene escrituras sin fsync, antes las lleva al
+// dispositivo por ese mismo descriptor (tras cerrarlo, un error de escritura del sistema podría perderse) con
+// vfs.FlushFile: el fsync simple basta para eso, y F_FULLFSYNC en macOS costaba 4 ms por cada store nuevo pasados
+// los DefaultMaxFiles (tarea 98 de F-23). No quita la marca de sucio: el próximo Sync lo sincroniza de verdad, así
+// un Sync que corre a la vez no vuelve antes de tiempo.
 func (m *manager) evict(h *handle) {
 	m.mu.Lock()
 	_, dirty := m.dirty[h.key]
 	m.mu.Unlock()
 	if dirty {
-		if err := h.f.Sync(); err != nil {
+		if err := vfs.FlushFile(h.f); err != nil {
 			m.fail(fmt.Errorf("smgr: fsync de %s al cerrarlo: %w", m.segName(h.key), err))
 		}
 	}

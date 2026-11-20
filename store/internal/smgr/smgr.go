@@ -24,7 +24,8 @@ const (
 // Manager guarda y lee bloques de los archivos de datos. Es seguro usarlo desde varias goroutines; las escrituras
 // de un mismo bloque las serializa quien llama (la caché).
 type Manager interface {
-	// Create crea el primer archivo vacío del fork (idempotente) y hace fsync de data/.
+	// Create crea el primer archivo vacío del fork (idempotente). El fsync de data/ queda para SyncAll: hasta el
+	// checkpoint, el WAL rehace un archivo que un corte haya perdido.
 	Create(file FileNo, fork Fork) error
 
 	// Exists dice si el fork tiene al menos un archivo.
@@ -47,10 +48,11 @@ type Manager interface {
 	// Sync hace fsync de los archivos del fork escritos desde su último Sync.
 	Sync(file FileNo, fork Fork) error
 
-	// SyncAll hace fsync de todos los archivos escritos desde el último SyncAll (al terminar un checkpoint).
+	// SyncAll hace fsync de todos los archivos escritos desde el último SyncAll y, si Create o Unlink lo cambiaron,
+	// de data/ (al terminar un checkpoint).
 	SyncAll() error
 
-	// Unlink borra todos los archivos de todos los forks del store y hace fsync de data/.
+	// Unlink borra todos los archivos de todos los forks del store; el fsync de data/ queda para SyncAll.
 	Unlink(file FileNo) error
 
 	// Close cierra los descriptores abiertos.

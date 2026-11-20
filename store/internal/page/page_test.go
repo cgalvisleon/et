@@ -458,6 +458,11 @@ func exercise(p Page) {
 		_, _ = p.ItemID(off)
 	}
 	checked := p.CheckItems() == nil
+	var buf [MaxLines]stored
+	_, _, serr := p.storedItems(&buf)
+	if slow := p.checkLayout() == nil && serr == nil; slow != checked {
+		panic("CheckItems disagrees with storedItems")
+	}
 	q := Page(bytes.Clone(p))
 	if err := q.Repair(); checked && err != nil {
 		panic("Repair failed on a page CheckItems accepted: " + err.Error())

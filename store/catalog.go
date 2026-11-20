@@ -7,7 +7,7 @@ import (
 	"github.com/cgalvisleon/et/store/internal/vfs"
 )
 
-// Catálogo de la API pública (fases 1A, 1B y 2): envolturas delgadas; la implementación vive en los demás archivos del
+// Catálogo de la API pública (fases 1A, 1B, 2 y 3): envolturas delgadas; la implementación vive en los demás archivos del
 // paquete con el mismo nombre en minúscula. Ver doc.go para la semántica de cada método.
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -563,4 +563,27 @@ func (s *Store) ForEachBorrowedAt(v *Snapshot, fn func(id string, data []byte) (
 **/
 func (s *Store) CountAt(v *Snapshot) (int64, error) {
 	return s.countAt(v)
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Estadísticas
+// ---------------------------------------------------------------------------------------------------------------
+
+/**
+* Stats devuelve una foto barata del motor: caché, WAL y checkpoints, versiones por limpiar, transacciones abiertas,
+* contadores por operación y latencias (p50, p99). No recorre el árbol ni frena a nadie.
+* @return Stats
+**/
+func (e *Engine) Stats() Stats {
+	return e.stats()
+}
+
+/**
+* OnStats llama a fn con Stats cada interval, sin ningún candado tomado, hasta stop o Close. Close espera a la
+* llamada en curso y después no hay más; fn no debe llamar a Close.
+* @param interval time.Duration: 0 o menos = 1 s, fn func(Stats)
+* @return func(): stop (se puede llamar varias veces, también desde fn)
+**/
+func (e *Engine) OnStats(interval time.Duration, fn func(Stats)) func() {
+	return e.onStats(interval, fn)
 }

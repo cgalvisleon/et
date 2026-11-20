@@ -98,7 +98,9 @@ type Engine struct {
 
 	timers timers // los temporizadores de los lotes y snapshots abiertos: Close los detiene
 
-	stop chan struct{} // se cierra en Close: detiene el checkpointer, el escritor del WAL y la limpieza de fondo
+	metrics engineMetrics // contadores y latencias de Stats (stats.go): tamaño fijo, solo atómicos
+
+	stop chan struct{} // se cierra en Close: detiene el checkpointer, el escritor del WAL, la limpieza de fondo y OnStats
 	bg   sync.WaitGroup
 
 	// afterStep, si no es nil, corre al terminar cada paso del checkpoint (1 a 7, el 7 es el truncado del archivo de
@@ -288,16 +290,20 @@ func (e *Engine) logRecord(kind wal.Kind, main []byte) (page.LSN, error) {
 
 /**
 * openTxn anota un lote o snapshot abierto (Empty no corre mientras haya alguno). Con closeMu en lectura.
+* @param kind *atomic.Int64: el contador de Stats (metrics.openBatches o metrics.openSnapshots)
 **/
-func (e *Engine) openTxn() {
+func (e *Engine) openTxn(kind *atomic.Int64) {
 	e.txGate.RLock()
 	e.openTx.Add(1)
 	e.txGate.RUnlock()
+	kind.Add(1)
 }
 
 /**
 * closeTxn anota que un lote o snapshot terminó.
+* @param kind *atomic.Int64: el mismo de openTxn
 **/
-func (e *Engine) closeTxn() {
+func (e *Engine) closeTxn(kind *atomic.Int64) {
+	kind.Add(-1)
 	e.openTx.Add(-1)
 }

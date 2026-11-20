@@ -21,6 +21,8 @@ func (e *Engine) vacuum() error {
 	}
 	horizon := e.txs.OldestActive()
 	names := e.cat.Names()
+	e.metrics.vacuumWrites.Store(e.writes.Load())
+	e.metrics.vacuums.Add(1)
 	e.leave()
 
 	var first error
@@ -91,18 +93,17 @@ func (e *Engine) vacuumer() {
 	defer e.bg.Done()
 	ticker := time.NewTicker(e.cfg.vacuumEvery)
 	defer ticker.Stop()
-	var last int64
 	lastXID := e.txs.NextXID()
 	for {
 		select {
 		case <-e.stop:
 			return
 		case <-ticker.C:
-			n, next := e.writes.Load(), e.txs.NextXID()
-			if n-last < e.cfg.vacuumWrites && uint64(next-lastXID) < e.cfg.vacuumXids {
+			next := e.txs.NextXID()
+			if e.writes.Load()-e.metrics.vacuumWrites.Load() < e.cfg.vacuumWrites && uint64(next-lastXID) < e.cfg.vacuumXids {
 				continue
 			}
-			last, lastXID = n, next
+			lastXID = next
 			if err := e.vacuum(); errors.Is(err, ErrClosed) || errors.Is(err, ErrFailed) {
 				return
 			}

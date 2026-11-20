@@ -187,6 +187,7 @@ func (p *pool) DropFile(file smgr.FileNo) {
 				p.dirty.Add(-1)
 			}
 			d.tag, d.state, d.usage, d.dirty, d.justDirtied = Tag{}, stateEmpty, 0, false, false
+			p.used.Add(-1)
 		}
 		d.mu.Unlock()
 		d.io.Unlock()

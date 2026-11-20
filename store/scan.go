@@ -1,6 +1,8 @@
 package store
 
 import (
+	"time"
+
 	"github.com/cgalvisleon/et/store/internal/btree"
 	"github.com/cgalvisleon/et/store/internal/xact"
 )
@@ -299,6 +301,7 @@ func (s *Store) existsWith(id string, snap *xact.Snapshot) (bool, error) {
 		return false, err
 	}
 	defer s.end()
+	defer s.e.observeRead(time.Now())
 	found, err := s.tree.Exists(id, snap)
 	return found, s.e.readError(err)
 }

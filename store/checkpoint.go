@@ -58,6 +58,8 @@ func (e *Engine) checkpoint(state control.State, spread bool) error {
 	}
 	e.stepDone(7)
 	e.lastCheckpoint.Store(start.UnixNano())
+	e.metrics.checkpointTook.Store(int64(time.Since(start)))
+	e.metrics.checkpoints.Add(1)
 	return nil
 }
 

@@ -56,7 +56,7 @@ func (e *Engine) newBatch() *Batch {
 		return b
 	}
 	defer e.leave()
-	e.openTxn()
+	e.openTxn(&e.metrics.openBatches)
 	b.xid = e.txs.Begin()
 	b.snap = e.txs.Snapshot(b.xid)
 	if e.cfg.txTimeout > 0 {
@@ -199,7 +199,7 @@ func (b *Batch) abortLocked(err error) {
 func (b *Batch) finishLocked(commit, deferred bool) error {
 	b.state = batchDone
 	b.e.timers.stop(b.timer)
-	defer b.e.closeTxn()
+	defer b.e.closeTxn(&b.e.metrics.openBatches)
 	defer b.e.txs.End(b.xid)
 	if !b.wrote {
 		return nil
@@ -223,6 +223,7 @@ func (b *Batch) finishLocked(commit, deferred bool) error {
 **/
 func (b *Batch) logEnd(commit, deferred bool) error {
 	e := b.e
+	start := time.Now()
 	e.commitMu.RLock()
 	defer e.commitMu.RUnlock()
 	rec := &wal.Record{XID: b.xid, Kind: wal.KindAbort}
@@ -249,7 +250,13 @@ func (b *Batch) logEnd(commit, deferred bool) error {
 			return err
 		}
 	}
-	return e.status.SetStatus(b.xid, status, lsn)
+	if err := e.status.SetStatus(b.xid, status, lsn); err != nil {
+		return err
+	}
+	if commit {
+		e.observeCommit(start)
+	}
+	return nil
 }
 
 /**

@@ -21,7 +21,7 @@ func TestPinNewFlushRead(t *testing.T) {
 	for i := range 3 {
 		e.newBlock(t, 1, page.XID(100+i))
 	}
-	if s := e.pool.Stats(); s.Dirty != 3 || s.Buffers != 8 || s.Misses != 3 {
+	if s := e.pool.Stats(); s.Dirty != 3 || s.Buffers != 8 || s.Misses != 3 || s.Used != 3 {
 		t.Fatalf("Stats = %+v", s)
 	}
 	if err := e.pool.FlushAll(nil); err != nil {
@@ -538,8 +538,11 @@ func TestDropFile(t *testing.T) {
 		e.newBlock(t, 2, 9)
 	}
 	e.newBlock(t, 1, 1)
+	if s := e.pool.Stats(); s.Used != 4 {
+		t.Fatalf("Stats antes de DropFile = %+v", s)
+	}
 	e.pool.DropFile(2)
-	if s := e.pool.Stats(); s.Dirty != 1 {
+	if s := e.pool.Stats(); s.Dirty != 1 || s.Used != 1 {
 		t.Fatalf("Stats tras DropFile = %+v", s)
 	}
 	if err := e.pool.FlushAll(nil); err != nil {

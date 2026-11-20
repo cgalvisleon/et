@@ -5,8 +5,9 @@
 //
 // Qué hace: formato de los registros; reservar lsn y lugar; escribir en paralelo y publicar en orden; group commit;
 // el punto de rehacer y la decisión de página entera; leer el WAL desde una posición; cortar la cola inválida;
-// reciclar segmentos. Qué no hace: no aplica los registros a las páginas (cada dueño de un Kind tiene su función de
-// rehacer; el motor las reparte), no sabe de transacciones más allá del xid de cada registro. Depende de vfs, page y
+// reciclar segmentos; medir la latencia de cada fsync del group commit (SyncLatency, un metric.Histogram de tamaño
+// fijo). Qué no hace: no aplica los registros a las páginas (cada dueño de un Kind tiene su función de rehacer; el
+// motor las reparte), no sabe de transacciones más allá del xid de cada registro. Depende de vfs, page, metric y
 // smgr (FileNo, Fork).
 //
 // # Segmentos

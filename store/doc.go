@@ -23,7 +23,8 @@
 // De la fase 2 están hechos los recorridos, Exists y Empty (ver «Recorridos, Exists y Empty»), la escritura diferida
 // y las versiones (ver «Escritura diferida y versiones») y el congelado con el truncado del archivo de estados (ver
 // «Congelado y truncado del archivo de estados»), y la prueba del diseño recursivo (ver «Diseño recursivo»). De la
-// fase 3 están hechos Verify y Repair (tarea 45, ver «Verificación y reparación») y el comando cmd/storecheck.
+// fase 3 están hechos Verify y Repair (tarea 45, ver «Verificación y reparación»), el comando cmd/storecheck y las
+// estadísticas Stats y OnStats (tarea 43, ver «Estadísticas»).
 //
 // Disco: vfs.OS() es el sistema de archivos real (fsync con F_FULLFSYNC en macOS, fdatasync en Linux; Lock devuelve
 // vfs.ErrLocked si otro tiene el LOCK, y el error público del motor lo envuelve); crashfs.New() es el disco simulado
@@ -74,6 +75,7 @@
 //	fsm       lista de páginas libres y mapa de visibilidad              page, smgr, buffer, wal
 //	overflow  cadenas de páginas de desborde                             page, smgr, buffer, fsm, wal
 //	btree     árbol B+ Lehman-Yao con versiones                          page, smgr, buffer, fsm, overflow, xact, wal
+//	metric    histograma de latencias log2 de tamaño fijo (Stats)        —
 //	store     motor: checkpoints, recuperación, transacciones, API       todos
 //
 // El grafo es acíclico, y cada paquete usa a los demás por sus interfaces (smgr.Manager, wal.Log, wal.Flusher,
@@ -329,7 +331,8 @@
 // ExistsAt, Empty, ForEachAt, CountAt y la API secundaria de recorridos (Keys, KeysAfter, KeysPrefix, ForEach,
 // ForEachPrefix, ForEachRange, ForEachBorrowed y sus variantes …At), y Store.Deferred (Put, Remove, Insert, Update,
 // Delete), Batch.CommitDeferred, Engine.WaitDurable, GetVersion, GetVersionIn y GetVersionAt. Hecho en la fase 3:
-// Engine.Verify y Engine.Repair (con Report y Finding, report.go). Errores públicos en msg.go: ErrLocked,
+// Engine.Verify y Engine.Repair (con Report y Finding, report.go), Engine.Stats y Engine.OnStats (con Stats y
+// Latency, stats.go). Errores públicos en msg.go: ErrLocked,
 // ErrClosed, ErrFailed, ErrBadID, ErrValueTooLarge, ErrBadName, ErrStoreNotFound, ErrStoreDropped, ErrConflict,
 // ErrSerialization, ErrTimeout, ErrTxDone, ErrOtherEngine, ErrBusy, ErrCorrupt.
 //
@@ -351,7 +354,8 @@
 //	func (b *Batch) CommitDeferred() error                    // 2 (hecho): Commit sin esperar el fsync
 //	func (e *Engine) Verify() (Report, error)                 // 3 (hecho): revisa sin cambiar nada
 //	func (e *Engine) Repair() (Report, error)                 // 3 (hecho): arregla lo reparable, con WAL
-//	func (e *Engine) Stats() et.Json                          // 3 (también OnStats)
+//	func (e *Engine) Stats() Stats                            // 3 (hecho): foto barata del motor
+//	func (e *Engine) OnStats(interval time.Duration, fn func(Stats)) (stop func()) // 3 (hecho): fn cada interval
 //
 //	// Store: operaciones sueltas (cada una es su propia transacción y confirma al volver)
 //	func (s *Store) Put(id string, data []byte) error
@@ -793,6 +797,50 @@
 // dañada no se reconstruya; los MaxFindings; que una hoja con bits y una versión de otra transacción en curso cuente
 // como bit mal puesto (lo es: la limpieza nunca la deja así).
 //
+// # Estadísticas (fase 3)
+//
+// Engine.Stats (tarea 43 de F-23) es una foto barata del motor: lee contadores atómicos uno a uno, sin recorrer el
+// árbol ni detener a nadie (dos campos pueden no ser del mismo instante). Los contadores son desde Open, como los de
+// pg_stat_*: para tasas se restan dos fotos. Campos:
+//
+//	grupo          campos                                         de dónde sale
+//	caché          CacheSize, CachePages, CacheDirty, CacheHits,  buffer.Pool.Stats (Used = búferes con página;
+//	               CacheMisses, CacheWritten                      sube al dar un búfer vacío, baja en DropFile)
+//	WAL            WALSinceCheckpoint, LSN, DurableLSN            wal.SizeSince(RedoPoint), Published, Durable
+//	checkpoints    Checkpoints, LastCheckpoint,                   contados al terminar el paso 7 (también el que
+//	               LastCheckpointTook                             cierra la recuperación; uno de fondo se reparte)
+//	limpieza       WritesSinceVacuum, Vacuums                     Engine.writes menos su valor al empezar la última
+//	                                                              limpieza (lo que mira VACUUM_THRESHOLD)
+//	transacciones  OpenBatches, OpenSnapshots, NextXID,           openTxn/closeTxn por tipo; xact OldestActive;
+//	               OldestXID, FrozenXID, FrozenAge                engineFrozen; FrozenAge = OldestXID − FrozenXID
+//	operaciones    Reads, Writes, Commits                         lecturas puntuales (Read, Exists, GetVersion y sus
+//	                                                              …In/…At; no los recorridos); escrituras aplicadas;
+//	                                                              confirmaciones (suelta aplicada o Commit con
+//	                                                              escrituras)
+//	latencias      CommitLatency, ReadLatency, FsyncLatency       metric.Histogram: confirmar (registro del lote,
+//	                                                              espera del fsync y archivo de estados), una lectura
+//	                                                              puntual, cada fsync del group commit del WAL
+//
+// Las latencias son histogramas de 64 cubetas log2 de nanosegundos con contadores atómicos (store/internal/metric,
+// 536 B cada uno): nada crece con las claves ni con el tiempo (regla 1). Latency da Count, Mean, P50, P99 y Max; P50
+// y P99 son el límite superior de su cubeta (error de hasta ×2, para ver órdenes de magnitud).
+//
+// Costo: en el camino caliente solo hay sumas atómicas y un time.Now por lectura, por confirmación y por fsync;
+// ningún candado nuevo. Stats toma tres candados cortos que ya toman el checkpointer y la limpieza (el writeMu del
+// WAL en SizeSince, el de las transacciones en curso en OldestActive y el del catálogo en engineFrozen), uno a la
+// vez. Sirve también con el motor cerrado (devuelve los últimos valores).
+//
+// OnStats(interval, fn) arranca una goroutine (en Engine.bg) que cada interval (0 o menos = 1 s) llama a fn con
+// Stats sin ningún candado tomado; antes de cada llamada mira si la detuvieron, así no empieza otra tras stop o
+// Close. Devuelve stop, que se puede llamar varias veces y desde fn (no espera a la llamada en curso). Close cierra
+// Engine.stop y espera a bg, así que espera a la llamada en curso y después no hay más: fn no debe llamar a Close
+// (se esperaría a sí misma). Con el motor cerrado, OnStats no arranca nada. El Add a bg va con closeMu en lectura y
+// Close marca closed con closeMu en escritura antes de bg.Wait: ningún Add llega tarde.
+//
+// A confirmar (fase 3): Metrics (el et.Json del diseño anterior), Pressure (qué tan cerca está de frenar a los
+// escritores) y DirUsage (uso de disco por store) de la tabla de la propuesta, que no son de esta tarea; la edad de
+// los snapshots en tiempo (hoy solo su cantidad y el horizonte en xids).
+//
 // # Implementación del motor (ola 4)
 //
 //	archivo        qué tiene
@@ -805,6 +853,7 @@
 //	counts.go      contadores vivos de Count y walProxy
 //	records.go     formato de KindCheckpoint, KindCreateStore, KindDropStore y KindCommit
 //	config.go      variables de entorno
+//	stats.go       Stats, Latency, engineMetrics, stats, onStats (ver «Estadísticas»)
 //
 // Una operación suelta es una transacción con su xid (xact.Transactions.Begin): si el valor no cabe en línea escribe
 // antes su cadena de desborde con ese xid; toma commitMu en lectura; btree.Write con Commit (FlagCommit), la

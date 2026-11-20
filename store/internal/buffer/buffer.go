@@ -93,5 +93,6 @@ type Stats struct {
 	Misses  int64
 	Dirty   int64
 	Written int64
+	Used    int64 // búferes con una página (cargada o cargándose); el resto está vacío
 	Buffers int
 }

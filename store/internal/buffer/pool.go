@@ -40,6 +40,7 @@ type pool struct {
 	wg   sync.WaitGroup
 
 	hits, misses, dirty, written atomic.Int64
+	used                         atomic.Int64 // búferes no vacíos: sube al dar uno vacío a una página, baja al vaciarlo
 }
 
 /**
@@ -282,6 +283,8 @@ func (p *pool) load(tag Tag, strategy Strategy, fresh bool) (*desc, bool, error)
 	d.mu.Unlock()
 	if hadOld {
 		p.remove(oldTag, d.id)
+	} else {
+		p.used.Add(1)
 	}
 
 	p.misses.Add(1)
@@ -298,6 +301,7 @@ func (p *pool) load(tag Tag, strategy Strategy, fresh bool) (*desc, bool, error)
 	close(d.done)
 	d.mu.Unlock()
 	if err != nil {
+		p.used.Add(-1)
 		p.unpin(d)
 		return nil, false, err
 	}
@@ -414,6 +418,7 @@ func (p *pool) Stats() Stats {
 		Misses:  p.misses.Load(),
 		Dirty:   p.dirty.Load(),
 		Written: p.written.Load(),
+		Used:    p.used.Load(),
 		Buffers: len(p.descs),
 	}
 }

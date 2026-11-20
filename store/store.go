@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"sync"
+	"time"
 
 	"github.com/cgalvisleon/et/store/internal/btree"
 	"github.com/cgalvisleon/et/store/internal/page"
@@ -216,10 +217,15 @@ func (s *Store) writeLoop(id string, w btree.Write, deferred bool) (bool, error)
 * @return error
 **/
 func (e *Engine) commit(xid page.XID, lsn page.LSN, deferred bool) error {
+	start := time.Now()
 	if err := e.syncCommit(lsn, deferred); err != nil {
 		return err
 	}
-	return e.status.SetStatus(xid, xact.StatusCommitted, lsn)
+	if err := e.status.SetStatus(xid, xact.StatusCommitted, lsn); err != nil {
+		return err
+	}
+	e.observeCommit(start)
+	return nil
 }
 
 /**
@@ -332,6 +338,7 @@ func (s *Store) readVersion(id string, snap *xact.Snapshot) (current, bool, erro
 		return current{}, false, err
 	}
 	defer s.end()
+	defer s.e.observeRead(time.Now())
 	v, found, err := s.tree.Lookup(id, snap)
 	if err != nil || !found {
 		return current{}, false, s.e.readError(err)

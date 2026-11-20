@@ -7,7 +7,9 @@ import (
 	"path/filepath"
 	"sync"
 	"sync/atomic"
+	"time"
 
+	"github.com/cgalvisleon/et/store/internal/metric"
 	"github.com/cgalvisleon/et/store/internal/page"
 	"github.com/cgalvisleon/et/store/internal/vfs"
 )
@@ -38,6 +40,9 @@ type WAL struct {
 	// syncMu: qué está en disco.
 	syncMu  sync.Mutex
 	durable atomic.Uint64 // todos los lsn ≤ durable tienen fsync; se escribe con syncMu
+
+	// syncs mide cada fsync de WaitDurable (el del group commit), de tamaño fijo y solo con atómicos.
+	syncs metric.Histogram
 }
 
 // Comprobación en compilación de que WAL cumple las interfaces.
@@ -320,12 +325,21 @@ func (w *WAL) WaitDurable(lsn page.LSN) error {
 	// target se lee con syncMu tomado: el fsync confirma todo lo publicado mientras se esperaba el turno. Los
 	// segmentos anteriores al activo ya se sellaron con su fsync (ver rotate).
 	target := w.published.Load()
-	if err := w.active.file.Sync(); err != nil {
+	start := time.Now()
+	err := w.active.file.Sync()
+	w.syncs.Since(start)
+	if err != nil {
 		w.fail(err)
 		return failedError(err)
 	}
 	w.durable.Store(max(w.durable.Load(), target))
 	return nil
+}
+
+// SyncLatency es la foto de las latencias de los fsync de WaitDurable (el de rotate, al sellar un segmento, no
+// cuenta).
+func (w *WAL) SyncLatency() metric.Summary {
+	return w.syncs.Summary()
 }
 
 // RedoPoint es el punto de rehacer vigente.

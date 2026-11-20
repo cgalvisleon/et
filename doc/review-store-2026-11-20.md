@@ -420,3 +420,296 @@ Ninguna pasa de 75 líneas. Las de decodificación son largas por la secuencia d
 - `Engine.recover`: un paso por función, igual que los 9 pasos de `doc.go`;
 - `manager.Extend`: separar el nacimiento de un segmento;
 - `ChangeReader.replay`.
+
+---
+
+## Segunda parte (2026-11-20)
+
+Es la misma revisión de solo lectura y usa el mismo formato. Se miró contra `store/doc.go` y contra el `doc.go` de cada paquete.
+
+**Alcance:**
+
+- **Lo pendiente de la primera parte:**
+  - `store/internal/btree` entero: borrado de páginas (`delete.go`, `guard.go`), raíz rápida, pila de páginas borradas, partición, limpieza, `Verify` y recorridos.
+  - `store/internal/fsm` entero, con `Grow`.
+  - `vacuum.go`, `frozen.go`, `verify.go`, `storecheck.go`, `report.go` y `scan.go`.
+- **Lo nuevo de hoy:**
+  - el búfer del WAL (`drain`, `waitPublished`/`wanted`, `WAL_BUFFERS`) y la marca de sellado;
+  - el fsync de `data/` movido al checkpoint (`smgr.Create`/`Unlink`, `SyncAll`, `vfs.FlushFile`);
+  - el catálogo diferido (`catalogChanged`, `ddlLSN`, `dropUninitialized`, `removeUnallocated`);
+  - `fsm.Grow` → `buffer.ExtendBy` + `KindFreePush`;
+  - `page.CheckItems` con mapa de bits;
+  - el flujo de cambios (`changes.go`);
+  - `OpenWith`, `Promote`/`isReplica`, `BackupTo`/`OpenAtTime`;
+  - `DropStoreIn` con espera y `droppedNames`;
+  - la segunda pasada del escritor de fondo.
+
+**Cómo se confirmó:** tres pruebas temporales con `go test -p 1`, escritas en un archivo que después se borró: `TestReviewSlotLazyCommit`, `TestReviewHeadOverflow` y `TestReviewUnlinkAfterSyncAll`. Las tres fallaron como se esperaba. No queda nada en el repo.
+
+### Resumen
+
+| Gravedad | Hallazgos |
+|---|---|
+| Crítico | 0 |
+| Alto | 3 |
+| Medio | 4 |
+| Bajo | 15 |
+| Estilo | 6 |
+| **Total** | **28** |
+
+**La pregunta principal: ¿un corte puede perder algo confirmado o dejar el disco inconsistente?** No se encontró pérdida de datos confirmados. Se revisó cada caso:
+
+- **El búfer del WAL nunca confirma antes de escribir.** Una confirmación síncrona pasa por `WaitDurable` → `waitPublished`, y una diferida es pérdida aceptada por diseño. Las marcas de visibilidad exigen `Durable`, y el flush de una página espera `WaitDurable(pd_lsn)`.
+- **El sellado espera todo lo reservado:** `seal` llama a `waitPublished(lastLSN)` con `writeMu` tomado, y la marca de sellado se escribe después del fsync de los registros.
+- **Ningún archivo queda creado sin fsync del directorio y referenciado por WAL ya pasado por el punto de rehacer.** `smgr.Create` va siempre antes del registro que nombra el archivo (`btree.Create`, `fsm` del mapa). Entonces un registro anterior al punto de rehacer implica un `Create` anterior a `SyncAll`, y uno posterior lo rehace la recuperación.
+- **El catálogo guardado siempre cubre lo que recicla el WAL.** El paso 3 toma `ddlMu` y espera `WaitDurable(ddlLSN)`. `removeUnallocated` es correcto porque los registros rehechos suben `NextFileNo` (`reserveFileNo`).
+- **Las páginas que empuja `Grow` sin extensión durable no son un problema:** el rehacer de `KindFreePush` (`BlockWillInit`) extiende el archivo con `ensureBlock`.
+
+**Donde sí hay huecos:**
+
+- **El unlink de `data/` puede quedar no durable** (D1, medio). Deja un archivo huérfano, pero ningún dato se pierde.
+- **El flujo lógico se rompe en dos casos** (C1 y C2, altos):
+  - entrega una transacción a medias;
+  - da ErrCorrupt.
+
+### Los 5 más importantes
+
+1. **Alto, confirmado con prueba.** Con el búfer del WAL, una ranura lógica nueva entrega a medias un lote que confirmó diferido mientras se creaba. Está en `slots.go:196` y `wal/log.go:215`.
+2. **Alto, confirmado con prueba.** `ChangeHead` no ve las escrituras sueltas con desborde que están en curso, y el lector que parte de ahí da ErrCorrupt («corrupted engine») y queda inservible. Está en `changes.go:87-101` y `store.go:247-260`.
+3. **Alto, confirmado por lectura.** En una réplica, `Verify` toma `applyMu` → `ckptMu`, mientras que el restartpoint y `Promote` toman `ckptMu` → `applyMu`. El interbloqueo es permanente y `Close` también se cuelga. Está en `verify.go:31,72`, `replica.go:381-388` y `promote.go:24-27`.
+4. **Medio, confirmado con prueba.** Un `DropStore` cuyo registro queda antes del punto de rehacer y cuyo unlink llega después del `SyncAll` deja, tras un corte, un archivo huérfano. `Verify` deja de dar limpio. Contradice `doc.go` («antes de que el punto de rehacer pase su registro»). Está en `ddl.go:367`, `checkpoint.go:182,196` y `smgr/manager.go:323`.
+5. **Medio, confirmado por lectura.** La limpieza de un store tiene `Store.mu` durante toda la pasada. Un `DropStore`, `DropStoreIn` o `Empty` que espera ese candado con `ddlMu` tomado frena el paso 3 del checkpoint hasta que la limpieza termina, y `LOCK_TIMEOUT` no acota esa espera. Está en `vacuum.go:68-78` y `ddlbatch.go:197`.
+
+### Detalle por paquete
+
+#### store/ — flujo de cambios y ranuras (changes, slots) con el búfer del WAL
+
+**C1. [Alto, confirmado con prueba] `slots.go:196` (`createSlot`) y `slots.go:220` (`addSlot`): la posición consistente de una ranura lógica es `Published()`, que con `WAL_BUFFERS` puede quedar detrás de confirmaciones ya hechas.**
+
+- **Qué pasa:** `waitConsistent` espera a que terminen las transacciones que estaban en curso. Pero un lote con `CommitDeferred` (o con `SYNC_ON_WRITE=false`) termina con su `KindCommit` todavía pendiente en el búfer (`wal/log.go:215`: `lazy`). Por eso `confirmed = Published()` queda por debajo de ese commit.
+- **Qué entrega el decodificador:** el lote, pero solo con los cambios posteriores a `restart`.
+- **Escenario** (`testConfig`, búfer de 64 KB):
+  1. El lote B hace `PutIn(a,k1)`.
+  2. Un `Put` síncrono en otro store publica k1.
+  3. En otra goroutine se crea la ranura `CreateLogicalSlot("s")`.
+  4. B hace `PutIn(a,k2)` y `CommitDeferred`.
+  5. `WaitDurable` y `Changes("s")`.
+  - **Resultado:** se entrega `[a/k2]`, sin k1. Lo correcto es no entregar B, o entregarlo entero. En la prueba, al crear la ranura `Published = 7` y `LastLSN = 9`.
+- **Hay una variante:** una escritura suelta con desborde en curso da ErrCorrupt (como en C2).
+- **Sugerencia:**
+  - después de `waitConsistent`, usar `confirmed = LastLSN()`, o llamar antes a `waitPublished(LastLSN)`;
+  - revisar los otros usos de `Published()` como «lo escrito», es decir `slots.go:136,364` y `pressure.go:47` (ver W2);
+  - agregar el caso con `CommitDeferred` a las pruebas de ranuras.
+
+**C2. [Alto, confirmado con prueba] `changes.go:87-101` (`changeHead`): `Restart` solo considera los lotes (`noteFirst`), no las escrituras sueltas que están escribiendo su cadena de desborde.**
+
+- **Qué pasa:** una escritura suelta grande escribe primero sus `KindOverflowWrite`, con su xid (`store.go:247`, `prepare`), y después el `KindLeafWrite` con `FlagCommit`. Si `ChangeHead` cae entre los dos:
+  - `Confirmed = LastLSN` queda después de los trozos;
+  - `Restart` también;
+  - la hoja se confirma después.
+  - **Resultado:** el lector la entrega sin sus trozos. `assemble` (`decode.go:570`) devuelve `ErrCorrupt` («logical decoding spill file: store: corrupted engine»), el lector queda inservible (`r.err`) y cada `ChangesFrom(mismaPos)` vuelve a fallar.
+- **Escenario:** un `Put` de 60 KB en bucle y, en paralelo, `ChangeHead` + `ChangesFrom` + `Next`. Falló en la segunda iteración.
+- **Sugerencia:**
+  - anotar también en `headState` la primera reserva de una escritura suelta con desborde (`LastLSN()+1` antes de `chains.Write`), y olvidarla al confirmar o liberar;
+  - otra opción: que `changeHead` use la cota de las transacciones vivas (`txs`);
+  - además, que un trozo faltante para una transacción que empezó antes de `Restart` no se informe como corrupción del motor.
+
+#### store/ — catálogo diferido y fsync de data/ (ddl, checkpoint, smgr)
+
+**D1. [Medio, confirmado con prueba] `ddl.go:367` (`removeFiles` → `unlinkData` → `smgr.Unlink`), `checkpoint.go:182` (`SyncAll`, paso 2) y `checkpoint.go:196` (`saveCatalog`, paso 3, que toma `ddlMu`): el unlink de una baja puede llegar después del fsync de `data/` del checkpoint que pasa su registro.**
+
+- **Qué pasa:**
+  1. `dropFiles` escribe `KindDropStore` (durable, lsn L) con `ddlMu` tomado.
+  2. El checkpoint fija el punto de rehacer R > L y hace `SyncAll`. `dirDirty` sigue en false porque el unlink todavía no llegó.
+  3. Llega el unlink (`markDirDirty`).
+  4. `saveCatalog` guarda el catálogo sin el store, y el control queda en R.
+  5. Un corte (`LoseUnsynced`) devuelve el archivo.
+  - **Resultado:** la recuperación empieza en R y no rehace la baja, y `removeUnallocated` no lo toca porque su número es < `NextFileNo`. Queda un huérfano para siempre: espacio perdido, y `Verify` deja de dar limpio (`orphan-file`, lo arregla `Repair`).
+- **Escenario de la prueba:** un `hookFS` frena el `Remove` de `data/` hasta `afterStep(2)`. El resultado es «orphan files 1».
+- **Lo mismo pasa con:** el archivo viejo de `Empty` y el DDL en lote (`applyDDL`).
+- **`Create` no tiene el problema:** siempre va antes del registro que nombra el archivo.
+- **Sugerencia:** en `saveCatalog`, ya con `ddlMu`, hacer el fsync de `data/` si `dirDirty` (un `smgr.SyncDir()` aparte). Toda baja con registro < R terminó su unlink antes de soltar `ddlMu`. Corregir la frase de `doc.go:1637`.
+
+**W3. [Bajo, confirmado por lectura] `checkpoint.go:205`: `saveCatalog` espera `WaitDurable(ddlLSN)` con `ddlMu` tomado.**
+
+- **Qué pasa:** durante un fsync del WAL se frenan todos los DDL y todo `Store()` de un store no abierto. No es un ciclo, porque quien escribe el WAL no necesita `ddlMu`.
+- **Sugerencia:** leer `ddlLSN` y esperarlo antes de tomar `ddlMu`. Un DDL nuevo que entre en medio sigue cubierto, porque después se vuelve a esperar con `ddlMu` (casi siempre sin espera).
+
+#### store/internal/wal — búfer y sellado
+
+**W2. [Bajo, confirmado por lectura] `pressure.go:47`, `stats.go:160` y `slots.go:136`: lo que está en el búfer (hasta `WAL_BUFFERS`) no es «publicado».**
+
+- **Qué pasa:** el retraso de las diferidas (`Published − Durable`), `Stats.LSN` y el `Lag` de las ranuras quedan por debajo de lo real en hasta 1 MB de registros.
+- **Sugerencia:** usar `LastLSN()` donde se quiere «lo confirmado», o documentar la diferencia.
+
+**W4. [Estilo] Detalles de formato y orden de los candados.**
+
+- **`segment.go:5`:** el import de `page` quedó entre los de la biblioteca estándar.
+- **`log.go:354`:** el comentario de `rotate` pasa los 120 caracteres.
+- **El orden de los candados está escrito distinto en dos lugares:**
+  - `log.go:18` dice «writeMu → drainMu → pubMu, writeMu → syncMu, syncMu → pubMu»;
+  - `wal/doc.go` dice «leadMu es una hoja; syncMu lo toman el líder, rehacer y Close».
+  - Conviene una sola tabla.
+
+**Lo que está bien:**
+
+- **`drain` y `waitPublished`:**
+  - no hay despertar perdido, porque `published` y `Broadcast` van bajo `pubMu`;
+  - un `Write` sin búfer ve `wanted` y sigue la tanda, y nunca espera a otra reserva;
+  - las tandas no cruzan segmentos (`r.seg != run[0].seg`).
+- **`Write` se llama con la página ya suelta** (`wal/doc.go`, «Reserve»). Un pwrite de 1 MB no alarga candados de página.
+- **La marca de sellado:**
+  - se escribe después del fsync;
+  - un segmento reciclado conserva la marca de su número viejo, que no valida;
+  - un corte a mitad de la marca la deja inválida por el crc;
+  - con `StopLSN` (`OpenAt`, `OpenAtTime`, que se traduce a lsn) se salta `checkSealed` y `cutTail` vuelve activo el segmento cortado.
+- **`BackupTo`** reusa los pasos de `Backup`. El último segmento se copia hasta `end.Offset`, sin marca, y por eso no da un falso `ErrCorrupted`.
+
+#### store/internal/smgr y vfs
+
+**W1. [Bajo, confirmado por lectura] `crashfs` no implementa `vfs.Flusher`.**
+
+- **Qué pasa:** en las pruebas, `vfs.FlushFile` (que usa `smgr.evict`) cae a `Sync` y deja durable lo que en macOS real no lo sería. El diseño es correcto, porque la marca de sucio queda y `SyncAll` vuelve a sincronizar, pero ninguna prueba ejercita «flush no durable».
+- **Sugerencia:** en `crashfs`, un `Flush` que no vuelva durable y que sí devuelva los errores de `FailAfter`.
+
+#### store/ — limpieza, verificación, recorridos, Promote, OpenWith, DDL en lote
+
+**V1. [Alto, confirmado por lectura] `verify.go:31` (`check`: `applyMu`) → `verify.go:72` (`checkFiles`: `closeMu.R`, `ckptMu`), frente a `replica.go:381-388` (`restartpoint`: `ckptMu` → `applyMu`) y `promote.go:24-27`: en una réplica, `Verify` invierte el orden de los candados.**
+
+- **Escenario:**
+  1. El checkpointer de la réplica toma `ckptMu`.
+  2. `Verify` toma `applyMu` y espera `ckptMu`.
+  3. El restartpoint espera `applyMu`.
+  - **Resultado:** un interbloqueo permanente. El aplicador queda frenado. `Close` espera `closeMu.Lock` detrás del `closeMu.R` de `Verify` y desde ahí frena todo `enter()`. Lo mismo pasa con `Promote()`.
+  - **La ventana:** es la de dos líneas, pero el checkpointer de fondo pasa cada `checkEvery`.
+- **Sugerencia:**
+  - en una réplica, tomar `ckptMu` antes que `applyMu` en `check()`, o tomar `applyMu` dentro de `checkFiles` (después de `ckptMu`) y otra vez para los stores;
+  - fijar el orden en `doc.go` («Orden de los bloqueos») y en `engine.go:28-34`;
+  - agregar una prueba con `Verify` y `Checkpoint` concurrentes en una réplica.
+
+**V2. [Medio, confirmado por lectura] `vacuum.go:68-78`, frente a `ddlbatch.go:197` (`markDrop`), `ddl.go:330` (`dropStore`), `Empty` y `checkpoint.go:196`: la limpieza bloquea `ddlMu`, y con él el checkpoint.**
+
+- **Qué pasa:** `Store.vacuum` tiene `Store.mu.R` durante toda la pasada de `btree.Vacuum`, que es O(hojas) y no se corta. Un DDL sobre ese store pide `s.mu.Lock` con `ddlMu` tomado, y queda bloqueado todo lo que pide `ddlMu`:
+  - el paso 3 del checkpoint;
+  - `Store()` de un store no abierto;
+  - `StoreIn`;
+  - `Verify`.
+- **Escenario:** la limpieza de un store de 10 GB y, a la vez, un `DropStore` de ese store. El checkpoint queda detenido un minuto, el WAL pasa `MAX_WAL_SIZE` y el freno detiene a los escritores.
+- **Lo mismo con `Verify`:** tiene `s.mu` en escritura todo el store (`verify.go:292`).
+- **Sugerencia:** una de estas:
+  - que la limpieza suelte `Store.mu` entre hojas y mire `dropped`;
+  - una marca «borrando» que la corte con `Complete=false`;
+  - que el DDL espere `s.mu` sin `ddlMu`.
+
+**V3. [Bajo, confirmado por lectura] `vacuum.go:68` y `engine.go:211`: `btree.Vacuum` no mira `e.stop`.** `Close` espera la pasada en curso con `closeMu.Lock` pendiente, y eso frena todo `enter()` y `enterRead()` del motor. Sugerencia: `VacuumOptions.Stop`, revisado por hoja.
+
+**V4. [Bajo, confirmado por lectura] `verify.go:313-339` (`checkHandle`): en una réplica abre y registra en `e.handles` un store con `FlagPendingCreate`.**
+
+- **Qué pasa:** `openLocked` lo rechaza (`ddl.go:118`). Después, `Store("x")` en la réplica lo devuelve antes del commit del primario.
+- **Sugerencia:** revisarlo sin registrarlo.
+
+**V5. [Bajo, plausible] `storecheck.go:535`: el atajo `live == before || live == after` puede ocultar un contador malo cuando hay confirmaciones concurrentes.** Sugerencia: aceptar sin recontar solo si `before == after == live`.
+
+**V6. [Bajo, confirmado por lectura] `ddlbatch.go:264-270` (`waitWriters`): con `LOCK_TIMEOUT=0` y sin `TRANSACTION_TIMEOUT` devuelve ErrBusy enseguida.** En el resto del motor, 0 es «sin límite» (`xact.Transactions.Wait`). Sugerencia: unificar.
+
+**V7. [Bajo, confirmado por lectura] `ddlbatch.go:424`: `droppedNames` solo recuerda las bajas de lotes.** Con un `DropStore` suelto o un `Empty`, un lote más viejo que hace `StoreIn` del mismo nombre crea otro store sin ErrSerialization. Sugerencia: documentarlo como decisión, o recordarlo también.
+
+**V8. [Bajo, confirmado por lectura] `vacuum.go:49`: la limpieza de fondo abre el store con `existing` → `openEntry` → `openTree`, que crea el árbol de un store sin página meta.** Ese store quedó así por un disco lleno al crearlo. Sugerencia: saltar los stores sin meta (`initialized`).
+
+**V9. [Bajo, confirmado por lectura] `options.go:69`: `Options.VacuumThreshold` no puede pedir 0** (0 toma la variable de entorno y un negativo se ignora). Sugerencia: que un negativo signifique 0.
+
+**V10. [Estilo] `verify.go:116-119`: el comentario de `checkCatalog` dice que `catalogBehind` se pone solo por disco lleno.** Desde la tarea 98 se pone en cada DDL.
+
+**V11. [Estilo] `ddlbatch.go:24-50` y `ddlbatch.go:125-157`: `storeIn` y `dropStoreIn` repiten el mismo bucle de espera.** Sugerencia: unificarlo y escribir en un solo lugar que se vuelve con `closeMu` y `ddlMu` sueltos.
+
+**Lo que está bien:**
+
+- **Recorridos (`scan.go`):** no tienen nada tomado entre hojas, y `withSnapshot` cierra con `defer`.
+- **Esperas:** no reaparecen los ciclos de las tareas 89, 91 y 93. `waitWriters` y `waitDDL` sueltan `b.mu`, `closeMu`, `ddlMu` y `Store.mu`.
+- **`droppedNames`:** está acotado (`pruneDrops`).
+- **`engineFrozen`:** se toma antes del punto de rehacer.
+- **Memoria de `Verify`:** acotada (bitsets por store, `buffer.Ring`, `MaxFindings`).
+- **`Promote`:** sigue el orden del restartpoint.
+
+#### store/internal/btree
+
+**B1. [Medio, plausible] `delete.go:597-632,641-664`: la pila de páginas borradas es LIFO y solo se mira la cima.**
+
+- **Qué pasa:** el safeXID crece hacia la cima. Mientras la cima no sea reciclable, ninguna lo es, aunque las de abajo sí.
+- **Escenario:** una ventana deslizante con una limpieza cada 60 s y siempre algún snapshot de más de 60 s. No se recicla nada y el archivo crece.
+- **Sugerencia:** una cola FIFO, con cabeza y cola en la meta, que se corta en la primera página no reciclable.
+
+**B2. [Medio; que el registro se escribe está confirmado por lectura, que se dispare es plausible] `finish.go:36-48` y `fsm/record.go:146-157`: si aplicar el cambio falla después de `Reserve`, el registro se escribe igual.**
+
+- **Qué pasa:** `Redo` repite las mismas validaciones, así que un error de lógica deja un registro venenoso y `Open` falla siempre. En memoria la aplicación puede quedar a medias, por ejemplo con un `KindSplit` que solo partió la izquierda.
+- **Sugerencia:** validar antes de `Reserve`. Ante un `applyErr`, dejar el motor fallado.
+
+**B3. [Bajo, confirmado por lectura] Páginas sacadas de la lista libre que se pierden en caminos de error.**
+
+- **`split.go:67-82`:** después de `Allocate`.
+- **`finish.go:178-192` (`newRoot`):** pide la página antes de comprobar `m.root`.
+- **`freelist.go:172-176`:** un error a mitad de `Grow`.
+- **Consecuencia:** quedan como páginas perdidas, que `Repair` recupera.
+- **Sugerencia:** comprobar antes de pedir la página, o devolverla con `Free`.
+
+**B4. [Bajo, confirmado por lectura] Grow tiene dos huecos.**
+
+- **(a) `write.go:115-122`:** `writeLeaf` suelta la hoja y llama a `Grow` aunque la lista ya tenga páginas.
+- **(b) `finish.go:86,178`:** las particiones de internas y la raíz nueva siguen extendiendo con `PinNew` con el padre y la hija bloqueados, que es el patrón que la tarea 100 quitó de las hojas.
+- **Sugerencia:** mirar `freeHead` antes de soltar la hoja, y llamar a `Grow` también en esos dos caminos.
+
+**B6. [Bajo, plausible] Recorridos sin tope ante enlaces dañados: un ciclo cuelga el proceso en lugar de dar `ErrCorrupt`.**
+
+- `verify.go:293-309` (`chainTop`).
+- `scan.go:481-487` (`reanchor`).
+- `delete.go:116-129` (`FinishDeletes`).
+- **Sugerencia:** un tope de `nblocks` pasos.
+
+**B8. [Estilo] `scan.go:160,218`: `Cursor.leaf` guarda un `node` cuyo `p` apunta a una página ya soltada.** Hoy solo se usan `blk` y `o`. Sugerencia: guardar solo esos campos.
+
+**Lo que está bien:**
+
+- **WAL antes que la página:** se reserva con las páginas bloqueadas y se aplica con la misma función que el rehacer. Las páginas que se inician enteras usan `PinZero`, y el `KindVMClear` va antes del registro de la hoja.
+- **`opGuard`:** la época es monótona de 64 bits, así que no hay ABA. Reciclar exige `safeXID < Horizon`.
+- **Candados:** no hay ciclos. La meta va siempre después del árbol, y quien tiene una interna nunca espera una hoja.
+- **Saltos por el mapa de visibilidad en la limpieza:** son seguros.
+- **Memoria acotada:** las marcas pendientes, a 256; los planes, por hoja.
+
+#### store/internal/fsm y page
+
+**F4. [Bajo, plausible] `btree/vacuum.go:346` → `fsm/vm.go:126,155-161`: `vm.Set` extiende el fork del mapa (y la primera vez lo crea) con la hoja bloqueada en exclusivo.** Pasa una vez cada 32.640 hojas. Sugerencia: extender antes de bloquear la hoja.
+
+**F2. [Bajo, confirmado por lectura] `fsm/check.go:117-124`: `visitVMPage` arma un slice de hasta 32.640 entradas (~520 KB) por página del mapa en `Verify`.** Sugerencia: reutilizarlo.
+
+**F1. [Estilo] `fsm/check.go:163-175`: `Reclaim` repite `push` (`freelist.go:125-139`).**
+
+**F3. [Estilo] `fsm/vm.go:171-174`: `ensureBlock` depende de que `NBlocks` devuelva 0 junto con `ErrNoFork`.** Conviene hacerlo explícito, como en `btree/redo.go:158`.
+
+**Lo que está bien:**
+
+- **`Grow` ante un corte:**
+  - si el `KindFreePush` es durable y la extensión no, el rehacer la hace (`ensureBlock`);
+  - si el checkpoint ya pasó los registros, las páginas sucias las escribe `FlushAll` y `SyncAll` hace su fsync;
+  - si el corte cae entre la extensión y los registros, quedan páginas en ceros fuera del árbol, como documenta `doc.go`.
+- **`page.CheckItems` con mapa de bits:** detecta todo solapamiento real, porque las unidades se redondean hacia afuera. No asigna memoria (128 bytes en la pila).
+
+### Funciones más largas de lo revisado (sin tests)
+
+| # | Líneas | Función | Ubicación |
+|---|---|---|---|
+| 1 | 78 | `Engine.recover` | `store/recovery.go:26` |
+| 2 | 68 | `wal.Open` | `store/internal/wal/log.go:82` |
+| 3 | 55 | `manager.Extend` | `store/internal/smgr/manager.go:152` |
+| 4 | 52 | `BTree.writeLeaf` | `store/internal/btree/write.go:98` |
+| 5 | 50 | `BTree.split` | `store/internal/btree/split.go:58` |
+| 6 | 49 | `planSplit` | `store/internal/btree/split.go:118` |
+| 7 | 46 | `BTree.descend` | `store/internal/btree/descend.go:34` |
+| 8 | 44 | `btree.Create` | `store/internal/btree/tree.go:115` |
+| 9 | 44 | `BTree.lookup` | `store/internal/btree/read.go:93` |
+| 10 | 42 | `checkDelta` | `store/internal/btree/delta.go:216` |
+| 11 | 41 | `storeCheck.run` | `store/storecheck.go:123` |
+| 12 | 41 | `WAL.Recycle` | `store/internal/wal/log.go:531` |
+| 13 | 41 | `BTree.removeFreeing` | `store/internal/btree/vacuum.go:612` |
+| 14 | 40 | `Manager.Allocate` | `store/internal/fsm/freelist.go:49` |
+
+`Engine.recover` y `wal.Open` crecieron desde la primera parte: de 73 a 78 líneas y de 63 a 68. La sugerencia sigue siendo un paso por función.

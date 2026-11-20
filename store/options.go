@@ -11,8 +11,8 @@ import (
 // Options es la configuración de un motor para OpenWith y OpenReplicaWith (tarea 84 de F-23): un proceso puede abrir
 // varios motores con distinta caché, WAL y tiempos (josefina abre el de datos y uno local chico). Un campo en cero
 // toma el valor de su variable de entorno (ver «Variables de entorno» en doc.go), así Options{} es lo mismo que Open.
-// En los que 0 apaga algo (WALWriterDelay, VacuumInterval, ArchiveMaxMB, SlotKeepMB, WALBuffersKB), un valor
-// negativo lo apaga.
+// En los que 0 apaga algo (TransactionTimeout, WALWriterDelay, VacuumInterval, ArchiveMaxMB, SlotKeepMB,
+// WALBuffersKB), un valor negativo lo apaga.
 type Options struct {
 	CacheMB      int // STORE_CACHE_SIZE: la caché de páginas, en MB
 	WALSegmentMB int // WAL_SEGMENT_SIZE: el largo de un segmento del WAL, en MB (al menos 1)

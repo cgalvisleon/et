@@ -24,6 +24,9 @@ import (
 * @return error
 **/
 func (e *Engine) recover() error {
+	if err := e.checkFormat(); err != nil { // antes de leer o cambiar nada
+		return err
+	}
 	label, restoring, err := e.readBackupLabel()
 	if err != nil {
 		return err

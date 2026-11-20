@@ -166,7 +166,8 @@ func validSlotName(name string) bool {
 /**
 * createSlot crea una ranura que retiene el WAL desde el próximo registro. Una lógica espera antes a que terminen
 * las transacciones que estaban en curso (hasta TRANSACTION_TIMEOUT), como PostgreSQL al buscar su punto
-* consistente: su ConfirmedLSN queda en el WAL escrito después de eso, y el decodificado no entrega nada anterior.
+* consistente: su ConfirmedLSN queda en el último registro reservado después de eso (también lo que sigue en el
+* búfer del WAL, como un commit diferido), y el decodificado no entrega nada anterior.
 * @param name string, logical bool
 * @return SlotInfo, error: ErrSlotExists, ErrSlotLimit, ErrBusy (lógica: no terminaron), ErrReadOnly (lógica en una
 * réplica), ErrDiskFull, ErrClosed, ErrFailed
@@ -193,7 +194,8 @@ func (e *Engine) createSlot(name string, logical bool) (SlotInfo, error) {
 	st.mu.Lock()
 	defer st.mu.Unlock()
 	if found := st.find(name); found != nil {
-		found.confirmed = max(found.confirmed, e.log.Published())
+		// el último reservado, no Published: un commit diferido puede seguir en el búfer del WAL (tarea 102)
+		found.confirmed = max(found.confirmed, e.log.LastLSN())
 		if err := e.saveSlotsLocked(); err != nil {
 			return SlotInfo{}, e.writeError(err)
 		}

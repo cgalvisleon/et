@@ -82,13 +82,26 @@ func (r *WalReader) next(maxBytes int) ([]WalEntry, error) {
 }
 
 /**
-* removedError traduce el error de leer el WAL: un segmento que ya no está es ErrWalRemoved.
+* removedError traduce el error de leer el WAL: un segmento que ya no está es ErrWalRemoved, y uno dañado ErrCorrupt.
 * @param lsn page.LSN, err error
 * @return error
 **/
 func removedError(lsn page.LSN, err error) error {
 	if errors.Is(err, wal.ErrRemoved) {
 		return fmt.Errorf(MSG_WAL_REMOVED, ErrWalRemoved, lsn, err)
+	}
+	return corruptError(err)
+}
+
+/**
+* corruptError traduce el daño que encuentra el paquete wal (wal.ErrCorrupted: un segmento sellado cortado, un hueco)
+* a ErrCorrupt, así errors.Is(err, ErrCorrupt) vale para todo daño del WAL (tarea 101).
+* @param err error
+* @return error
+**/
+func corruptError(err error) error {
+	if errors.Is(err, wal.ErrCorrupted) && !errors.Is(err, ErrCorrupt) {
+		return fmt.Errorf("%w: %w", ErrCorrupt, err)
 	}
 	return err
 }

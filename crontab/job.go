@@ -115,6 +115,17 @@ func WithTimeout(d time.Duration) JobOption {
 }
 
 /**
+* WithPaused: Registra el job ya en pausa (sin una ventana programado antes de un StopJob); StartJob lo reanuda. Solo
+* aplica a una definición nueva: si ya hay un job con la misma definición se conserva con su estado.
+* @return JobOption
+**/
+func WithPaused() JobOption {
+	return func(j *Job) {
+		j.Status = Paused
+	}
+}
+
+/**
 * Job: Un job de una instancia de Crontab. La definición (ID, Rev, Type, Tag, OwnerId, Spec, At, Params, Repetitions,
 * Retries, RetryDelay, Timeout) no cambia después de crearlo; el resto se lee y escribe bajo mu, incluido save().
 * Cada réplica tiene su copia: la líder la programa, la guarda y la difunde; las demás aplican lo que difunde.
@@ -175,6 +186,9 @@ func newJob(c *Crontab, tp TypeJob, tag, ownerId string, params et.Json, repetit
 	}
 	for _, opt := range opts {
 		opt(result)
+	}
+	if result.Status == Paused {
+		result.addAuditLog(string(Paused))
 	}
 	return result
 }
@@ -442,12 +456,17 @@ func (s *Job) failArm(err error) {
 
 /**
 * lead: Esta réplica pasó a líder (o el job es nuevo y ella lo es): programa lo que le toca al job según su estado.
-* Una corrida en curso de la líder anterior se sigue esperando (su respuesta puede llegar) hasta el timeout.
+* Una corrida en curso de la líder anterior se sigue esperando (su respuesta puede llegar) hasta el timeout. Uno en
+* pausa no se programa, pero se guarda (un job registrado en pausa llega así al Store).
 **/
 func (s *Job) lead() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if !s.crontab.isLeader() || s.Status.IsFinal() || s.Status == Paused {
+	if !s.crontab.isLeader() || s.Status.IsFinal() {
+		return
+	}
+	if s.Status == Paused {
+		s.save()
 		return
 	}
 

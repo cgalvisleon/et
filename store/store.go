@@ -203,6 +203,7 @@ func (s *Store) write(id string, c change) (bool, error) {
 	var xid page.XID
 	defer func() {
 		if xid != 0 {
+			s.e.heads.forget(xid) // después de la hoja: ChangeHead ya ve su confirmación
 			s.e.txs.End(xid)
 		}
 	}()
@@ -276,6 +277,7 @@ func (s *Store) prepare(xid page.XID, id string, c change) (btree.Write, error) 
 		w.Value = c.data
 		return w, nil
 	}
+	s.e.heads.note(xid, s.e.log.LastLSN) // la cadena va antes que la hoja: ChangeHead no debe partir en medio
 	ref, err := s.e.chains.Write(s.file, xid, c.data)
 	if err != nil {
 		return w, err

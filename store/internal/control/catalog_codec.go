@@ -129,7 +129,7 @@ func decodeCatalog(b []byte) (Catalog, error) {
 		return Catalog{}, fmt.Errorf("%w: magic %08x", ErrBadCatalog, m)
 	}
 	if v := le.Uint32(b[catOffVersion:]); v != FormatVersion {
-		return Catalog{}, fmt.Errorf("%w: format version %d, want %d", ErrBadCatalog, v, FormatVersion)
+		return Catalog{}, fmt.Errorf("%w: %w: %d, want %d", ErrBadCatalog, ErrFormatVersion, v, FormatVersion)
 	}
 	if !allZero(b[catOffReserved:CatalogHeaderSize]) {
 		return Catalog{}, fmt.Errorf("%w: reserved header bytes are not zero", ErrBadCatalog)
@@ -189,4 +189,17 @@ func decodeEntry(body []byte, off int) (Entry, int, error) {
 		Flags:     le.Uint32(h[entOffFlags:]),
 	}
 	return e, start + n, nil
+}
+
+// EncodeCatalog es encodeCatalog para las pruebas de ida y vuelta del formato (store/format_test.go).
+// c: el catálogo. Devuelve el archivo entero o ErrBadCatalog.
+func EncodeCatalog(c Catalog) ([]byte, error) {
+	return encodeCatalog(c)
+}
+
+// DecodeCatalog es decodeCatalog para las pruebas de ida y vuelta del formato: lo que acepta, EncodeCatalog lo
+// vuelve a escribir igual byte a byte.
+// b: el archivo. Devuelve el catálogo, o ErrBadCatalog (ErrFormatVersion si es de otra versión).
+func DecodeCatalog(b []byte) (Catalog, error) {
+	return decodeCatalog(b)
 }

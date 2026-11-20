@@ -24,12 +24,8 @@ import (
 **/
 func (e *Engine) check(repair bool) (Report, error) {
 	var r Report
-	if rs := e.replica; rs != nil && e.isReplica() {
-		if repair {
-			return r, ErrReadOnly
-		}
-		rs.applyMu.Lock() // la réplica no aplica nada mientras se revisa
-		defer rs.applyMu.Unlock()
+	if repair && e.isReplica() {
+		return r, ErrReadOnly
 	}
 	if err := e.checkFiles(&r, repair); err != nil {
 		return r, err
@@ -48,7 +44,7 @@ func (e *Engine) check(repair bool) (Report, error) {
 }
 
 /**
-* enterCheck es enter para Verify y Repair; en una réplica (solo Verify, con applyMu) deja pasar como una lectura.
+* enterCheck es enter para Verify y Repair; en una réplica (solo Verify) deja pasar como una lectura.
 * @return error
 **/
 func (e *Engine) enterCheck() error {
@@ -59,8 +55,24 @@ func (e *Engine) enterCheck() error {
 }
 
 /**
+* quietReplica frena al aplicador de una réplica (applyMu) mientras Verify revisa una parte, para ver un estado quieto.
+* Va siempre después de closeMu (lectura) y de ckptMu, y antes de ddlMu y Store.mu, el orden del restartpoint, de
+* Promote y del aplicador (tarea 104): tomarlo antes de ckptMu cerraba un ciclo con el restartpoint.
+* @return func(): lo suelta (nada en un primario)
+**/
+func (e *Engine) quietReplica() func() {
+	rs := e.replica
+	if rs == nil || !e.isReplica() {
+		return func() {}
+	}
+	rs.applyMu.Lock()
+	return rs.applyMu.Unlock
+}
+
+/**
 * checkFiles revisa el control, el catálogo guardado y los archivos de data/, con ckptMu (ningún checkpoint escribe
-* el control ni el catálogo mientras tanto) y ddlMu (ningún store se crea, vacía ni borra).
+* el control ni el catálogo mientras tanto), en una réplica applyMu (no aplica nada) y ddlMu (ningún store se crea,
+* vacía ni borra).
 * @param r *Report, repair bool: borra los archivos huérfanos
 * @return error
 **/
@@ -71,6 +83,7 @@ func (e *Engine) checkFiles(r *Report, repair bool) error {
 	defer e.leave()
 	e.ckptMu.Lock()
 	defer e.ckptMu.Unlock()
+	defer e.quietReplica()()
 	e.ddlMu.Lock()
 	defer e.ddlMu.Unlock()
 	e.checkControl(r)
@@ -289,6 +302,7 @@ func (e *Engine) checkStore(r *Report, name string, repair bool) error {
 		return err
 	}
 	defer e.leave()
+	defer e.quietReplica()()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.dropped || s.tree == nil {
@@ -308,6 +322,7 @@ func (e *Engine) checkHandle(r *Report, name string) (*Store, error) {
 		return nil, err
 	}
 	defer e.leave()
+	defer e.quietReplica()()
 	e.ddlMu.Lock()
 	defer e.ddlMu.Unlock()
 	if s := e.handles[name]; s != nil {

@@ -523,6 +523,66 @@ func TestReplace(t *testing.T) {
 	}
 }
 
+// TestPaused: WithPaused registra el job ya en pausa: una definición nueva registrada en una réplica que no es la
+// líder reemplaza a la programada sin dispararse (no hay StopJob que pueda llegar antes que el job), la líder la guarda
+// en pausa y StartJob la reanuda.
+func TestPaused(t *testing.T) {
+	store := newMemStore()
+	net := newMemNet()
+	a := replica(t, net, "paused", store)
+	b := replica(t, net, "paused", store)
+	if !a.IsLeader() || b.IsLeader() {
+		t.Fatalf("líder: a=%v b=%v", a.IsLeader(), b.IsLeader())
+	}
+
+	count := newCounter()
+	if _, err := a.CronJob("p", "", "* * * * * *", 0, et.Json{"v": "1"}, count.fn); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, 3*time.Second, "la primera dispara", func() bool { return count.of("1") >= 1 })
+
+	job, err := b.CronJob("p", "", "* * * * * *", 0, et.Json{"v": "2"}, count.fn, WithPaused())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if job.Status != Paused {
+		t.Fatalf("registrado en %s", job.Status)
+	}
+	waitStatus(t, a, "p", Paused, time.Second)
+	waitFor(t, time.Second, "guardado en pausa", func() bool {
+		doc, ok := store.get("paused:p")
+		return ok && doc.Str("status") == string(Paused) && doc.Json("params").Str("v") == "2"
+	})
+	time.Sleep(2 * time.Second)
+	if n := count.of("2"); n != 0 {
+		t.Fatalf("el job en pausa disparó %d veces", n)
+	}
+
+	if err := b.StartJob("p"); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, 3*time.Second, "reanudado dispara", func() bool { return count.of("2") >= 1 })
+
+	// la misma definición con WithPaused conserva el job y su estado
+	again, err := a.CronJob("p", "", "* * * * * *", 0, et.Json{"v": "2"}, count.fn, WithPaused())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again.Rev != job.Rev || again.status() == Paused {
+		t.Fatalf("la misma definición: rev %s → %s, estado %s", job.Rev, again.Rev, again.status())
+	}
+
+	// un schedule nuevo en pausa en la líder no se arma
+	if _, err := a.ScheduleJob("s", "", soon(300*time.Millisecond), et.Json{"v": "s"}, count.fn, WithPaused()); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(800 * time.Millisecond)
+	if count.of("s") != 0 {
+		t.Fatal("el schedule en pausa disparó")
+	}
+	waitStatus(t, b, "s", Paused, time.Second)
+}
+
 // TestConcurrentStart: dos réplicas que arrancan y registran el mismo job a la vez: queda una sola programándolo.
 func TestConcurrentStart(t *testing.T) {
 	net := newMemNet()

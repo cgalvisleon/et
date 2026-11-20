@@ -9,7 +9,8 @@
 // los de ahí). Las piezas viven en paquetes internos (store/internal/...), cada uno con su doc.go, que detalla sus
 // formatos con una tabla comentada: si una tabla de un paquete y este documento difieren, es un error de uno de los
 // dos. Si este documento y el código difieren, manda el código. El historial (qué cambió, cuándo y cómo se probó) está
-// en doc/CHANGELOG.md, no acá.
+// en doc/CHANGELOG.md, no acá. Cómo operarlo (dimensionar, respaldar, replicar, verificar, qué hacer ante cada
+// error) está en store/MANUAL.md, el manual de operación.
 //
 // # Estado del código
 //
@@ -688,7 +689,8 @@
 //     (TestDeferredHintWaitsDurable). La limpieza decide por la marca o, sin ella, por el estado, y lo que quita va en
 //     el WAL detrás de la confirmación que hizo muerta a la versión vieja: no puede llegar al disco sin ella.
 //
-// El escritor de fondo del WAL (walWriter, como el walwriter de PostgreSQL) hace cada 200 ms un WaitDurable si
+// El escritor de fondo del WAL (walWriter, como el walwriter de PostgreSQL) hace cada WAL_WRITER_DELAY (200 ms; 0 lo
+// apaga) un WaitDurable si
 // lastCommit pasó a Durable: lo que puede perder un corte queda acotado a esa pausa más un fsync, también con
 // SYNC_ON_WRITE=false. SYNC_ON_WRITE=false vuelve diferidas todas las confirmaciones del motor (Put, Commit…);
 // Deferred y CommitDeferred lo son siempre, también con SYNC_ON_WRITE=true, que es la forma de diferir solo a quien
@@ -712,8 +714,8 @@
 // ErrSerialization, TestOptimisticBatchPattern), y josefina compara sus versiones bajo su propio lock de modelo y
 // guarda la suya dentro del valor (decisión 46), así que una escritura condicional por versión no tendría quien la use.
 //
-// A confirmar (fase 2): la pausa de 200 ms del escritor del WAL (constante); que una lectura no espere el fsync de lo
-// diferido que ve (como PostgreSQL); que GetVersion devuelva el lsn y no un contador por id.
+// A confirmar (fase 2): que una lectura no espere el fsync de lo diferido que ve (como PostgreSQL); que GetVersion
+// devuelva el lsn y no un contador por id.
 //
 // # Orden de los bloqueos
 //
@@ -733,7 +735,11 @@
 //   - Página (bloqueo de contenido) → writeMu → drainMu → pubMu; writeMu → syncMu; syncMu → pubMu; leadMu (quién hace
 //     el fsync del group commit) es una hoja. Nunca writeMu → página. Partir una hoja pide antes su página nueva con
 //     la hoja suelta (fsm.Grow, tarea 100): la extensión del archivo no va con páginas del árbol bloqueadas.
-//   - Promote (tarea 85): ckptMu → applyMu → replayMu → ddlMu, el orden del restartpoint y del aplicador.
+//   - Réplica (tareas 85 y 104), un solo orden: closeMu (lectura) → ckptMu → applyMu → replayMu → ddlMu → Store.mu.
+//     Lo siguen el restartpoint (ckptMu → applyMu), Promote (ckptMu → applyMu → replayMu → ddlMu), el aplicador
+//     (closeMu → applyMu → … → Store.mu) y Verify (quietReplica: applyMu después de ckptMu en checkFiles y después de
+//     closeMu en cada store, nunca alrededor de todo: tomarlo antes de ckptMu cerraba un ciclo con el restartpoint,
+//     TestReplicaVerifyLockOrder).
 //   - Nunca se espera a otra transacción (xact.Manager.Wait) ni a un fsync con una página bloqueada. Un pin sí se puede
 //     tener mientras tanto. El fsync del checkpoint (smgr Sync) va con el candado del fork suelto, así una extensión
 //     (fsm.Allocate → PinNew → smgr Extend, con páginas del árbol bloqueadas) no lo espera. La excepción documentada:
@@ -758,7 +764,7 @@
 //     paso 6); recover → archive.mu → writeMu (wal.Switch). Ranuras: closeMu (lectura) → slots.mu → writeMu (Hold);
 //     ckptMu → slots.mu (paso 6). Réplica: applyMu → txGate (escritura, para un registro que choca con los
 //     snapshots) → replayMu (escritura) → ddlMu → Store.mu; las lecturas de páginas closeMu (lectura) → replayMu
-//     (lectura) → Store.mu (Store.begin); Verify y el restartpoint toman applyMu.
+//     (lectura) → Store.mu (Store.begin); Verify y el restartpoint toman applyMu después de ckptMu (ver Réplica).
 //   - Marcas de visibilidad: con bloqueo compartido, por OR atómico (y leídas con atomic.LoadUint32); la escritura de
 //     la página al disco calcula la suma sobre una copia. La marca de confirmada solo se pone si el WAL es durable
 //     hasta el lsn de confirmación del grupo de su xid (pregunta 49). La primera marca en una página tras un checkpoint
@@ -1131,13 +1137,15 @@
 // # Presión y uso de disco
 //
 // Engine.Pressure (tarea 65 de F-23, fase 3, como pebble.Pressure de josefina) dice qué tan cerca está el motor de
-// frenar a los escritores: un float64, 0 = sin presión, ≥ 1 = ya frena. Es el máximo de cuatro razones, o 1 si el motor
+// frenar a los escritores: un float64, 0 = sin presión, ≥ 1 = ya frena. Es el máximo de cinco razones, o 1 si el motor
 // quedó de solo lectura o inutilizable; la mayor es la causa (Stats.Pressure y Stats.PressureCause; Pressure da solo el
 // valor):
 //
 //	causa      razón                                                  qué frena al llegar a 1
 //	wal        WAL sin reciclar (walBacklog) / 2 × MAX_WAL_SIZE        throttle: espera un checkpoint, ErrThrottled
 //	archive    WAL sin archivar (archiveBacklog, sin tope) / el mismo  throttle: espera al archivador, ErrThrottled
+//	slot       WAL que retiene la ranura más atrasada / MAX_SLOT_WAL_  con tope, la ranura se invalida (paso 6);
+//	           KEEP_SIZE (sin tope: / 2 × MAX_WAL_SIZE)               sin tope, throttle: ErrThrottled
 //	deferred   registros sin fsync (Published − Durable) / 8.192       deferredBrake: la diferida espera un fsync
 //	dirty      páginas sucias / búferes de la caché                    nadie en el motor: un escritor que necesita
 //	                                                                  un búfer escribe antes una página sucia
@@ -1559,11 +1567,13 @@
 // DDL que lee (un store borrado antes de abrirlo da Store "").
 //
 //   - CreateLogicalSlot espera (hasta TRANSACTION_TIMEOUT, si no ErrBusy) a que terminen las transacciones en curso
-//     al crearla: sus primeros cambios pueden estar antes de lo que la ranura retiene. Su ConfirmedLSN queda en lo
-//     escrito después, así nunca entrega una transacción a medias.
+//     al crearla: sus primeros cambios pueden estar antes de lo que la ranura retiene. Su ConfirmedLSN queda en el
+//     último registro reservado después (no en Published: con WAL_BUFFERS un commit diferido puede seguir en el
+//     búfer, tarea 102), así nunca entrega una transacción a medias.
 //   - Changes(slot) lee desde RestartLSN; ChangeReader.Next pasa cada registro por un búfer de reordenamiento por xid
 //     y, en cada confirmación (KindCommit, o una escritura suelta con FlagCommit), entrega a fn sus cambios en el orden
-//     del WAL (put con el valor nuevo, delete, create de StoreIn, drop de la cola de DDL), con TxInfo{XID, CommitLSN}.
+//     del WAL (ChangePut con el valor nuevo, ChangeDelete, ChangeCreate de Store o StoreIn, ChangeDrop de DropStore o
+//     de la cola de DDL, ChangeEmpty de Empty), con TxInfo{XID, CommitLSN}.
 //     Las confirmaciones salen en el orden del WAL, que es el de confirmación. Lo confirmado hasta ConfirmedLSN se
 //     salta. KindAbort descarta; una transacción que nunca confirmó (murió con un corte del primario, o no escribió) se
 //     descarta en el primer KindCheckpoint cuyo xid vivo más viejo la supera. Los DDL sueltos (Store, DropStore, Empty)
@@ -1606,8 +1616,10 @@
 // registro de la transacción más vieja en su búfer, o lo leído + 1; Confirmed = lo leído) y AdvanceLogicalSlot(nombre,
 // pos) lleva una ranura lógica a una posición sin abrir su lector. ChangeHead no espera a los lotes abiertos: cada lote
 // anota en su primera escritura (writeIn, storeIn, dropStoreIn: noteFirst) una cota de su primer registro (el último
-// lsn reservado + 1, wal.LastLSN) en headState, un mapa acotado por los lotes abiertos, y la saca al terminar, después
-// de su registro final; ChangeHead da Restart = el menor de esas cotas (o el último reservado + 1) y Confirmed = el
+// lsn reservado + 1, wal.LastLSN) en headState, un mapa acotado por las transacciones abiertas, y la saca al terminar,
+// después de su registro final; una escritura suelta con desborde hace lo mismo antes de escribir su cadena (prepare)
+// y la saca después de su hoja (tarea 103: sin eso, un lector que partía entre la cadena y la hoja daba ErrCorrupt,
+// TestChangeHeadOverflowWrite); ChangeHead da Restart = el menor de esas cotas (o el último reservado + 1) y Confirmed = el
 // último reservado, todo bajo headState.mu. Batch.CommitLSN es el TxInfo.CommitLSN de su transacción.
 //
 // Origen (tarea 83): Batch.SetOrigin(n) guarda n en el lote; su KindCommit lleva wal.FlagOrigin y origin(2) al final
@@ -1634,7 +1646,9 @@
 // El catálogo ya no se guarda en cada DDL (catalogChanged → catalogBehind): lo guarda el paso 3 del checkpoint, que
 // antes espera el fsync de ddlLSN, así el catálogo guardado nunca tiene un alta que no es durable; la réplica sigue
 // guardándolo tras cada DDL que rehace (storeCatalog). smgr.Create y smgr.Unlink no hacen fsync de data/: lo hace
-// SyncAll en el checkpoint, antes de que el punto de rehacer pase su registro. Al recuperar: los stores sueltos dados
+// el checkpoint antes de que el control pase su registro, SyncAll en el paso 2 y otra vez smgr.SyncDir en el paso 3
+// con ddlMu (una baja con registro antes del punto de rehacer pudo hacer su unlink después del paso 2, pero antes de
+// soltar ddlMu: D1, TestDropUnlinkAfterSyncAll). Al recuperar: los stores sueltos dados
 // de alta en lo rehecho sin página meta (su KindInitStore no llegó a ser durable: su Store no volvió bien) se borran
 // sin WAL (dropUninitialized, como dropPending), y los archivos de datos con número ≥ NextFileNo (de un alta cuyo
 // registro se perdió) también (removeUnallocated). La caché de descriptores de smgr cierra uno con escrituras sin

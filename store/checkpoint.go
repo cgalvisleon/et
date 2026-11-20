@@ -188,7 +188,8 @@ func (e *Engine) flushData(spread bool, redo wal.Position, start time.Time) erro
 /**
 * saveCatalog es el paso 3: guarda el catálogo con los contadores tomados en el paso 1 y countLSN = el punto de
 * rehacer. Un store creado después del punto de rehacer no está en counts y queda en 0: todas sus confirmaciones
-* tienen lsn ≥ countLSN y la recuperación las suma.
+* tienen lsn ≥ countLSN y la recuperación las suma. Antes hace el fsync de data/ si una baja lo cambió después del
+* paso 2.
 * @param counts map[smgr.FileNo]int64, redoLSN page.LSN
 * @return error
 **/
@@ -204,6 +205,11 @@ func (e *Engine) saveCatalog(counts map[smgr.FileNo]int64, redoLSN page.LSN) err
 	// el catálogo nunca guarda un alta cuyo registro no es durable (createStore no espera su fsync)
 	if err := e.log.WaitDurable(page.LSN(e.ddlLSN.Load())); err != nil {
 		return err
+	}
+	// toda baja con registro antes del punto de rehacer terminó su unlink antes de soltar ddlMu, quizá después de
+	// SyncAll (paso 2): su fsync de data/ va acá, antes del control que pasa su registro (D1, tarea nueva de F-23)
+	if err := e.sm.SyncDir(); err != nil {
+		return e.fail(err)
 	}
 	if err := e.catFile.Save(e.cat.Catalog()); err != nil {
 		return err

@@ -116,6 +116,10 @@ var (
 	// ErrCorrupt: el WAL, el control o el catálogo no son coherentes (falta el registro del checkpoint, un registro
 	// del motor está mal formado…).
 	ErrCorrupt = errors.New("store: corrupted engine")
+
+	// ErrFormatVersion: el directorio es de otra versión del formato en disco (tarea 54): más nueva que la que lee este
+	// binario (actualizar et) o anterior y sin migración. Open no tocó nada (ver «Versiones del formato» en doc.go).
+	ErrFormatVersion = errors.New("store: unsupported on-disk format version")
 )
 
 // Mensajes con detalle.
@@ -126,6 +130,9 @@ const (
 	MSG_DISK_FULL       = "%w: %w"
 	MSG_THROTTLED       = "%w: %d bytes of WAL not recyclable (since the last checkpoint or not archived), limit %d"
 	MSG_OPEN            = "store: open %s: %w"
+	MSG_FORMAT_NEWER    = "%w: %s has format version %d, newer than the %d this binary reads: upgrade et"
+	MSG_FORMAT_OLDER    = "%w: %s has format version %d, older than the %d this binary reads and not migratable"
+	MSG_FORMAT_CONTROL  = "%w: %w"
 	MSG_NO_CHECKPOINT   = "%w: the checkpoint record at lsn %d is missing from the WAL"
 	MSG_BAD_RECORD      = "%w: wal record lsn %d kind %d: %s"
 	MSG_NOT_SUPPORTED   = "%w: wal record lsn %d kind %d is not supported yet"

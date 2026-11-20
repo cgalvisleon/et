@@ -30,8 +30,9 @@ const lockName = "LOCK"
 // (escritura) → writeMu; ckptMu → commitMu (escritura); ckptMu → ddlMu; Store.vacuumMu → closeMu (lectura) →
 // Store.mu (lectura) → páginas; closeMu (lectura) → txGate (lectura); closeMu (lectura) → archive.mu → writeMu y
 // ckptMu → archive.mu (el archivo continuo); closeMu (lectura) → ckptMu → ddlMu y
-// Store.vacuumMu → closeMu (lectura) → Store.mu → commitMu (escritura) (Verify y Repair). failMu, counts.mu y el
-// catálogo en memoria son hojas.
+// Store.vacuumMu → closeMu (lectura) → Store.mu → commitMu (escritura) (Verify y Repair). En una réplica: closeMu
+// (lectura) → ckptMu → applyMu → replayMu → ddlMu → Store.mu (restartpoint, Promote, el aplicador y Verify). failMu,
+// counts.mu y el catálogo en memoria son hojas.
 type Engine struct {
 	dir string
 	fs  vfs.FS
@@ -180,6 +181,7 @@ func open(base vfs.FS, dir string, cfg config) (*Engine, error) {
 		frozen:  frozenXIDs{files: map[smgr.FileNo]page.XID{}},
 	}
 	if err := e.recover(); err != nil {
+		err = corruptError(err)
 		if vfs.IsNoSpace(err) && !errors.Is(err, ErrDiskFull) {
 			err = fmt.Errorf(MSG_DISK_FULL, ErrDiskFull, err) // p. ej. rehacer un archivo que el corte se llevó
 		}

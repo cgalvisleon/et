@@ -104,13 +104,23 @@ fuzz_one() {
   # «context deadline exceeded» sin haber fallado. Se acota (page, como siempre, con 1x).
   extra=(-fuzzminimizetime "$FUZZ_MINIMIZE")
   [ "$pkg" = store/internal/page ] && extra=(-fuzzminimizetime 1x)
-  mac_go test "./$pkg" -run '^$' -fuzz "^$fn\$" -fuzztime "$FUZZTIME" -parallel "$FUZZ_PARALLEL" "${extra[@]}"
-  local rc=$? f
+  local log rc f found=0
+  log=$(mktemp)
+  mac_go test "./$pkg" -run '^$' -fuzz "^$fn\$" -fuzztime "$FUZZTIME" -parallel "$FUZZ_PARALLEL" "${extra[@]}" 2>&1 | tee "$log"
+  rc=${PIPESTATUS[0]}
   for f in $(ls "$corpus" 2>/dev/null); do
     grep -qx "$f" <<<"$before" && continue
     for dest in "$OUT/fuzz-found/$pkg/$fn" "$CI/fuzz-found/$pkg/$fn"; do mkdir -p "$dest" && cp "$corpus/$f" "$dest/"; done
     echo "CASO NUEVO: $pkg/testdata/fuzz/$fn/$f"
+    found=1
   done
+  # Al vencer -fuzztime mientras Go minimiza una entrada «interesante» (no un fallo), el fuzzer sale con
+  # «context deadline exceeded» sin guardar caso: no es un hallazgo.
+  if [ "$rc" -ne 0 ] && [ "$found" -eq 0 ] && grep -q 'context deadline exceeded' "$log" && ! grep -q 'Failing input' "$log"; then
+    echo "AVISO: venció el tiempo minimizando una entrada; sin caso guardado: no es un hallazgo"
+    rc=0
+  fi
+  rm -f "$log"
   return $rc
 }
 

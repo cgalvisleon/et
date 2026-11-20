@@ -108,7 +108,7 @@ func decodeControl(b []byte) (Control, error) {
 		return Control{}, fmt.Errorf("%w: magic %08x", ErrBadControl, m)
 	}
 	if v := le.Uint32(b[offVersion:]); v != FormatVersion {
-		return Control{}, fmt.Errorf("%w: format version %d, want %d", ErrBadControl, v, FormatVersion)
+		return Control{}, fmt.Errorf("%w: %w: %d, want %d", ErrBadControl, ErrFormatVersion, v, FormatVersion)
 	}
 	if n := le.Uint32(b[offPageSize:]); n != page.Size {
 		return Control{}, fmt.Errorf("%w: page size %d, want %d", ErrBadControl, n, page.Size)
@@ -169,4 +169,17 @@ func allZero(b []byte) bool {
 		}
 	}
 	return true
+}
+
+// EncodeCopy es encodeControl para las pruebas de ida y vuelta del formato (store/format_test.go).
+// c: el control, con su Seq. Devuelve la copia de CopySize bytes o ErrBadControl.
+func EncodeCopy(c Control) ([]byte, error) {
+	return encodeControl(c)
+}
+
+// DecodeCopy es decodeControl para las pruebas de ida y vuelta del formato: lo que acepta, EncodeCopy lo vuelve a
+// escribir igual byte a byte.
+// b: una copia. Devuelve el control, o ErrBadControl (ErrFormatVersion si es de otra versión).
+func DecodeCopy(b []byte) (Control, error) {
+	return decodeControl(b)
 }

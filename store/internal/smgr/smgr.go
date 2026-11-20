@@ -52,6 +52,10 @@ type Manager interface {
 	// de data/ (al terminar un checkpoint).
 	SyncAll() error
 
+	// SyncDir hace fsync de data/ si Create o Unlink lo cambiaron desde el último (el paso 3 del checkpoint, con
+	// ddlMu: una baja cuyo unlink llegó después de SyncAll queda durable antes de guardar el catálogo y el control).
+	SyncDir() error
+
 	// Unlink borra todos los archivos de todos los forks del store; el fsync de data/ queda para SyncAll.
 	Unlink(file FileNo) error
 

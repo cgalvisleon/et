@@ -35,7 +35,9 @@ func copyOffset(seq uint64) int64 {
 }
 
 // Read devuelve la copia válida con mayor seq. Una copia es válida si decodeControl la acepta y está en el lugar
-// que le toca por su seq. Si ninguna lo es, devuelve ErrNoValidCopy con el motivo de cada una.
+// que le toca por su seq. Si ninguna lo es, devuelve ErrNoValidCopy con el motivo de cada una. Si alguna copia (con
+// su CRC válido) es de otra versión del formato, devuelve ErrFormatVersion aunque la otra valga: volver a la copia
+// vieja sería abrir atrás de lo que escribió otro binario.
 func (f *controlFile) Read() (Control, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -51,6 +53,10 @@ func (f *controlFile) read() (Control, error) {
 	a, errA := decodeCopy(b, 0)
 	bb, errB := decodeCopy(b, 1)
 	switch {
+	case errors.Is(errA, ErrFormatVersion):
+		return Control{}, fmt.Errorf("%s: copy A: %w", f.path, errA)
+	case errors.Is(errB, ErrFormatVersion):
+		return Control{}, fmt.Errorf("%s: copy B: %w", f.path, errB)
 	case errA != nil && errB != nil:
 		return Control{}, fmt.Errorf("%w: %s: copy A: %v; copy B: %v", ErrNoValidCopy, f.path, errA, errB)
 	case errA != nil:

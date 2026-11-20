@@ -7,6 +7,10 @@ var (
 	// ErrBadControl: una copia del control no es válida (magia, versión, CRC, tamaños o campos fuera de rango).
 	ErrBadControl = errors.New("control: invalid control copy")
 
+	// ErrFormatVersion: un control (con su CRC válido) o un catálogo de otra versión del formato en disco: lo escribió
+	// un binario más nuevo, o uno anterior sin migración (ver «Versiones del formato» en store/doc.go).
+	ErrFormatVersion = errors.New("control: unsupported on-disk format version")
+
 	// ErrNoValidCopy: ninguna de las dos copias del control es válida; el motor no se puede abrir.
 	ErrNoValidCopy = errors.New("control: no valid copy of the control file")
 

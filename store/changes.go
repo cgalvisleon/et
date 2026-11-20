@@ -38,8 +38,9 @@ func (f ChangeFilter) keepID(store, id string) bool {
 	return f.keepStore(store) && (f.ID == nil || f.ID(store, id))
 }
 
-// headState guarda el primer registro posible de cada lote que escribe (una cota por debajo), para ChangeHead: crece
-// con los lotes abiertos, no con las claves (regla 1).
+// headState guarda el primer registro posible de cada transacción que escribe (una cota por debajo), para
+// ChangeHead: los lotes y las escrituras sueltas con desborde, cuya cadena va antes que la hoja (tarea 103). Crece con
+// las transacciones abiertas, no con las claves (regla 1).
 type headState struct {
 	mu    sync.Mutex
 	first map[page.XID]page.LSN
@@ -49,39 +50,54 @@ type headState struct {
 var readerSeq atomic.Uint64
 
 /**
-* noteFirst anota, en la primera escritura del lote, una cota del lsn de su primer registro: el siguiente al último
-* reservado. Con b.mu tomado.
+* note anota para xid, si no estaba, una cota del lsn de su primer registro: el siguiente al último reservado.
+* @param xid page.XID, last func() page.LSN: el último lsn reservado del WAL
+**/
+func (h *headState) note(xid page.XID, last func() page.LSN) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.first == nil {
+		h.first = map[page.XID]page.LSN{}
+	}
+	if _, ok := h.first[xid]; !ok {
+		h.first[xid] = last() + 1
+	}
+}
+
+/**
+* forget saca a xid de headState, después de su registro final.
+* @param xid page.XID
+**/
+func (h *headState) forget(xid page.XID) {
+	h.mu.Lock()
+	delete(h.first, xid)
+	h.mu.Unlock()
+}
+
+/**
+* noteFirst anota, en la primera escritura del lote, una cota del lsn de su primer registro. Con b.mu tomado.
 **/
 func (b *Batch) noteFirst() {
 	if b.firstNoted {
 		return
 	}
 	b.firstNoted = true
-	h := &b.e.heads
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	if h.first == nil {
-		h.first = map[page.XID]page.LSN{}
-	}
-	h.first[b.xid] = b.e.log.LastLSN() + 1
+	b.e.heads.note(b.xid, b.e.log.LastLSN)
 }
 
 /**
 * forgetFirst saca al lote de headState al terminar, después de escribir su registro final.
 **/
 func (b *Batch) forgetFirst() {
-	if !b.firstNoted {
-		return
+	if b.firstNoted {
+		b.e.heads.forget(b.xid)
 	}
-	h := &b.e.heads
-	h.mu.Lock()
-	delete(h.first, b.xid)
-	h.mu.Unlock()
 }
 
 /**
 * changeHead da la posición actual del flujo sin esperar a las transacciones en curso: Confirmed es el último lsn
-* reservado (lo confirmado antes queda atrás) y Restart el primer registro posible de los lotes que escriben.
+* reservado (lo confirmado antes queda atrás) y Restart el primer registro posible de las transacciones que escriben
+* (lotes y escrituras sueltas con desborde).
 * @return ChangePos, error: ErrClosed, ErrFailed
 **/
 func (e *Engine) changeHead() (ChangePos, error) {

@@ -298,6 +298,18 @@ func (m *manager) SyncAll() error {
 			return err
 		}
 	}
+	return m.SyncDir()
+}
+
+/**
+* SyncDir hace fsync de data/ si Create o Unlink lo cambiaron desde el último. Un fsync fallido deja el gestor
+* inutilizable (no se reintenta).
+* @return error
+**/
+func (m *manager) SyncDir() error {
+	if err := m.check(); err != nil {
+		return err
+	}
 	m.mu.Lock()
 	dirDirty := m.dirDirty
 	m.dirDirty = false

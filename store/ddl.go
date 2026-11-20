@@ -105,20 +105,19 @@ func (e *Engine) createStore(name string) (control.Entry, error) {
 /**
 * openTree abre el árbol de un store del catálogo. Si su página meta no existe o está en ceros (un store nuevo, o
 * uno cuyo KindInitStore no llegó a ser durable antes de un corte), borra lo que haya de sus archivos y lo crea:
-* ningún registro durable apunta a sus páginas. Con ddlMu tomado.
+* ningún registro durable apunta a sus páginas. Un store nuevo nace con frozenXID = el xid vivo más viejo: ninguna
+* transacción que pueda escribir en él tiene un xid menor. Con ddlMu tomado.
 * @param file smgr.FileNo
 * @return *btree.BTree, error
 **/
 func (e *Engine) openTree(file smgr.FileNo) (*btree.BTree, error) {
-	cfg := btree.Config{
-		File: file, Pool: e.pool, Smgr: e.sm, Free: e.free, Log: e.log, Status: e.status, HintGate: &e.hintGate,
-	}
+	cfg := e.treeConfig(file)
 	ready, err := e.initialized(file)
 	if err != nil {
 		return nil, e.readError(err)
 	}
 	if ready {
-		return btree.Open(cfg)
+		return e.openExisting(cfg)
 	}
 	e.pool.DropFile(file)
 	if err := e.sm.Unlink(file); err != nil {
@@ -128,6 +127,38 @@ func (e *Engine) openTree(file smgr.FileNo) (*btree.BTree, error) {
 	if err != nil {
 		return nil, e.fail(err)
 	}
+	e.frozen.set(file, cfg.FrozenXID)
+	return tree, nil
+}
+
+/**
+* treeConfig arma la configuración del árbol de un store: las piezas del motor y, para un store nuevo, frozenXID = el
+* xid vivo más viejo.
+* @param file smgr.FileNo
+* @return btree.Config
+**/
+func (e *Engine) treeConfig(file smgr.FileNo) btree.Config {
+	return btree.Config{
+		File: file, Pool: e.pool, Smgr: e.sm, Free: e.free, Log: e.log, Status: e.status, HintGate: &e.hintGate,
+		VM: e.free, FrozenXID: e.txs.OldestActive(),
+	}
+}
+
+/**
+* openExisting abre el árbol de un store con su página meta escrita y anota su frozenXID.
+* @param cfg btree.Config
+* @return *btree.BTree, error
+**/
+func (e *Engine) openExisting(cfg btree.Config) (*btree.BTree, error) {
+	tree, err := btree.Open(cfg)
+	if err != nil {
+		return nil, err
+	}
+	frozen, err := tree.FrozenXID()
+	if err != nil {
+		return nil, e.readError(err)
+	}
+	e.frozen.set(cfg.File, frozen)
 	return tree, nil
 }
 
@@ -191,6 +222,7 @@ func (e *Engine) dropFiles(entry control.Entry) error {
 	}
 	e.cat.Drop(entry.Name, entry.File)
 	e.counts.remove(entry.File)
+	e.frozen.forget(entry.File)
 	if err := e.catFile.Save(e.cat.Catalog()); err != nil {
 		return err
 	}

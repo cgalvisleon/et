@@ -5,10 +5,10 @@
 //
 // Qué hace: buscar la versión que ve una lectura, escribir una versión nueva con su condición comprobada con la hoja
 // bloqueada, partir páginas, crear la raíz, terminar particiones incompletas, la inserción rápida al final (una pista
-// por store: la hoja más a la derecha), recorrer (fase 2), poner las marcas de visibilidad, quitar versiones muertas
-// (fase 1B) y rehacer sus Kind del WAL. Qué no hace: no espera a otras transacciones (devuelve WaitError y quien llama espera sin páginas
+// por store: la hoja más a la derecha), recorrer (Cursor, fase 2), poner las marcas de visibilidad, quitar versiones muertas
+// (fase 1B), congelar y llevar el mapa de visibilidad y el frozenXID del store (fase 2), y rehacer sus Kind del WAL. Qué no hace: no espera a otras transacciones (devuelve WaitError y quien llama espera sin páginas
 // bloqueadas), no guarda valores grandes (recibe la overflow.Ref ya escrita), no confirma transacciones. Depende de
-// page, smgr, buffer, fsm, overflow (Ref), xact (Status, Snapshot) y wal por sus interfaces.
+// page, smgr, buffer, fsm (FreeList, VisibilityMap), overflow (Ref), xact (Status, Snapshot) y wal por sus interfaces.
 //
 // # Clave
 //
@@ -19,9 +19,10 @@
 // # Entrada de hoja (EntryHeaderSize = 28 + id + valor o referencia; little-endian)
 //
 //	off tam campo
-//	  0   4 flags     EntryTombstone, EntryOverflow, las marcas de visibilidad EntryXidCommitted, EntryXidAborted,
-//	                  EntryFrozen (se ponen con OR atómico, ver buffer) y EntryFreeing (versión muerta cuya cadena
-//	                  de desborde se está liberando: solo con EntryOverflow)
+//	  0   4 flags     EntryTombstone, EntryOverflow, las marcas de visibilidad EntryXidCommitted, EntryXidAborted
+//	                  (se ponen con OR atómico, ver buffer), EntryFrozen (congelada: confirmada y visible para todo
+//	                  snapshot sin consultar el archivo de estados; la pone la limpieza con KindLeafVacuum) y
+//	                  EntryFreeing (versión muerta cuya cadena de desborde se está liberando: solo con EntryOverflow)
 //	  4   2 idLen     1 a MaxIDLen
 //	  6   2 reservado
 //	  8   8 lsn       lsn del registro que escribió la versión (parte de la clave)
@@ -58,11 +59,13 @@
 //	20   4 fastLevel
 //	24   4 freeHead   primera página de la lista de libres (fsm); 0 = vacía
 //	28   4 reservado
-//	32   8 frozenXID  horizonte de congelado del store (fase 2, pregunta 44)
+//	32   8 frozenXID  ninguna versión con xid menor queda sin congelar (fase 2, pregunta 44): nace con
+//	                  Config.FrozenXID y solo sube (KindSetFrozen)
 //	40   8 reservado
 //
 // Su espacio especial lleva flags = page.OpaqueMeta. Un store nuevo nace con KindInitStore: la meta y una hoja raíz
-// vacía en el bloque 1.
+// vacía en el bloque 1. Una hoja lleva page.FlagAllVisible en su encabezado mientras su bit del mapa de visibilidad
+// puede estar puesto (ver «Congelado y mapa de visibilidad»).
 //
 // # Registros del WAL (deltas, little-endian)
 //
@@ -74,10 +77,12 @@
 // que rehace (applyBlock) → pd_lsn y MarkDirty → soltar → Write. Todos los bloques son del fork principal de un store.
 //
 //	Kind             bloques                                   delta
-//	KindInitStore    0: meta (bloque 0), BlockWillInit         root(4) = 1
+//	KindInitStore    0: meta (bloque 0), BlockWillInit         root(4) = 1 + frozenXID(8) (sin él, formato
+//	                                                           anterior: frozenXID 0)
 //	                 1: hoja raíz (bloque 1), BlockWillInit     vacío (hoja vacía con OpaqueLeaf|OpaqueRoot)
 //	KindLeafWrite    0: la hoja                                off(2) + la entrada con lsn 0 (el lsn del registro se
-//	                                                           pone al aplicar); FlagCommit, FlagCountAdd/Sub
+//	                                                           pone al aplicar); FlagCommit, FlagCountAdd/Sub; apaga
+//	                                                           page.FlagAllVisible
 //	KindSplit        0: la izquierda                           right(4) keep(2) + clave alta nueva (pivote sin enlace):
 //	                                                           conserva sus primeros keep ítems de datos, enlaza a right
 //	                                                           y se marca OpaqueIncompleteSplit
@@ -92,12 +97,17 @@
 //	                 1: meta                                   root(4) level(4) (la raíz rápida es la misma)
 //	                 2: la raíz vieja                          vacío: apaga OpaqueIncompleteSplit y OpaqueRoot
 //	KindLeafVacuum   0: la hoja                                nMark(2) nRemove(2) + nMark × off(2) + nRemove ×
-//	                                                           off(2): marca EntryFreeing en las versiones con
-//	                                                           desborde de la primera lista, quita las de la segunda
-//	                                                           (cada lista ascendente, sin números comunes) y compacta
-//	                                                           con page.Repair; xid = el de la limpieza
+//	                                                           off(2) [+ nFreeze(2) pageFlags(2) + nFreeze × off(2)]:
+//	                                                           marca EntryFreeing en las versiones con desborde de la
+//	                                                           primera lista, EntryFrozen en las de la tercera y, con
+//	                                                           pageFlags bit 0, page.FlagAllVisible; quita las de la
+//	                                                           segunda (los números son de antes de quitar; cada lista
+//	                                                           ascendente, sin números comunes) y compacta con
+//	                                                           page.Repair; xid = el de la limpieza. Sin la parte del
+//	                                                           congelado es el formato de la fase 1B
 //	KindSetHints     0: la hoja (con su imagen: va solo como   count(2) + count × [off(2) flags(4)]: OR de
 //	                    primera marca tras un checkpoint)      EntryXidCommitted / EntryXidAborted; xid 0
+//	KindSetFrozen    0: meta                                   frozenXID(8): solo sube; xid 0
 //
 // Cada estado intermedio es un árbol válido: entre KindSplit y su KindInsertPivot (o KindNewRoot) la derecha nueva
 // se alcanza por el enlace de la izquierda. KindNewRoot toca dos niveles (la raíz nueva y la vieja), como el
@@ -127,11 +137,20 @@
 //     el enlace a la hija; si el padre no tiene lugar, lo parte y repite.
 //   - Lectura (Lookup): la primera versión visible del id (sin snapshot: la más nueva confirmada; sin Config.Status,
 //     toda versión cuenta como confirmada; el motor siempre pasa el archivo de estados), siguiendo a la derecha.
-//   - Recorridos (Scan, ScanBackward): bajan una vez y avanzan por las hojas; leen cada hoja entera, la sueltan y
-//     recién entonces llaman al callback. Hacia atrás, el primer id de cada hoja queda pendiente hasta leer la anterior
-//     (sus versiones más nuevas pueden estar ahí), y para ir a la izquierda se sigue a la derecha desde la hermana
-//     anotada hasta la página cuyo enlace derecho es la recién leída (como _bt_walk_left, sin borrado de páginas).
-//   - Verify comprueba la estructura entera (pruebas y el Verify del motor, fase 3).
+//   - Recorridos (Cursor, fase 2; Scan y ScanBackward lo usan): NewCursor(ScanOptions) baja una vez y cada Next lee
+//     una hoja entera con bloqueo compartido, la suelta y devuelve sus versiones visibles: entre dos Next no queda nada
+//     fijado ni bloqueado, así quien llama suelta sus propios locks antes de usar lo leído. Hacia atrás, el primer id de
+//     cada hoja queda pendiente hasta leer la anterior (sus versiones más nuevas pueden estar ahí), y para ir a la
+//     izquierda se sigue a la derecha desde la hermana anotada hasta la página cuyo enlace derecho es la recién leída
+//     (como _bt_walk_left, sin borrado de páginas). Opciones: Ring fija las hojas siguientes a la primera con
+//     buffer.Ring (un recorrido grande no vacía la caché); KeysOnly no copia los valores; Borrow copia los valores de la
+//     hoja a un búfer del cursor que se reutiliza (valen hasta el próximo Next; solo hacia adelante).
+//   - Exists: Lookup sin copiar el valor.
+//   - Verify comprueba la estructura entera (pruebas). VerifyWith (fase 3, Verify del motor) es lo mismo con
+//     VerifyOptions: la estrategia de la caché (buffer.Ring), Page (cada página del árbol, ya soltada) y Leaf (cada
+//     hoja ya soltada con sus entradas sin el valor en línea); no pone marcas ni cambia nada, y guarda una hoja de
+//     entradas. RecordFrozenXID da el frozenXID que pone un KindInitStore o KindSetFrozen (la recuperación no deja el
+//     siguiente xid por debajo).
 //
 // # Marcas de visibilidad (ola 5B)
 //
@@ -155,8 +174,9 @@
 //
 // # Limpieza (ola 5B, fase 1)
 //
-// Vacuum(VacuumOptions{Horizon, XID, Free}) recorre las hojas de izquierda a derecha por sus enlaces, una bloqueada en
-// exclusivo a la vez. Por id, de la versión más nueva a la más vieja: la de referencia es la primera confirmada
+// Vacuum(VacuumOptions{Horizon, FreezeLimit, Aggressive, XID, Free}) recorre las hojas de izquierda a derecha, una
+// bloqueada en exclusivo a la vez (por los enlaces del nivel 1 si hay mapa y dos niveles, saltando hojas: ver
+// «Congelado y mapa de visibilidad»; si no, por los enlaces de las hojas). Por id, de la versión más nueva a la más vieja: la de referencia es la primera confirmada
 // visible para todos (EntryFrozen, o xid < Horizon: toda transacción anterior terminó y todo snapshot la ve); están
 // muertas las de transacciones abortadas y todas las más viejas que la de referencia (las versiones de un id que
 // siguen en la hoja de la derecha heredan la de referencia de la izquierda); la de referencia, si es una lápida y no
@@ -168,7 +188,32 @@
 // invisible para toda lectura y no cuenta para Latest; si un corte (o un error de Free) la deja marcada, la próxima
 // pasada sigue liberando lo que falta de su cadena y la quita. Las hojas no se borran (fase 2); el espacio se
 // reutiliza porque page.DeleteItems cierra los huecos y page.Repair compacta. Quien llama no corre dos limpiezas del
-// mismo store a la vez (a confirmar: el motor las serializa).
+// mismo store a la vez (el motor las serializa con Store.vacuumMu).
+//
+// # Congelado y mapa de visibilidad (fase 2)
+//
+// En la misma pasada, con la hoja bloqueada, la limpieza congela (EntryFrozen) toda versión que queda, confirmada y con
+// xid < FreezeLimit, en el mismo KindLeafVacuum. Si todo lo que queda es visible para todos (congelado o confirmado
+// con xid < Horizon; ni muertas, ni «liberándose», ni en curso), la hoja no tiene partición incompleta y no comparte un
+// id con una vecina (su primer id venía de la hoja anterior, o su último sigue en la hermana derecha, que se mira
+// bloqueándola en compartido: si la limpieza ya quitó esas versiones, la clave alta sigue nombrando el id pero ya no
+// comparte), el registro pone page.FlagAllVisible y después, todavía con la hoja bloqueada, Config.VM.Set pone su bit:
+// VMAllFrozen si todo quedó congelado, si no VMAllVisible. Una abortada nunca se congela: está muerta.
+//
+// Toda escritura (writeLeaf) o partición (split) que encuentra la hoja con page.FlagAllVisible borra antes su bit
+// (Config.VM.Clear, un KindVMClear con la hoja bloqueada y antes de reservar su registro); KindLeafWrite y KindSplit
+// dejan la página sin la marca. Así, en todo prefijo del WAL, un bit puesto implica la marca en la página y ningún
+// cambio desde que la limpieza la vio.
+//
+// Recorrido: con Config.VM y la raíz en el nivel 1 o más, Vacuum copia los enlaces de cada página del nivel 1 (de
+// izquierda a derecha por sus enlaces, con bloqueo compartido; también los de la siguiente para saber dónde termina la
+// última cadena) y, por cada enlace, salta la hoja sin leerla si su bit es VMAllFrozen (o VMAllVisible sin
+// Aggressive), o la limpia y sigue a la derecha hasta el enlace siguiente (así ve las hojas de particiones posteriores
+// a la copia o sin enlace en el padre). Saltar es seguro: el bit solo se pone en una hoja sin partición incompleta y
+// cualquier partición posterior lo borra, así que las hojas a su derecha hasta el enlace siguiente están en la copia.
+// VacuumStats: Frozen, Skipped, SkippedVisible, Complete (sin error y sin saltar hojas solo todo-visibles) y FrozenXID
+// (el menor xid que quedó sin congelar en lo recorrido, acotado por Horizon: el frozenXID que el store puede guardar con
+// SetFrozenXID si Complete). FrozenXID y SetFrozenXID leen y suben el de la meta.
 //
 // Toda página del árbol que se bloquea pasa por page.CheckItems (la caché solo verifica la suma; a confirmar: un
 // gancho de la caché al cargar del disco evitaría repetirlo en cada acceso).

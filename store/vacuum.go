@@ -54,8 +54,9 @@ func (e *Engine) vacuumStore(name string, horizon page.XID) error {
 }
 
 /**
-* vacuum limpia el árbol del store (serializado por vacuumMu). Mientras dura tiene el store tomado en lectura: un
-* DropStore espera a que termine, y uno que ya empezó deja el store en ErrStoreDropped y no se limpia.
+* vacuum limpia y congela el árbol del store (serializado por vacuumMu; ver freezeStore). Mientras dura tiene el store
+* tomado en lectura: un DropStore espera a que termine, y uno que ya empezó deja el store en ErrStoreDropped y no se
+* limpia.
 * @param horizon page.XID: el xid vivo más viejo al empezar la limpieza del motor
 * @return error: ErrStoreDropped, ErrClosed, ErrFailed o el error de una página dañada
 **/
@@ -66,8 +67,7 @@ func (s *Store) vacuum(horizon page.XID) error {
 		return err
 	}
 	defer s.end()
-	_, err := s.tree.Vacuum(btree.VacuumOptions{Horizon: horizon, Free: s.freeDead})
-	return s.e.readError(err)
+	return s.e.readError(s.freezeStore(horizon))
 }
 
 /**
@@ -83,24 +83,26 @@ func (s *Store) freeDead(v btree.Version) error {
 
 /**
 * vacuumer es la limpieza de fondo (como autovacuum, con un criterio simple): cada VACUUM_INTERVAL, si hubo al menos
-* VACUUM_THRESHOLD escrituras desde la última (0 = en cada vuelta), limpia todos los stores. Termina con Close o
-* cuando el motor quedó inutilizable; Close la espera antes del checkpoint final.
+* VACUUM_THRESHOLD escrituras desde la última (0 = en cada vuelta) o se asignaron al menos vacuumXids xids (así el
+* congelado y el truncado del archivo de estados siguen también con transacciones que no escriben), limpia todos los
+* stores. Termina con Close o cuando el motor quedó inutilizable; Close la espera antes del checkpoint final.
 **/
 func (e *Engine) vacuumer() {
 	defer e.bg.Done()
 	ticker := time.NewTicker(e.cfg.vacuumEvery)
 	defer ticker.Stop()
 	var last int64
+	lastXID := e.txs.NextXID()
 	for {
 		select {
 		case <-e.stop:
 			return
 		case <-ticker.C:
-			n := e.writes.Load()
-			if n-last < e.cfg.vacuumWrites {
+			n, next := e.writes.Load(), e.txs.NextXID()
+			if n-last < e.cfg.vacuumWrites && uint64(next-lastXID) < e.cfg.vacuumXids {
 				continue
 			}
-			last = n
+			last, lastXID = n, next
 			if err := e.vacuum(); errors.Is(err, ErrClosed) || errors.Is(err, ErrFailed) {
 				return
 			}

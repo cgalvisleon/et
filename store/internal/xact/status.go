@@ -30,7 +30,7 @@ var (
 	// ErrStatusConflict: el xid ya tiene el otro estado final (confirmada contra abortada).
 	ErrStatusConflict = errors.New("xact: xid already has another final status")
 
-	// ErrTruncated: el estado del xid ya se borró con Truncate.
+	// ErrTruncated: SetStatus de un xid cuyo estado ya se borró con Truncate (Status lo lee confirmado).
 	ErrTruncated = errors.New("xact: status of xid was truncated")
 
 	// ErrCorrupt: los bits del xid tienen el valor reservado.
@@ -46,6 +46,7 @@ type Config struct {
 	Dir        string      // directorio del motor; los archivos van en Dir/xact
 	Flusher    wal.Flusher // el WAL, para no escribir una página antes de que sea durable hasta su lsn
 	CachePages int         // páginas de la caché; 0 = DefaultCachePages
+	FilePages  int         // páginas por archivo; 0 = PagesPerFile (otro valor solo en pruebas: cambia el formato)
 }
 
 // slotState dice qué tiene una ranura de la caché.
@@ -75,15 +76,16 @@ type slot struct {
 // ni se hace E/S (se suelta para leer, escribir o esperar al WAL; la ranura queda marcada slotReading o writing).
 // filesMu guarda solo el mapa de archivos abiertos y tampoco se toma con otro lock.
 type Statuses struct {
-	fs      vfs.FS
-	dir     string
-	flusher wal.Flusher
+	fs           vfs.FS
+	dir          string
+	flusher      wal.Flusher
+	pagesPerFile uint64 // PagesPerFile salvo en pruebas
 
 	mu      sync.Mutex
 	cond    *sync.Cond // avisa cuando una ranura termina de cargarse o de escribirse
 	slots   []slot
 	tick    uint64   // reloj de uso de las ranuras
-	oldest  page.XID // el primer xid que todavía tiene estado (los anteriores se truncaron)
+	oldest  page.XID // el primer xid que todavía tiene estado (los anteriores se truncaron: se leen confirmados)
 	horizon page.XID // horizonte de recuperación: en curso por debajo = abortada
 	failed  error    // si no es nil, todo devuelve este error
 
@@ -113,12 +115,16 @@ func Open(cfg Config) (*Statuses, error) {
 	}
 
 	s := &Statuses{
-		fs:       cfg.FS,
-		dir:      dir,
-		flusher:  cfg.Flusher,
-		slots:    make([]slot, n),
-		files:    map[uint64]vfs.File{},
-		unsynced: map[uint64]bool{},
+		fs:           cfg.FS,
+		dir:          dir,
+		flusher:      cfg.Flusher,
+		pagesPerFile: PagesPerFile,
+		slots:        make([]slot, n),
+		files:        map[uint64]vfs.File{},
+		unsynced:     map[uint64]bool{},
+	}
+	if cfg.FilePages > 0 {
+		s.pagesPerFile = uint64(cfg.FilePages)
 	}
 	s.cond = sync.NewCond(&s.mu)
 	for i := range s.slots {
@@ -126,13 +132,15 @@ func Open(cfg Config) (*Statuses, error) {
 		s.slots[i].groupLSN = make([]page.LSN, groupsPerPage)
 	}
 	if len(numbers) > 0 {
-		s.oldest = page.XID((numbers[0] - 1) * XidsPerFile)
+		s.oldest = page.XID((numbers[0] - 1) * s.xidsPerFile())
 	}
 	return s, nil
 }
 
 // Status devuelve el estado de xid y el lsn de confirmación de su grupo (0 si la página no está en la caché: ya es
-// durable). Un xid en curso por debajo del horizonte de recuperación se lee como abortado.
+// durable). Un xid en curso por debajo del horizonte de recuperación se lee como abortado. Un xid truncado se lee
+// confirmado (y congelado) sin tocar el disco: el motor solo trunca por debajo de su frozenXID, y por debajo no
+// queda ninguna versión abortada ni sin congelar (store/doc.go, «Congelado»).
 func (s *Statuses) Status(xid page.XID) (Status, page.LSN, error) {
 	if xid == 0 {
 		return 0, 0, ErrInvalidXID
@@ -140,7 +148,7 @@ func (s *Statuses) Status(xid page.XID) (Status, page.LSN, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if xid < s.oldest {
-		return 0, 0, ErrTruncated
+		return StatusCommitted, 0, nil
 	}
 	i, err := s.getSlot(pageOf(xid))
 	if err != nil {
@@ -223,22 +231,27 @@ func (s *Statuses) Flush() error {
 }
 
 // Truncate borra los archivos con todos sus xids menores que before (los estados anteriores al horizonte de
-// congelado). Consultar después un xid de esos devuelve ErrTruncated.
+// congelado). Después Status lee esos xids confirmados sin tocar el disco y SetStatus devuelve ErrTruncated. Borra
+// de menor a mayor: un corte a mitad deja un prefijo borrado, y al abrir el primer archivo que queda marca el límite.
+// Si ya no hay nada que borrar no lista el directorio.
 func (s *Statuses) Truncate(before page.XID) error {
-	last := uint64(before) / XidsPerFile // se borran los archivos 1..last
+	last := uint64(before) / s.xidsPerFile() // se borran los archivos 1..last
 	if last == 0 {
 		return nil
 	}
+	limit := page.XID(last * s.xidsPerFile())
 	s.mu.Lock()
 	if s.failed != nil {
 		err := s.failed
 		s.mu.Unlock()
 		return err
 	}
-	if s.oldest < page.XID(last*XidsPerFile) {
-		s.oldest = page.XID(last * XidsPerFile)
+	if s.oldest >= limit {
+		s.mu.Unlock()
+		return nil
 	}
-	s.discardPages(func(pageNo uint64) bool { return fileOf(pageNo) <= last })
+	s.oldest = limit
+	s.discardPages(func(pageNo uint64) bool { return s.fileOf(pageNo) <= last })
 	s.mu.Unlock()
 
 	return s.removeFiles(func(n uint64) bool { return n <= last })
@@ -269,10 +282,10 @@ func (s *Statuses) Recover(next page.XID) error {
 	s.slots[i].dirty = true
 	s.mu.Unlock()
 
-	if err := s.removeFiles(func(n uint64) bool { return n > fileOf(p) }); err != nil {
+	if err := s.removeFiles(func(n uint64) bool { return n > s.fileOf(p) }); err != nil {
 		return err
 	}
-	return s.cutFile(fileOf(p), offsetOf(p)+PageSize)
+	return s.cutFile(s.fileOf(p), s.offsetOf(p)+PageSize)
 }
 
 // Close cierra los archivos sin escribir nada: el motor hace antes su checkpoint final (Flush).
@@ -432,11 +445,11 @@ func (s *Statuses) discardPages(match func(pageNo uint64) bool) {
 
 // readPage lee la página pageNo en buf; lo que falta en el archivo (o el archivo entero) se lee como ceros.
 func (s *Statuses) readPage(pageNo uint64, buf []byte) error {
-	f, err := s.file(fileOf(pageNo))
+	f, err := s.file(s.fileOf(pageNo))
 	if err != nil {
 		return err
 	}
-	n, err := f.ReadAt(buf, offsetOf(pageNo))
+	n, err := f.ReadAt(buf, s.offsetOf(pageNo))
 	if err != nil && !errors.Is(err, io.EOF) {
 		return err
 	}
@@ -451,12 +464,12 @@ func (s *Statuses) writePage(pageNo uint64, buf []byte, lsn page.LSN) error {
 			return err
 		}
 	}
-	n := fileOf(pageNo)
+	n := s.fileOf(pageNo)
 	f, err := s.file(n)
 	if err != nil {
 		return err
 	}
-	if _, err := f.WriteAt(buf, offsetOf(pageNo)); err != nil {
+	if _, err := f.WriteAt(buf, s.offsetOf(pageNo)); err != nil {
 		return err
 	}
 	s.filesMu.Lock()
@@ -601,11 +614,21 @@ func fileName(dir string, n uint64) string {
 // pageOf es la página global del xid.
 func pageOf(xid page.XID) uint64 { return uint64(xid) / XidsPerPage }
 
+// xidsPerFile es la cantidad de xids de cada archivo (XidsPerFile salvo en pruebas).
+func (s *Statuses) xidsPerFile() uint64 { return s.pagesPerFile * XidsPerPage }
+
 // fileOf es el número de archivo (desde 1) de una página global.
-func fileOf(pageNo uint64) uint64 { return pageNo/PagesPerFile + 1 }
+func (s *Statuses) fileOf(pageNo uint64) uint64 { return pageNo/s.pagesPerFile + 1 }
 
 // offsetOf es el byte donde empieza una página global dentro de su archivo.
-func offsetOf(pageNo uint64) int64 { return int64(pageNo%PagesPerFile) * PageSize }
+func (s *Statuses) offsetOf(pageNo uint64) int64 { return int64(pageNo%s.pagesPerFile) * PageSize }
+
+// Oldest es el primer xid cuyo estado sigue en el archivo: los anteriores se truncaron y se leen confirmados.
+func (s *Statuses) Oldest() page.XID {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.oldest
+}
 
 // groupOf es el grupo de lsn del xid dentro de su página.
 func groupOf(xid page.XID) uint64 { return (uint64(xid) % XidsPerPage) / GroupSize }

@@ -45,6 +45,10 @@ var (
 	// ErrOtherEngine: el lote o el snapshot es de otro motor que el store.
 	ErrOtherEngine = errors.New("store: the batch or snapshot belongs to another engine")
 
+	// ErrBusy: Empty con lotes o snapshots abiertos en el motor (cualquiera de ellos podría ver el store vaciado, y un
+	// lote podría tener versiones sin confirmar en él). Se reintenta cuando terminen.
+	ErrBusy = errors.New("store: cannot empty the store while batches or snapshots are open")
+
 	// ErrCorrupt: el WAL, el control o el catálogo no son coherentes (falta el registro del checkpoint, un registro
 	// del motor está mal formado…).
 	ErrCorrupt = errors.New("store: corrupted engine")
@@ -61,4 +65,42 @@ const (
 	MSG_STORE_NAME      = "%w: %q"
 	MSG_REDO            = "store: redo lsn %d kind %d: %w"
 	MSG_BAD_CONTROL_NEW = "%w: the control file has no valid copy but the catalog has stores: %w"
+	MSG_BUSY            = "%w: %d open"
+)
+
+// Mensajes del informe de Verify y Repair (report.go, verify.go, repair.go).
+const (
+	MSG_REPORT_TOTALS   = "stores %d, pages %d (tree %d, chains %d, free %d, lost %d), versions %d, live ids %d, orphan files %d\n"
+	MSG_REPORT_FINDINGS = "findings %d (repaired %d, irreparable %d)\n"
+	MSG_REPORT_OMITTED  = "... and %d more findings\n"
+
+	MSG_CHECK_CONTROL_READ  = "cannot read the control file: %v"
+	MSG_CHECK_CONTROL_REDO  = "redo point lsn %d, the engine's is %d"
+	MSG_CHECK_CONTROL_CKPT  = "checkpoint lsn %d is before the redo point lsn %d"
+	MSG_CHECK_CONTROL_XID   = "frozenXID %d is after nextXID %d"
+	MSG_CHECK_CATALOG_READ  = "cannot read the catalog: %v"
+	MSG_CHECK_CATALOG_LEN   = "the saved catalog has %d stores, the engine %d"
+	MSG_CHECK_CATALOG_STORE = "store %q has file %d in the saved catalog and %d in the engine"
+	MSG_CHECK_CATALOG_NEXT  = "the saved catalog's next file number %d is after the engine's %d"
+	MSG_CHECK_DATA_DIR      = "cannot list the data directory: %v"
+	MSG_CHECK_ORPHAN_FILE   = "%d data files of file number %d, which no store uses"
+	MSG_CHECK_UNKNOWN_FILE  = "not a data file name"
+	MSG_CHECK_NO_META       = "the store has no meta page: Store creates it empty"
+	MSG_CHECK_BLOCKS        = "cannot count the blocks: %v"
+	MSG_CHECK_META          = "cannot read the meta page: %v"
+	MSG_CHECK_TREE          = "the tree does not verify: %v"
+	MSG_CHECK_DOUBLE_TREE   = "tree page reached twice"
+	MSG_CHECK_DOUBLE_CHAIN  = "page %d of the overflow chain of %.40q already has another owner"
+	MSG_CHECK_DOUBLE_FREE   = "page in the free list already has another owner"
+	MSG_CHECK_CHAIN         = "overflow chain of %.40q (lsn %d): %v"
+	MSG_CHECK_FREE_LIST     = "the free list is damaged: %v"
+	MSG_CHECK_STATUS        = "cannot read the status of xid %d: %v"
+	MSG_CHECK_FROZEN        = "%d versions below the store's frozenXID %d are not frozen (first xid %d)"
+	MSG_CHECK_FROZEN_NEXT   = "the store's frozenXID %d is after nextXID %d"
+	MSG_CHECK_VM_LEAF       = "visibility bits %d on a leaf that is not %s"
+	MSG_CHECK_VM_NOT_LEAF   = "visibility bits %d on a block that is not a leaf"
+	MSG_CHECK_VM_READ       = "cannot read the visibility map: %v"
+	MSG_CHECK_COUNT         = "Count is %d, the walk finds %d live ids"
+	MSG_CHECK_LOST          = "pages without an owner: %s"
+	MSG_CHECK_ORPHAN_CHAIN  = "overflow pages without a version (orphan chain)"
 )

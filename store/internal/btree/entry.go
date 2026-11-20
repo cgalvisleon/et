@@ -112,19 +112,33 @@ func (e entry) tombstone() bool { return e.flags()&EntryTombstone != 0 }
 * @return Version
 **/
 func (e entry) version() Version {
-	v := Version{ID: string(e.id()), LSN: e.lsn(), XID: e.xid(), Flags: e.flags()}
-	rest := e[EntryHeaderSize+len(e.id()):]
-	switch {
-	case v.Flags&EntryTombstone != 0:
-	case v.Flags&EntryOverflow != 0:
-		v.Overflow = overflow.Ref{First: page.BlockNumber(le.Uint32(rest)), Len: le.Uint32(e[OffEntryValueLen:])}
-	default:
-		v.Value = bytes.Clone(rest)
+	v := e.header()
+	if v.Flags&(EntryTombstone|EntryOverflow) == 0 {
+		v.Value = bytes.Clone(e.inlineValue())
 		if v.Value == nil {
 			v.Value = []byte{}
 		}
 	}
 	return v
+}
+
+/**
+* header copia la entrada a un Version sin el valor en línea (Value nil): id, lsn, xid, marcas y la referencia a
+* desborde. Lo usan los recorridos que no necesitan el valor y los que lo copian a su propio búfer.
+* @return Version
+**/
+func (e entry) header() Version {
+	v := Version{ID: string(e.id()), LSN: e.lsn(), XID: e.xid(), Flags: e.flags()}
+	if v.Flags&EntryOverflow != 0 && v.Flags&EntryTombstone == 0 {
+		rest := e[EntryHeaderSize+len(e.id()):]
+		v.Overflow = overflow.Ref{First: page.BlockNumber(le.Uint32(rest)), Len: le.Uint32(e[OffEntryValueLen:])}
+	}
+	return v
+}
+
+// inlineValue es la vista del valor en línea (vacía en una lápida; en desborde, los bytes de la referencia).
+func (e entry) inlineValue() []byte {
+	return e[EntryHeaderSize+len(e.id()):]
 }
 
 /**

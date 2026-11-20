@@ -18,7 +18,8 @@ type Store struct {
 	file smgr.FileNo
 	tree *btree.BTree
 
-	// mu: las operaciones lo toman en lectura; DropStore en escritura (espera a las que están en curso).
+	// mu: las operaciones lo toman en lectura; DropStore y Empty en escritura (esperan a las que están en curso).
+	// file y tree solo cambian con mu en escritura (Empty los cambia por los del archivo nuevo).
 	mu      sync.RWMutex
 	dropped bool
 
@@ -31,6 +32,7 @@ type change struct {
 	tombstone bool
 	data      []byte
 	check     func(latest btree.Latest) btree.Action // nil = siempre (Put, Remove)
+	deferred  bool                                   // confirma sin esperar el fsync del WAL (Deferred)
 }
 
 /**
@@ -125,7 +127,7 @@ func (s *Store) write(id string, c change) (bool, error) {
 	if err != nil {
 		return false, s.e.fail(err)
 	}
-	applied, err := s.writeLoop(id, w)
+	applied, err := s.writeLoop(id, w, c.deferred)
 	unused := err == nil || errors.Is(err, ErrConflict)
 	if !applied && unused && w.Overflow != nil {
 		if ferr := s.e.chains.Free(s.file, *w.Overflow, xid); ferr != nil {
@@ -176,10 +178,10 @@ func (s *Store) countUnderLock(_ page.LSN, delta int) {
 /**
 * writeLoop escribe la versión y confirma; si otra transacción en curso tiene el id, la espera (hasta LOCK_TIMEOUT)
 * sin páginas bloqueadas y repite. commitMu va en lectura desde antes de reservar hasta anotar el estado.
-* @param id string, w btree.Write
+* @param id string, w btree.Write, deferred bool: confirmar sin esperar el fsync del WAL
 * @return bool: si escribió, error: ErrConflict, o ErrFailed con la causa
 **/
-func (s *Store) writeLoop(id string, w btree.Write) (bool, error) {
+func (s *Store) writeLoop(id string, w btree.Write, deferred bool) (bool, error) {
 	for {
 		s.e.commitMu.RLock()
 		res, err := s.tree.Write(id, w)
@@ -196,7 +198,7 @@ func (s *Store) writeLoop(id string, w btree.Write) (bool, error) {
 		}
 		if err == nil && res.Applied {
 			s.e.writes.Add(1)
-			err = s.e.commit(w.XID, res.LSN)
+			err = s.e.commit(w.XID, res.LSN, deferred)
 		}
 		s.e.commitMu.RUnlock()
 		if err != nil {
@@ -207,52 +209,51 @@ func (s *Store) writeLoop(id string, w btree.Write) (bool, error) {
 }
 
 /**
-* commit confirma una escritura suelta (paso 10): con SYNC_ON_WRITE espera el WAL durable hasta su lsn (group
-* commit) y anota confirmada en el archivo de estados; desde ahí la ven las lecturas.
-* @param xid page.XID, lsn page.LSN
+* commit confirma una escritura suelta (paso 10): salvo diferida, con SYNC_ON_WRITE espera el WAL durable hasta su
+* lsn (group commit); anota el lsn para WaitDurable y confirmada en el archivo de estados: desde ahí la ven las
+* lecturas, sea o no durable todavía.
+* @param xid page.XID, lsn page.LSN, deferred bool: no esperar el fsync
 * @return error
 **/
-func (e *Engine) commit(xid page.XID, lsn page.LSN) error {
-	if e.cfg.syncOnWrite {
-		if err := e.log.WaitDurable(lsn); err != nil {
-			return err
-		}
+func (e *Engine) commit(xid page.XID, lsn page.LSN, deferred bool) error {
+	if err := e.syncCommit(lsn, deferred); err != nil {
+		return err
 	}
 	return e.status.SetStatus(xid, xact.StatusCommitted, lsn)
 }
 
 /**
 * put guarda id con data, lo cree o lo reemplace.
-* @param id string, data []byte
+* @param id string, data []byte, deferred bool: confirmar sin esperar el fsync
 * @return error
 **/
-func (s *Store) put(id string, data []byte) error {
-	_, err := s.write(id, change{data: data})
+func (s *Store) put(id string, data []byte, deferred bool) error {
+	_, err := s.write(id, change{data: data, deferred: deferred})
 	return err
 }
 
 /**
 * remove borra id sin preguntar; si no tiene versión viva no escribe nada.
-* @param id string
+* @param id string, deferred bool
 * @return error
 **/
-func (s *Store) remove(id string) error {
-	_, err := s.write(id, change{tombstone: true})
+func (s *Store) remove(id string, deferred bool) error {
+	_, err := s.write(id, change{tombstone: true, deferred: deferred})
 	return err
 }
 
 /**
 * insert guarda id solo si no existe. Con un valor grande mira antes si existe, para no escribir el desborde en vano.
-* @param id string, data []byte
+* @param id string, data []byte, deferred bool
 * @return bool: si escribió, error
 **/
-func (s *Store) insert(id string, data []byte) (bool, error) {
+func (s *Store) insert(id string, data []byte, deferred bool) (bool, error) {
 	if checkWrite(id, data) == nil && !inline(id, data) {
 		if _, found, err := s.read(id); err != nil || found {
 			return false, err
 		}
 	}
-	return s.write(id, change{data: data, check: func(latest btree.Latest) btree.Action {
+	return s.write(id, change{data: data, deferred: deferred, check: func(latest btree.Latest) btree.Action {
 		if latest.Live {
 			return btree.Skip
 		}
@@ -262,21 +263,21 @@ func (s *Store) insert(id string, data []byte) (bool, error) {
 
 /**
 * delete borra id solo si existe.
-* @param id string
+* @param id string, deferred bool
 * @return bool: si borró, error
 **/
-func (s *Store) delete(id string) (bool, error) {
-	return s.write(id, change{tombstone: true})
+func (s *Store) delete(id string, deferred bool) (bool, error) {
+	return s.write(id, change{tombstone: true, deferred: deferred})
 }
 
 /**
 * update reemplaza id solo si existe y el valor cambió. Compara antes de bloquear la hoja (leer de desborde con la
 * hoja bloqueada frenaría a todos) y, con la hoja bloqueada, comprueba que la versión comparada siga siendo la
 * última (por su lsn); si cambió entre medio, repite.
-* @param id string, data []byte
+* @param id string, data []byte, deferred bool
 * @return bool: si escribió, error
 **/
-func (s *Store) update(id string, data []byte) (bool, error) {
+func (s *Store) update(id string, data []byte, deferred bool) (bool, error) {
 	if err := checkWrite(id, data); err != nil {
 		return false, err
 	}
@@ -289,7 +290,7 @@ func (s *Store) update(id string, data []byte) (bool, error) {
 			return false, nil
 		}
 		moved := false
-		applied, err := s.write(id, change{data: data, check: func(latest btree.Latest) btree.Action {
+		applied, err := s.write(id, change{data: data, deferred: deferred, check: func(latest btree.Latest) btree.Action {
 			moved = !latest.Live || latest.Version.LSN != cur.lsn
 			if moved {
 				return btree.Skip
@@ -362,5 +363,7 @@ func (s *Store) valueOf(v btree.Version) ([]byte, error) {
 * @return int64
 **/
 func (s *Store) count() int64 {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	return s.e.counts.get(s.file)
 }

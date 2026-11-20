@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -44,6 +45,21 @@ type procFS struct {
 	base crashfs.FS
 	mu   sync.RWMutex
 	dead bool
+
+	// budget, si es mayor que 0, son las operaciones que quedan antes de un corte en killMode (killAfter).
+	budget   atomic.Int64
+	killMode crashfs.Mode
+	killSeed int64
+}
+
+/**
+* killAfter arma un corte en mode cuando el proceso haga n operaciones más sobre el disco (en medio de lo que esté
+* haciendo). Se llama antes de empezar lo que se quiere cortar, sin operaciones en curso.
+* @param n int64, mode crashfs.Mode, seed int64
+**/
+func (p *procFS) killAfter(n int64, mode crashfs.Mode, seed int64) {
+	p.killMode, p.killSeed = mode, seed
+	p.budget.Store(n)
 }
 
 /**
@@ -72,6 +88,9 @@ func (p *procFS) kill(mode crashfs.Mode, seed int64) {
 * @return error
 **/
 func (p *procFS) do(op func() error) error {
+	if p.budget.Load() > 0 && p.budget.Add(-1) == 0 {
+		p.kill(p.killMode, p.killSeed)
+	}
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	if p.dead {

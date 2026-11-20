@@ -29,18 +29,24 @@ type pool struct {
 	scratch sync.Pool // copias de páginas para escribir; acotadas por las escrituras concurrentes
 
 	failed atomic.Pointer[error] // primer fallo de escritura o de WaitDurable
-	closed atomic.Bool
-	stop   chan struct{}
-	wg     sync.WaitGroup
+	closed atomic.Bool           // tras Close nadie fija un búfer más (pinLocked)
+
+	// arena es la memoria de todos los búferes (mapArena, fuera del heap de Go). arenaMu serializa su liberación:
+	// freeArena la libera una sola vez, cuando la caché está cerrada y ningún búfer está fijado.
+	arenaMu sync.Mutex
+	arena   page.Page
+
+	stop chan struct{}
+	wg   sync.WaitGroup
 
 	hits, misses, dirty, written atomic.Int64
 }
 
 /**
-* Open crea la caché con cfg.Buffers búferes en un solo arena (toda la memoria se reserva acá y no crece) y arranca el
-* escritor de fondo.
+* Open crea la caché con cfg.Buffers búferes en un solo arena fuera del heap de Go (toda la memoria se reserva acá y
+* no crece) y arranca el escritor de fondo.
 * @param cfg Config
-* @return Pool, error: ErrConfig si falta Smgr o Flusher o Buffers < 0
+* @return Pool, error: ErrConfig si falta Smgr o Flusher o Buffers < 0; el de mapArena si no hay memoria
 **/
 func Open(cfg Config) (Pool, error) {
 	if cfg.Smgr == nil || cfg.Flusher == nil || cfg.Buffers < 0 {
@@ -51,8 +57,11 @@ func Open(cfg Config) (Pool, error) {
 		n = EnvBuffers()
 	}
 
-	p := &pool{smgr: cfg.Smgr, flusher: cfg.Flusher, descs: make([]desc, n), stop: make(chan struct{})}
-	arena := newArena(n)
+	arena, err := mapArena(n)
+	if err != nil {
+		return nil, err
+	}
+	p := &pool{smgr: cfg.Smgr, flusher: cfg.Flusher, descs: make([]desc, n), arena: arena, stop: make(chan struct{})}
 	for i := range p.descs {
 		d := &p.descs[i]
 		d.id = int32(i)
@@ -62,7 +71,7 @@ func Open(cfg Config) (Pool, error) {
 		p.parts[i].m = map[Tag]int32{}
 	}
 	p.ring.init(ringLen(n))
-	p.scratch.New = func() any { return newArena(1) }
+	p.scratch.New = func() any { return heapPages(1) }
 
 	delay := cfg.BgWriterDelay
 	if delay == 0 {
@@ -76,12 +85,13 @@ func Open(cfg Config) (Pool, error) {
 }
 
 /**
-* newArena reserva n páginas contiguas alineadas a 8 (se piden como uint64): las marcas de visibilidad se ponen con
-* un OR atómico de 32 bits y la copia para escribir se lee con cargas atómicas.
+* heapPages reserva n páginas contiguas en el heap de Go alineadas a 8 (se piden como uint64): las marcas de
+* visibilidad se ponen con un OR atómico de 32 bits y la copia para escribir se lee con cargas atómicas. Son las
+* copias para escribir (scratch) y, donde no hay mmap, el arena.
 * @param n int: cantidad de páginas
 * @return page.Page: n×page.Size bytes
 **/
-func newArena(n int) page.Page {
+func heapPages(n int) page.Page {
 	words := make([]uint64, n*page.Size/8)
 	return unsafe.Slice((*byte)(unsafe.Pointer(&words[0])), n*page.Size)
 }
@@ -199,7 +209,10 @@ func (p *pool) pinExisting(tag Tag, strategy Strategy) (*desc, bool) {
 		d := &p.descs[id]
 		d.mu.Lock()
 		if d.tag == tag && d.state != stateEmpty {
-			d.pins++
+			if !p.pinLocked(d) {
+				d.mu.Unlock()
+				return nil, false // cerrada: pin lo ve en usable
+			}
 			d.bumpUsage(strategy)
 			d.mu.Unlock()
 			return d, true
@@ -326,7 +339,26 @@ func (t Tag) String() string {
 func (p *pool) unpin(d *desc) {
 	d.mu.Lock()
 	d.pins--
+	last := d.pins == 0
 	d.mu.Unlock()
+	if last && p.closed.Load() {
+		p.freeArena() // el último pin de una caché cerrada libera la memoria que Close no pudo
+	}
+}
+
+/**
+* pinLocked fija el búfer salvo que la caché esté cerrada. Toda fijada pasa por acá, con d.mu tomado: como Close
+* marca closed antes de mirar los pins (también bajo d.mu), tras Close los pins solo bajan, y freeArena puede liberar
+* el arena en cuanto los ve todos en 0.
+* @param d *desc: con d.mu tomado
+* @return bool: false si la caché está cerrada
+**/
+func (p *pool) pinLocked(d *desc) bool {
+	if p.closed.Load() {
+		return false
+	}
+	d.pins++
+	return true
 }
 
 /**
@@ -387,13 +419,57 @@ func (p *pool) Stats() Stats {
 }
 
 /**
-* Close detiene el escritor de fondo; no escribe nada. Llamarlo otra vez no hace nada.
-* @return error: siempre nil
+* Close detiene el escritor de fondo y libera el arena; no escribe nada. Desde acá nadie fija un búfer más; si
+* alguno sigue fijado (un Handle sin Release), el arena se libera con el último Release y no antes: tocarlo
+* liberado sería un SIGSEGV. Llamarlo otra vez no hace nada.
+* @return error: el de unmapArena
 **/
 func (p *pool) Close() error {
-	if p.closed.CompareAndSwap(false, true) {
-		close(p.stop)
-		p.wg.Wait()
+	if !p.closed.CompareAndSwap(false, true) {
+		return nil
 	}
-	return nil
+	close(p.stop)
+	p.wg.Wait()
+	return p.freeArena()
+}
+
+/**
+* freeArena libera el arena si la caché está cerrada y ningún búfer está fijado; si no, no hace nada. Después deja
+* los búferes sin memoria (data nil): un acceso tardío es un pánico de índice, no memoria ajena, y el GC no ve
+* punteros a un rango que el runtime podría reutilizar.
+* @return error: el de unmapArena
+**/
+func (p *pool) freeArena() error {
+	p.arenaMu.Lock()
+	defer p.arenaMu.Unlock()
+	if p.arena == nil || p.pinned() {
+		return nil
+	}
+	for i := range p.descs {
+		d := &p.descs[i]
+		d.mu.Lock()
+		d.data = nil
+		d.mu.Unlock()
+	}
+	mem := p.arena
+	p.arena = nil
+	return unmapArena(mem)
+}
+
+/**
+* pinned dice si algún búfer está fijado. Se llama con la caché cerrada: los pins ya no suben, así que si los ve
+* todos en 0 siguen en 0.
+* @return bool
+**/
+func (p *pool) pinned() bool {
+	for i := range p.descs {
+		d := &p.descs[i]
+		d.mu.Lock()
+		pins := d.pins
+		d.mu.Unlock()
+		if pins != 0 {
+			return true
+		}
+	}
+	return false
 }

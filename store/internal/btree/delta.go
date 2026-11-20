@@ -13,12 +13,33 @@ const (
 	splitRightHeaderSize = 16    // prev(4) next(4) level(4) flags(2) count(2)
 	newRootHeaderSize    = 4 + 4 // level(4) left(4)
 	metaRootDeltaSize    = 4 + 4 // root(4) level(4)
+	initMetaDeltaSize    = 4 + 8 // root(4) frozenXID(8); el formato viejo trae solo root(4)
+	frozenDeltaSize      = 8     // frozenXID(8)
 	itemLenSize          = 2     // largo de cada ítem en el delta de la derecha
 )
 
 // blockDelta arma el delta de un número de bloque.
 func blockDelta(b page.BlockNumber) []byte {
 	return le.AppendUint32(nil, uint32(b))
+}
+
+// initMetaDelta arma el delta de la meta de un store nuevo: la raíz y el frozenXID.
+func initMetaDelta(root page.BlockNumber, frozen page.XID) []byte {
+	return le.AppendUint64(blockDelta(root), uint64(frozen))
+}
+
+/**
+* parseInitMeta lee el delta de la meta de KindInitStore: root(4) y frozenXID(8), o solo root(4) (formato anterior al
+* congelado: frozenXID 0, el store retiene el truncado hasta su primera limpieza completa).
+* @param delta []byte: ya validado por checkFixedDelta
+* @return page.BlockNumber, page.XID
+**/
+func parseInitMeta(delta []byte) (page.BlockNumber, page.XID) {
+	root := page.BlockNumber(le.Uint32(delta))
+	if len(delta) < initMetaDeltaSize {
+		return root, 0
+	}
+	return root, page.XID(le.Uint64(delta[blockDeltaSize:]))
 }
 
 // itemDelta arma el delta de un ítem nuevo: el número donde va y el ítem.
@@ -206,7 +227,7 @@ func checkDelta(kind wal.Kind, i int, delta []byte) error {
 	case kind == wal.KindNewRoot && i == 0:
 		_, err = parseNewRoot(delta)
 	case kind == wal.KindLeafVacuum:
-		_, _, err = parseVacuum(delta)
+		_, err = parseVacuum(delta)
 	case kind == wal.KindSetHints:
 		_, err = parseHints(delta)
 	default:
@@ -216,15 +237,23 @@ func checkDelta(kind wal.Kind, i int, delta []byte) error {
 }
 
 /**
-* checkFixedDelta valida los deltas de largo fijo: un bloque, la raíz de la meta o ninguno.
+* checkFixedDelta valida los deltas de largo fijo: un bloque (con el frozenXID en la meta de KindInitStore), la raíz
+* de la meta, el frozenXID de KindSetFrozen o ninguno.
 * @param kind wal.Kind, i int, delta []byte
 * @return error
 **/
 func checkFixedDelta(kind wal.Kind, i int, delta []byte) error {
 	want := 0
 	switch {
+	case kind == wal.KindInitStore && i == 0 && len(delta) == initMetaDeltaSize:
+		want = initMetaDeltaSize
 	case kind == wal.KindInitStore && i == 0, kind == wal.KindSplit:
 		want = blockDeltaSize
+	case kind == wal.KindSetFrozen:
+		if len(delta) != frozenDeltaSize {
+			return badRecord(kind, "bad delta length")
+		}
+		return nil
 	case kind == wal.KindNewRoot && i == 1:
 		want = metaRootDeltaSize
 	}

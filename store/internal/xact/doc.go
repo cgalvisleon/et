@@ -29,9 +29,15 @@
 // se escribe antes, después de wal.Flusher.WaitDurable(el mayor lsn de sus grupos). Un solo mutex hoja guarda las
 // ranuras y se suelta durante toda E/S y toda espera al WAL (la ranura queda marcada como cargándose o
 // escribiéndose). Leer una página más allá del final del archivo da ceros (en curso); escribirla extiende el
-// archivo. Flush escribe las sucias y hace fsync de los archivos escritos y del directorio. Truncate borra los
-// archivos enteros por debajo del horizonte y después Status devuelve ErrTruncated; al abrir, el primer archivo que
-// queda marca ese límite. Recover(next), al terminar la recuperación, fija el horizonte y pone en cero los estados
+// archivo. Flush escribe las sucias y hace fsync de los archivos escritos y del directorio. Truncate(before) borra los
+// archivos enteros por debajo de before (de menor a mayor; si ya no hay nada que borrar no lista el directorio) y
+// después Status de un xid de esos devuelve confirmada con lsn 0 sin tocar el disco, y SetStatus ErrTruncated; al
+// abrir, el primer archivo que queda marca ese límite (Oldest), y el motor vuelve a llamar a Truncate con el frozenXID
+// de su control (fija el límite aunque falten archivos y termina un truncado cortado). Leer un truncado como
+// confirmada es correcto porque el motor solo trunca por debajo de su frozenXID, y por debajo toda versión que queda
+// está congelada o «liberándose» (ninguna de las dos consulta el archivo de estados) y no hay abortadas
+// (store/doc.go, «Congelado y truncado del archivo de estados»). Config.FilePages cambia las páginas por archivo
+// (solo pruebas: con 1, un archivo son 32.768 xids y el truncado se ve con pocas transacciones; cambia el formato). Recover(next), al terminar la recuperación, fija el horizonte y pone en cero los estados
 // desde next (resto de su página, páginas y archivos siguientes), como TrimCLOG: así un estado que llegó al disco sin
 // registro en el WAL no se pega a un xid que se vuelve a asignar. Un fallo de escritura o fsync deja todo en error.
 //

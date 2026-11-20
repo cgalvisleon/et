@@ -25,10 +25,12 @@ const lockName = "LOCK"
 // Engine es un motor abierto: un directorio con su caché, su WAL y sus stores. No hay estado global: un proceso
 // puede abrir varios motores (en directorios distintos).
 //
-// Orden de los locks del motor: closeMu (lectura) → ddlMu → Store.mu; closeMu (lectura) → Store.mu (lectura) →
+// Orden de los locks del motor: closeMu (lectura) → ddlMu → txGate → Store.mu; closeMu (lectura) → Store.mu (lectura) →
 // commitMu (lectura) → páginas → writeMu del WAL → counts.mu; páginas → hintGate (lectura); ckptMu → hintGate
 // (escritura) → writeMu; ckptMu → commitMu (escritura); ckptMu → ddlMu; Store.vacuumMu → closeMu (lectura) →
-// Store.mu (lectura) → páginas. failMu, counts.mu y el catálogo en memoria son hojas.
+// Store.mu (lectura) → páginas; closeMu (lectura) → txGate (lectura); closeMu (lectura) → ckptMu → ddlMu y
+// Store.vacuumMu → closeMu (lectura) → Store.mu → commitMu (escritura) (Verify y Repair). failMu, counts.mu y el
+// catálogo en memoria son hojas.
 type Engine struct {
 	dir string
 	fs  vfs.FS
@@ -75,18 +77,32 @@ type Engine struct {
 	// BeginCheckpoint.
 	hintGate sync.RWMutex
 
+	// txGate y openTx: lotes y snapshots abiertos. newBatch y snapshotFor suman a openTx con txGate en lectura;
+	// Empty toma txGate en escritura y exige openTx = 0, así ninguno empieza mientras vacía un store.
+	txGate sync.RWMutex
+	openTx atomic.Int64
+
 	// writes cuenta las escrituras aplicadas (sueltas y de lotes): la limpieza de fondo mira cuántas hubo desde la
 	// última.
 	writes atomic.Int64
 
 	lastCheckpoint atomic.Int64 // hora del último checkpoint (Unix en nanosegundos)
-	replayed       int          // registros rehechos por Open, sin contar los checkpoints (pruebas, regla 2)
 
-	stop chan struct{} // se cierra en Close: detiene el checkpointer y la limpieza de fondo
+	// lastCommit es el mayor lsn de confirmación anotado (durable o diferido): WaitDurable espera el WAL hasta él. Se
+	// sube antes de anotar confirmada en el archivo de estados, así lo visible siempre queda cubierto.
+	lastCommit atomic.Uint64
+
+	replayed int // registros rehechos por Open, sin contar los checkpoints (pruebas, regla 2)
+
+	frozen frozenXIDs // el frozenXID de cada store leído y el del control al abrir (ver frozen.go)
+
+	timers timers // los temporizadores de los lotes y snapshots abiertos: Close los detiene
+
+	stop chan struct{} // se cierra en Close: detiene el checkpointer, el escritor del WAL y la limpieza de fondo
 	bg   sync.WaitGroup
 
-	// afterStep, si no es nil, corre al terminar cada paso del checkpoint (1 a 6). Solo para las pruebas: simula un
-	// corte entre dos pasos.
+	// afterStep, si no es nil, corre al terminar cada paso del checkpoint (1 a 7, el 7 es el truncado del archivo de
+	// estados). Solo para las pruebas: simula un corte entre dos pasos.
 	afterStep func(step int)
 }
 
@@ -118,12 +134,17 @@ func open(fsys vfs.FS, dir string, cfg config) (*Engine, error) {
 		proxy:   &walProxy{},
 		handles: map[string]*Store{},
 		stop:    make(chan struct{}),
+		frozen:  frozenXIDs{files: map[smgr.FileNo]page.XID{}},
 	}
 	if err := e.recover(); err != nil {
 		return nil, errors.Join(err, e.closeResources())
 	}
 	e.bg.Add(1)
 	go e.checkpointer()
+	if cfg.walWriterDelay > 0 {
+		e.bg.Add(1)
+		go e.walWriter()
+	}
 	if cfg.vacuumEvery > 0 {
 		e.bg.Add(1)
 		go e.vacuumer()
@@ -133,7 +154,7 @@ func open(fsys vfs.FS, dir string, cfg config) (*Engine, error) {
 
 /**
 * close detiene las operaciones nuevas, espera a las que están en curso (también la limpieza de un store), detiene el
-* checkpointer y la limpieza de fondo, hace el checkpoint final (state = cerrado bien) y cierra todo. Si el motor quedó inutilizable no escribe nada y devuelve ese fallo.
+* checkpointer, el escritor del WAL y la limpieza de fondo, hace el checkpoint final (state = cerrado bien) y cierra todo. Si el motor quedó inutilizable no escribe nada y devuelve ese fallo.
 * Cerrar dos veces no hace nada.
 * @return error
 **/
@@ -146,6 +167,7 @@ func (e *Engine) close() error {
 	e.closed = true
 	e.closeMu.Unlock()
 
+	e.timers.closeAll()
 	close(e.stop)
 	e.bg.Wait()
 	err := e.checkpoint(control.StateShutdown, false)
@@ -262,4 +284,20 @@ func (e *Engine) logRecord(kind wal.Kind, main []byte) (page.LSN, error) {
 		return 0, err
 	}
 	return lsn, e.log.WaitDurable(lsn)
+}
+
+/**
+* openTxn anota un lote o snapshot abierto (Empty no corre mientras haya alguno). Con closeMu en lectura.
+**/
+func (e *Engine) openTxn() {
+	e.txGate.RLock()
+	e.openTx.Add(1)
+	e.txGate.RUnlock()
+}
+
+/**
+* closeTxn anota que un lote o snapshot terminó.
+**/
+func (e *Engine) closeTxn() {
+	e.openTx.Add(-1)
 }

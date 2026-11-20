@@ -49,10 +49,15 @@ func TestRoundTrip(t *testing.T) {
 	}
 }
 
-// TestMaxValue: un valor de MaxValueLen (64 MiB) va y vuelve; uno más grande o vacío se rechaza.
+// TestMaxValue: un valor de MaxValueLen (64 MiB; 16 MiB con -race) va y vuelve; uno más grande o vacío se rechaza.
 func TestMaxValue(t *testing.T) {
 	e := newEnv(t, 256)
-	value := randomValue(rand.New(rand.NewSource(2)), MaxValueLen)
+	size := MaxValueLen
+	if raceEnabled {
+		// Con -race el valor de 64 MiB sobre el disco simulado pasa de 2 GB; 16 MiB cruza igual miles de páginas.
+		size = 16 << 20
+	}
+	value := randomValue(rand.New(rand.NewSource(2)), size)
 	ref, err := e.ov.Write(testFile, 7, value)
 	if err != nil {
 		t.Fatal(err)
@@ -62,7 +67,7 @@ func TestMaxValue(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !bytes.Equal(got, value) {
-		t.Fatal("el valor de 64 MiB no coincide")
+		t.Fatalf("el valor de %d B no coincide", size)
 	}
 	for _, n := range []int{0, MaxValueLen + 1} {
 		if _, err := e.ov.Write(testFile, 7, make([]byte, n)); !errors.Is(err, ErrBadLen) {

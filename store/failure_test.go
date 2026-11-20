@@ -60,7 +60,7 @@ func runFailure(t *testing.T, inject func(crashfs.FS, int), seed uint64) {
 	fsys.FailSyncAfter(-1)
 	fsys.SetCapacity(0)
 	e = openTest(t, fsys, testConfig())
-	model = checkRecovered(t, e, model, pending)
+	model = recoveredOneOf(t, e, model, pending)
 	verifyTrees(t, e)
 	o := op{kind: "put", store: "a", id: "after-failure", value: "ok"}
 	o.apply(model)
@@ -71,7 +71,7 @@ func runFailure(t *testing.T, inject func(crashfs.FS, int), seed uint64) {
 	fsys.Crash(crashfs.LoseUnsynced, int64(seed))
 	e = openTest(t, fsys, testConfig())
 	defer e.Close()
-	checkRecovered(t, e, model, nil)
+	recoveredOneOf(t, e, model, nil)
 	verifyTrees(t, e)
 }
 

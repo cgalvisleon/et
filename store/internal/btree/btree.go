@@ -51,7 +51,7 @@ const (
 	EntryOverflow     EntryFlags = 1 << 1 // el valor está en desborde
 	EntryXidCommitted EntryFlags = 1 << 2 // marca: su transacción confirmó y el WAL es durable hasta la confirmación
 	EntryXidAborted   EntryFlags = 1 << 3 // marca: su transacción abortó
-	EntryFrozen       EntryFlags = 1 << 4 // marca: visible para todos (fase 2)
+	EntryFrozen       EntryFlags = 1 << 4 // congelada: confirmada y visible para todos, sin consultar el archivo de estados
 	EntryFreeing      EntryFlags = 1 << 5 // versión muerta cuya cadena de desborde se está liberando (pregunta 58)
 )
 
@@ -129,6 +129,13 @@ type VacuumOptions struct {
 	// snapshot abierto ve sus versiones confirmadas.
 	Horizon page.XID
 
+	// FreezeLimit: se congelan las versiones confirmadas con xid < FreezeLimit (0 = no congela; se acota a Horizon).
+	FreezeLimit page.XID
+
+	// Aggressive: salta por el mapa de visibilidad solo las hojas todo-congeladas (no las todo-visibles), así la
+	// pasada puede subir el frozenXID del store (VacuumStats.Complete).
+	Aggressive bool
+
 	// XID es el de la limpieza: va en sus registros del WAL (0 vale).
 	XID page.XID
 
@@ -143,6 +150,19 @@ type VacuumStats struct {
 	Leaves  int // hojas recorridas
 	Removed int // versiones quitadas de las hojas
 	Freed   int // cadenas de desborde liberadas
+	Frozen  int // versiones congeladas
+	Skipped int // hojas saltadas por el mapa de visibilidad
+
+	// SkippedVisible son las hojas saltadas por ser todo-visibles sin ser todo-congeladas (solo sin Aggressive).
+	SkippedVisible int
+
+	// Complete: la pasada terminó sin error y no saltó ninguna hoja que no fuera todo-congelada, así que toda versión
+	// del store con xid < FrozenXID está congelada o quitada (o «liberándose», que nunca consulta su estado).
+	Complete bool
+
+	// FrozenXID es el menor xid de una versión que quedó sin congelar en las hojas recorridas, acotado por Horizon:
+	// el frozenXID que puede guardar el store si Complete.
+	FrozenXID page.XID
 }
 
 // Tree es el árbol de un store.

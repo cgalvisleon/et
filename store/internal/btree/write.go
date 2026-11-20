@@ -114,6 +114,10 @@ func (t *BTree) writeLeaf(h buffer.Handle, n node, k key, item []byte, w Write, 
 		return Result{}, false, t.splitAndFinish(h, n, atEnd, w.XID)
 	}
 
+	if err := t.clearVisible(n); err != nil {
+		h.Release()
+		return Result{}, true, err
+	}
 	flags, delta := countChange(latest.Live, !w.Tombstone)
 	if w.Commit {
 		flags |= wal.FlagCommit
@@ -132,6 +136,21 @@ func (t *BTree) writeLeaf(h buffer.Handle, n node, k key, item []byte, w Write, 
 		t.fastLeaf.Store(uint32(n.blk))
 	}
 	return Result{Applied: true, LSN: lsn, CountDelta: delta}, true, nil
+}
+
+/**
+* clearVisible borra los bits de la hoja en el mapa de visibilidad antes de cambiarla (KindVMClear, con la hoja
+* bloqueada en exclusivo): si la hoja tiene page.FlagAllVisible su bit puede estar puesto, y el registro del mapa va
+* antes que el de la hoja, así ningún prefijo del WAL deja una hoja con una versión nueva y su bit puesto (la limpieza
+* la saltaría). El registro de la hoja apaga la marca de la página. Sin mapa no hace nada.
+* @param n node: la hoja, bloqueada en exclusivo
+* @return error
+**/
+func (t *BTree) clearVisible(n node) error {
+	if t.vm == nil || n.p.Flags()&page.FlagAllVisible == 0 {
+		return nil
+	}
+	return t.vm.Clear(t.file, n.blk)
 }
 
 /**

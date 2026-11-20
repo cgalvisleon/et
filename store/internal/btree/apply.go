@@ -20,7 +20,10 @@ func applyBlock(kind wal.Kind, i int, p page.Page, delta []byte, lsn page.LSN) e
 	}
 	switch {
 	case kind == wal.KindInitStore && i == 0:
-		return initMetaPage(p, page.BlockNumber(le.Uint32(delta)))
+		root, frozen := parseInitMeta(delta)
+		return initMetaPage(p, root, frozen)
+	case kind == wal.KindSetFrozen:
+		return applyMetaFrozen(p, delta)
 	case kind == wal.KindInitStore:
 		return initTreePage(p, page.Opaque{Flags: page.OpaqueLeaf | page.OpaqueRoot})
 	case kind == wal.KindLeafWrite:
@@ -64,7 +67,8 @@ func initTreePage(p page.Page, o page.Opaque) error {
 
 /**
 * applyLeafWrite inserta la entrada del delta en su número y le pone el lsn del registro: la clave (id, lsn) recién
-* existe acá, con la hoja bloqueada desde antes de reservar.
+* existe acá, con la hoja bloqueada desde antes de reservar. Apaga page.FlagAllVisible: la versión nueva no es visible
+* para todos (su bit del mapa de visibilidad se borró antes, en un KindVMClear anterior).
 * @param p page.Page, delta []byte, lsn page.LSN
 * @return error
 **/
@@ -73,6 +77,7 @@ func applyLeafWrite(p page.Page, delta []byte, lsn page.LSN) error {
 	if err := insertAt(wal.KindLeafWrite, p, off, item); err != nil {
 		return err
 	}
+	p.SetFlags(p.Flags() &^ page.FlagAllVisible)
 	stored, err := p.Item(off)
 	if err != nil {
 		return err

@@ -97,7 +97,7 @@ Cada tabla lista la API pública principal de cada paquete. `go doc github.com/c
 | `queue` | `New[T](size, maxEvents, period, handler)`, `Push`, `Len`, `Close` | `q.Push(item)` |
 | `crontab` | `New(tag, store, opts...)` (instancia; `WithHandler`) o `Load` (global), `CronJob`, `ScheduleJob`, `StopJob`, `StartJob`, `RemoveJob`, `GetJob`, `Http*`; estados `pending`→`scheduled`⇄`running`→`finished`/`failed`, `paused`, `missed`, `canceled`; `LastRun`, `WithRetries`, `WithTimeout`; las réplicas con el mismo tag eligen una líder y la relevan | `crontab.CronJob(tag, owner, "0 * * * *", 0, nil, fn)` |
 | `resilience` | `New()`, `LoadInstance(Params)`, `Instance.Run`, `IsDone`, `IsFailed`, `Stop` | `inst, _ := r.LoadInstance(resilience.Params{Fn: send, TotalAttempts: 3})` |
-| `store` | `Open(dir)` → `Engine` (`Store`, `DropStore`, `Stores`, `Checkpoint`, `Close`) → `Store` (`Put`, `Remove`, `Insert`, `Update`, `Delete`, `Read`, `Count`); motor al estilo PostgreSQL (F-23) | `s, _ := e.Store("users"); s.Put("id", data)` |
+| `store` | `Open(dir)` → `Engine` (`Store`, `DropStore`, `Stores`, `Checkpoint`, `Vacuum`, `NewBatch`, `Snapshot`, `SnapshotFor`, `WaitDurable`, `Verify`, `Repair`, `Close`) → `Store` (`Put`, `Remove`, `Insert`, `Update`, `Delete`, `Read`, `GetVersion`, `Exists`, `Count`, `Empty`, `Deferred`, `Keys`, `KeysAfter`, `KeysPrefix`, `ForEach`, `ForEachPrefix`, `ForEachRange`, `ForEachBorrowed`, sus formas `…In(lote, …)`, `ReadAt`/`GetVersionAt`/`ExistsAt`/`ForEachAt`/`CountAt(snapshot, …)`); `Batch` (`Commit`, `CommitDeferred`, `Rollback`); motor al estilo PostgreSQL con MVCC (F-23) | `s, _ := e.Store("users"); s.Put("id", data)` |
 
 ### Seguridad
 
@@ -344,7 +344,7 @@ defer q.Close()
 
 ### Store embebido clave/valor
 
-`store` es un motor de almacenamiento para construir bases de datos sobre él, tomando como referencia el almacenamiento de PostgreSQL (F-23): un árbol B+ en disco en páginas de 8 KB, una caché de páginas de tamaño fijo (nada del índice vive en RAM), un WAL por página con imágenes enteras tras cada checkpoint, checkpoints en segundo plano y una recuperación que solo reproduce el WAL desde el último checkpoint. Un motor es un directorio (un proceso a la vez) con varios stores de `(id string, data []byte)`; los valores que no caben en una hoja van a páginas de desborde (hasta 64 MiB). Cada operación suelta es su propia transacción y, con `SYNC_ON_WRITE` (por omisión), vuelve cuando el WAL está en disco (los escritores comparten cada fsync). Disponible hoy (fase 1A): `Open`, `Close`, `Store`, `DropStore`, `Stores`, `Checkpoint`; `Put`, `Remove` (ciegos), `Insert`, `Update`, `Delete` (devuelven si escribieron), `Read` y `Count`. Siguen los lotes, los snapshots y los recorridos. Diseño y formatos: [`store/doc.go`](../store/doc.go).
+`store` es un motor de almacenamiento para construir bases de datos sobre él, tomando como referencia el almacenamiento de PostgreSQL (F-23): un árbol B+ en disco en páginas de 8 KB, una caché de páginas de tamaño fijo (nada del índice vive en RAM), un WAL por página con imágenes enteras tras cada checkpoint, checkpoints en segundo plano y una recuperación que solo reproduce el WAL desde el último checkpoint. Un motor es un directorio (un proceso a la vez) con varios stores de `(id string, data []byte)`; los valores que no caben en una hoja van a páginas de desborde (hasta 64 MiB). Cada operación suelta es su propia transacción y, con `SYNC_ON_WRITE` (por omisión), vuelve cuando el WAL está en disco (los escritores comparten cada fsync). Disponible hoy (fases 1A, 1B, los recorridos, la escritura diferida y las versiones de la fase 2, y `Verify`/`Repair` de la fase 3): `Open`, `Close`, `Store`, `DropStore`, `Stores`, `Checkpoint`; `Put`, `Remove` (ciegos), `Insert`, `Update`, `Delete` (devuelven si escribieron), `Read`, `Exists` (sin leer el valor), `Count` (un contador, O(1)) y `Empty` (O(1), como `TRUNCATE`: devuelve `ErrBusy` mientras haya lotes o snapshots abiertos). Cada cambio escribe una versión nueva (MVCC): una operación suelta lee la más nueva confirmada (Read Committed) y espera hasta `LOCK_TIMEOUT` a otro escritor; un lote (`NewBatch`, los métodos `…In`, `Commit`/`Rollback`) es atómico entre stores, ve sus propios cambios y lee de su snapshot (Repeatable Read: un cambio en conflicto da `ErrSerialization`); un `Snapshot` da lecturas consistentes con `ReadAt`. Lotes y snapshots terminan al pasar `TRANSACTION_TIMEOUT` (`ErrTimeout`). Las versiones viejas se limpian en segundo plano (`VACUUM_INTERVAL`, `VACUUM_THRESHOLD`) o con `Vacuum()`. Los recorridos siguen las hojas enlazadas en orden de id (ascendente o descendente, con offset y limit, por prefijo o rango `[from, to)`) sobre un snapshot: `ForEach`, `Keys` y `KeysAfter` (paginar) toman uno propio, `ForEachAt` y `CountAt` (O(n)) usan el tuyo; el callback no tiene nada tomado mientras corre, `ForEachBorrowed` presta `data` solo dentro del callback, y los recorridos grandes usan un anillo de búferes en vez de vaciar la caché. La escritura diferida (como `synchronous_commit = off` de PostgreSQL) es para quien agrupa sus propias confirmaciones: `store.Deferred()` (`Put`, `Remove`, `Insert`, `Update`, `Delete`) y `batch.CommitDeferred()` confirman sin esperar el fsync — se ven enseguida y un corte puede perderlas enteras (nunca a medias) hasta que `engine.WaitDurable()` vuelva; un escritor de fondo del WAL las hace durables igual en ~200 ms, y `SYNC_ON_WRITE=false` vuelve diferida toda confirmación. `GetVersion`, `GetVersionIn` y `GetVersionAt` devuelven el valor con su versión (el LSN que lo escribió, 0 si no existe) para concurrencia optimista; la escritura condicional es un lote, que da `ErrSerialization` si alguien cambió el id después de que empezó. `engine.Verify()` revisa el motor abierto sin cambiar nada (control, catálogo, archivos de datos huérfanos y, de a un store, su árbol, sus cadenas de desborde, la lista de libres, el mapa de visibilidad, el congelado y `Count`) y devuelve un `Report` con totales y hallazgos; `engine.Repair()` además arregla, con WAL (seguro ante un corte), lo que se puede sin perder nada sano — archivos huérfanos, páginas sin dueño y cadenas huérfanas (vuelven a la lista de libres), bits del mapa de visibilidad mal puestos, un `Count` equivocado — y deja lo demás (una hoja ilegible, una cadena viva rota) informado y sin tocar; `go run ./cmd/storecheck -dir <dir> [-repair]` imprime el informe. Diseño y formatos: [`store/doc.go`](../store/doc.go).
 
 ```go
 engine, err := store.Open("./data")
@@ -361,6 +361,45 @@ changed, err := customers.Update("c-001", []byte(`{"name":"Ana M."}`)) // false 
 deleted, err := customers.Delete("c-002")                             // false si no existe
 err = customers.Remove("c-003")                                       // borrado ciego
 n := customers.Count()
+
+// Un lote: atómico entre stores, un solo fsync en Commit
+orders, _ := engine.Store("orders")
+tx := engine.NewBatch()
+_ = customers.PutIn(tx, "c-001", []byte(`{"name":"Ana","orders":1}`))
+_, _ = orders.InsertIn(tx, "o-001", []byte(`{"customer":"c-001"}`))
+if err := tx.Commit(); err != nil { // ErrSerialization: reintenta el lote
+    return err
+}
+
+// Un snapshot: lecturas consistentes mientras otros escriben
+view := engine.Snapshot()
+defer view.Close()
+data, found, err = customers.ReadAt(view, "c-001")
+
+// Recorridos: ids en orden sobre un snapshot; devolver false para parar
+err = customers.ForEach(func(id string, data []byte) (bool, error) {
+    fmt.Println(id, string(data))
+    return true, nil
+}, true, 0, 100) // ascendente, offset 0, como mucho 100
+page, err := customers.KeysAfter("", 50) // página siguiente: KeysAfter(page[len(page)-1], 50)
+exists, err := customers.Exists("c-001")
+
+// Escritura diferida: sin fsync por escritura; un WaitDurable para todo el grupo
+log := customers.Deferred()
+for _, e := range events {
+    _ = log.Put(e.ID, e.Data) // se ve ya, durable tras WaitDurable
+}
+err = engine.WaitDurable()
+
+// Versiones: el LSN de la versión visible (0 si no existe)
+data, version, found, err := customers.GetVersion("c-001")
+
+// Verify (solo lee) o Repair (arregla lo que puede, seguro ante un corte); el daño va en el informe
+report, err := engine.Verify()
+fmt.Print(report.String()) // totales y una línea por hallazgo
+if !report.Clean() {
+    report, err = engine.Repair() // report.Pending(): lo que queda sin arreglar
+}
 ```
 
 ### Workflows con `jwf`
@@ -439,7 +478,7 @@ hits, _ := index.Search(ctx, tenantId, projectId, "reset the router", 5, 0.3, em
 | `dt` | `PRODUCTION` (`true` guarda en Redis) |
 | `jwf`, `jsql` | `MAX_AUDIT_LOG` (1000) |
 | `jwsp` | `WHATSAPP_API_URL` |
-| `store` | `STORE_CACHE_SIZE` (MB, 128), `WAL_SEGMENT_SIZE` (MB, 128), `SYNC_ON_WRITE` (true), `CHECKPOINT_TIMEOUT` (s, 300), `MAX_WAL_SIZE` (MB, 1024), `LOCK_TIMEOUT` (s, 5) |
+| `store` | `STORE_CACHE_SIZE` (MB, 128), `WAL_SEGMENT_SIZE` (MB, 128), `SYNC_ON_WRITE` (true), `CHECKPOINT_TIMEOUT` (s, 300), `MAX_WAL_SIZE` (MB, 1024), `LOCK_TIMEOUT` (s, 5), `TRANSACTION_TIMEOUT` (s, 600), `VACUUM_INTERVAL` (s, 60; 0 = apagada), `VACUUM_THRESHOLD` (escrituras, 1000) |
 | `validator` | `LANG` |
 | `middleware` | `TELEMETRY_FORMAT` (`text` en una terminal, `json` en otro caso, `off`), `TELEMETRY_LOG` (`all`, `errors`), `LATENCY_LIMIT` (1000 ms, `WARN` por encima), `REQUESTS_LIMIT` (400 por segundo por método y ruta) |
 
@@ -450,7 +489,8 @@ go run ./cmd/create      # scaffolding: proyecto, microservicio, modelo, rpc
 go run ./cmd/apigateway  # API gateway (ettp)
 go run ./cmd/server      # nodo TCP (puerto 1377); ./cmd/client se conecta a él
 go run ./cmd/ia          # API HTTP de RAG (PORT, por defecto 3300)
-go run ./cmd/store       # ejemplo de store: Open, Store, Put, Read, Insert, Update, Delete, Remove, Close
+go run ./cmd/store       # ejemplo de store: Open, Store, Put, Read, Insert, Update, Delete, Remove, batch, snapshot, Vacuum, Close
+go run ./cmd/storecheck -dir <dir> [-repair]  # revisa (o repara) un motor de store e imprime el informe
 ```
 
 También `cmd/et`, `cmd/daemon`, `cmd/jsql`, `cmd/install`, `cmd/watcher`, `cmd/resilience`, `cmd/wsp` y `cmd/jwf`.

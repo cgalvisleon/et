@@ -604,7 +604,8 @@ func TestVacuumResumeFree(t *testing.T) {
 	}
 }
 
-// TestVacuumRedoRejects: KindLeafVacuum y KindSetHints con deltas inválidos no tocan páginas.
+// TestVacuumRedoRejects: KindLeafVacuum (también con congelado), KindSetHints y KindSetFrozen con deltas inválidos
+// no tocan páginas.
 func TestVacuumRedoRejects(t *testing.T) {
 	e := openEnv(t, crashfs.New(), wal.Start, 16)
 	tr := createTree(t, e)
@@ -621,12 +622,20 @@ func TestVacuumRedoRejects(t *testing.T) {
 		return b
 	}
 	bad := []wal.Record{
-		{Kind: wal.KindLeafVacuum, Blocks: block(u16(0, 0))},                      // nada que hacer
-		{Kind: wal.KindLeafVacuum, Blocks: block(u16(0, 2, 2, 1))},                // fuera de orden
-		{Kind: wal.KindLeafVacuum, Blocks: block(u16(1, 1, 1, 1))},                // marca y quita el mismo
-		{Kind: wal.KindLeafVacuum, Blocks: block(u16(0, 1, 9))},                   // no existe
-		{Kind: wal.KindLeafVacuum, Blocks: block(u16(1, 0, 1))},                   // marca una versión sin desborde
-		{Kind: wal.KindLeafVacuum, Blocks: block(u16(0, 1))},                      // corto
+		{Kind: wal.KindLeafVacuum, Blocks: block(u16(0, 0))},             // nada que hacer
+		{Kind: wal.KindLeafVacuum, Blocks: block(u16(0, 2, 2, 1))},       // fuera de orden
+		{Kind: wal.KindLeafVacuum, Blocks: block(u16(1, 1, 1, 1))},       // marca y quita el mismo
+		{Kind: wal.KindLeafVacuum, Blocks: block(u16(0, 1, 9))},          // no existe
+		{Kind: wal.KindLeafVacuum, Blocks: block(u16(1, 0, 1))},          // marca una versión sin desborde
+		{Kind: wal.KindLeafVacuum, Blocks: block(u16(0, 1))},             // corto
+		{Kind: wal.KindLeafVacuum, Blocks: block(u16(0, 0, 0, 0))},       // congelado sin nada que hacer
+		{Kind: wal.KindLeafVacuum, Blocks: block(u16(0, 0, 1, 2))},       // marca de página desconocida
+		{Kind: wal.KindLeafVacuum, Blocks: block(u16(0, 1, 1, 1, 0, 1))}, // quita y congela el mismo
+		{Kind: wal.KindLeafVacuum, Blocks: block(u16(0, 0, 2, 0, 2, 1))}, // congelado fuera de orden
+		{Kind: wal.KindLeafVacuum, Blocks: block(u16(0, 0, 1, 0, 9))},    // congela uno que no existe
+		{Kind: wal.KindLeafVacuum, Blocks: block(u16(0, 0, 1, 0))},       // congelado corto
+		{Kind: wal.KindSetFrozen, Blocks: []wal.BlockRef{{File: testFile, Fork: smgr.ForkMain, Block: MetaBlock}}},
+		{Kind: wal.KindSetFrozen, Blocks: block(le.AppendUint64(nil, 5))},         // no es la meta
 		{Kind: wal.KindSetHints, Blocks: block(u16(1, 1, 0, 0))},                  // marca vacía
 		{Kind: wal.KindSetHints, Blocks: block(append(u16(1, 1), 0x10, 0, 0, 0))}, // no es marca de visibilidad
 		{Kind: wal.KindSetHints, Blocks: block(append(u16(1, 7), 0x4, 0, 0, 0))},  // no existe

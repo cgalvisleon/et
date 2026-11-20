@@ -20,6 +20,10 @@
 // 1A (hecha: ver «Implementación del motor»); 5 MVCC, transacciones, esperas, limpieza (5A, lotes y snapshots de la
 // fase 1B, hecha: ver «Lotes y snapshots»; 5B, marcas de visibilidad y limpieza en btree y overflow, hecha; 5C, la
 // limpieza y las marcas conectadas al motor, hecha: ver «Limpieza en el motor»). Con la 5C queda cerrada la fase 1B.
+// De la fase 2 están hechos los recorridos, Exists y Empty (ver «Recorridos, Exists y Empty»), la escritura diferida
+// y las versiones (ver «Escritura diferida y versiones») y el congelado con el truncado del archivo de estados (ver
+// «Congelado y truncado del archivo de estados»), y la prueba del diseño recursivo (ver «Diseño recursivo»). De la
+// fase 3 están hechos Verify y Repair (tarea 45, ver «Verificación y reparación») y el comando cmd/storecheck.
 //
 // Disco: vfs.OS() es el sistema de archivos real (fsync con F_FULLFSYNC en macOS, fdatasync en Linux; Lock devuelve
 // vfs.ErrLocked si otro tiene el LOCK, y el error público del motor lo envuelve); crashfs.New() es el disco simulado
@@ -35,6 +39,10 @@
 //  2. Open no crece con el tamaño de los datos: lee el control y el catálogo y reproduce solo el WAL escrito desde el
 //     punto de rehacer del último checkpoint, cuyo volumen acota MAX_WAL_SIZE. La caché empieza vacía.
 //
+// La caché de páginas vive fuera del heap de Go (mmap anónimo en darwin, linux y los BSD; heap en windows), como la
+// memoria compartida de PostgreSQL: el GC no la cuenta, así el RSS de un motor ronda su tamaño más unos MB, no el
+// doble (decisión 62; ver store/internal/buffer/doc.go). Close la devuelve al SO; un motor sin cerrar la retiene.
+//
 // # Directorio del motor
 //
 //	<dir>/
@@ -42,8 +50,8 @@
 //	  control                 archivo de control: dos copias de 512 B (store/internal/control)
 //	  catalog                 catálogo de stores: nombre → número de archivo, página meta, contador (control)
 //	  data/<fileNo>.0001…     páginas de 8 KB del árbol de cada store, archivos de 1 GB (smgr; %010d.%04d)
-//	  data/<fileNo>_vm.0001…  mapa de visibilidad de cada store (fase 1B/2)
-//	  xact/0001…              archivo de estados de las transacciones (xact)
+//	  data/<fileNo>_vm.0001…  mapa de visibilidad de cada store: lo pone la limpieza, lo borra toda escritura
+//	  xact/0001…              archivo de estados de las transacciones (xact); el checkpoint borra los de xids congelados
 //	  wal/0000000001.seg…     segmentos del WAL de WAL_SEGMENT_SIZE (wal)
 //
 // Un motor es un directorio, con una caché y un WAL para todos sus stores; un proceso puede abrir varios motores
@@ -80,7 +88,8 @@
 // Control, cada copia de 512 B (copia A en el byte 0, B en el 512; se escribe la que no tiene la última versión; al
 // leer gana la válida con mayor seq): magic(4) version(4) seq(8) state(4) pageSize(4) blocksPerFile(4)
 // reservado(4) checkpointTime(8) redoSegment(8) redoOffset(8) redoLSN(8) checkpointLSN(8) nextXID(8)
-// oldestActiveXID(8) frozenXID(8, fase 2) slots(8 × [nombre(24) restartLSN(8)], fase 3) reservado(156) crc(4).
+// oldestActiveXID(8) frozenXID(8) slots(8 × [nombre(24) restartLSN(8)], fase 3) reservado(156) crc(4). frozenXID es
+// el del motor: el menor de los stores al checkpoint; el archivo de estados se trunca por debajo.
 //
 // Catálogo (se reescribe entero: catalog.tmp, fsync, rename, fsync del directorio): encabezado magic(4) version(4)
 // nextFileNo(4) entryCount(4) countLSN(8) reservado(8); por store fileNo(4) metaBlock(4) count(8) flags(4)
@@ -95,14 +104,17 @@
 // Entrada de hoja (una versión): flags(4) idLen(2) reservado(2) lsn(8) xid(8) valueLen(4) = 28 B, más el id, más el
 // valor en línea o la referencia a desborde (primer bloque, 4). Clave: (id ascendente, lsn descendente). Va en línea
 // si 28 + id + valor ≤ 2.032 B; si no, a desborde. Con el puntero y la alineación, una versión ocupa ~32 B + id +
-// valor. flags: EntryTombstone, EntryOverflow, las marcas de visibilidad (EntryXidCommitted, EntryXidAborted,
-// EntryFrozen) y EntryFreeing (versión muerta cuya cadena de desborde se está liberando).
+// valor. flags: EntryTombstone, EntryOverflow, las marcas de visibilidad (EntryXidCommitted, EntryXidAborted),
+// EntryFrozen (congelada: confirmada y visible para todo snapshot, sin consultar el archivo de estados; la pone la
+// limpieza con WAL) y EntryFreeing (versión muerta cuya cadena de desborde se está liberando). La página de una hoja
+// lleva page.FlagAllVisible mientras su bit del mapa de visibilidad puede estar puesto.
 //
 // Pivote (páginas internas y claves altas): keyLen(2) flags(2) downlink(4) lsn(8) = 16 B, más el prefijo truncado
 // del id.
 //
 // Página meta (bloque 0 de cada store, desde el byte 32): magic(4) version(4) root(4) level(4) fastRoot(4)
-// fastLevel(4) freeHead(4) reservado(4) frozenXID(8) reservado(8) = 48 B.
+// fastLevel(4) freeHead(4) reservado(4) frozenXID(8) reservado(8) = 48 B. frozenXID es el del store: ninguna versión
+// del store con un xid menor queda sin congelar (o sin quitar).
 //
 // Página de desborde: encabezado, el trozo del valor desde el byte 32 hasta pd_lower (hasta 8.144 B), espacio
 // especial con flags = desborde, next = la siguiente de la cadena y level = la posición de la página en la cadena
@@ -110,20 +122,23 @@
 // una sola versión.
 //
 // Archivo de estados: páginas de 8.192 B sin encabezado, 2 bits por xid (0 en curso, 1 confirmada, 2 abortada),
-// 4.096 páginas por archivo. El lsn de confirmación por grupo de 32 xids vive en memoria con cada página en caché.
+// 4.096 páginas por archivo. El lsn de confirmación por grupo de 32 xids vive en memoria con cada página en caché. Los
+// archivos enteros por debajo del frozenXID del motor se borran; un xid de esos se lee confirmado (y congelado).
 //
 // Registros del motor (datos principales, sin bloques): KindCheckpoint redoSegment(8) redoOffset(8) redoLSN(8)
 // nextXID(8) oldestActiveXID(8) time(8); KindCreateStore y KindDropStore fileNo(4) nameLen(2) name; KindCommit time(8)
-// storeCount(4) y storeCount × [fileNo(4) delta(8)] (fase 1B). KindEmptyStore (fase 2) todavía no se escribe y la
-// recuperación lo rechaza. KindPageImage queda reservado: las marcas de visibilidad van como KindSetHints de btree (la
-// imagen de la hoja más el delta de las marcas).
+// storeCount(4) y storeCount × [fileNo(4) delta(8)] (fase 1B); KindEmptyStore oldFileNo(4) newFileNo(4) nameLen(2)
+// name (fase 2). KindPageImage queda reservado: las marcas de visibilidad van como KindSetHints de btree (la
+// imagen de la hoja más el delta de las marcas). El congelado usa registros de btree (KindLeafVacuum con su parte de
+// congelado, KindSetFrozen) y de fsm (KindVMSet, KindVMClear): formatos en sus doc.go.
 //
 // Registro del WAL: crc(4) lsn(8) totalLen(4) xid(8) kind(1) flags(1) blockCount(1) reservado(1) mainLen(4) = 32 B;
 // por bloque fileNo(4) fork(1) flags(1) reservado(2) block(4) imageLen(2) deltaLen(2) = 16 B, la imagen y el delta;
 // al final los datos principales. Tipos (wal/kind.go): checkpoint, confirmación (con lo que suma a Count de cada
 // store), aborto, página entera (reservado), versión nueva en hoja (que es también el cambio lógico:
 // id, xid y valor; con FlagCommit es una operación suelta que nace confirmada), partición, enlace en el padre, raíz
-// nueva, store nuevo, limpieza de hoja, marcas de visibilidad (KindSetHints), página de desborde, lista de libres y mapa de visibilidad. La imagen de página
+// nueva, store nuevo, limpieza de hoja (que también congela), marcas de visibilidad (KindSetHints), frozenXID de un store
+// (KindSetFrozen), página de desborde, lista de libres y mapa de visibilidad. La imagen de página
 // entera es la página antes del cambio, sin el hueco entre pd_lower y pd_upper, comprimida con S2 si achica.
 //
 // # Límites
@@ -160,9 +175,10 @@
 //  9. Escribir el registro en su lugar del WAL (en paralelo con otros) y publicarlo. Toda reserva se escribe, también
 //     si la operación falla después de reservar: una reserva sin escribir frena published y deja Close esperando.
 //  10. Confirmar: una operación suelta ya lleva FlagCommit; un lote escribe su KindCommit (con la suma de Count por
-//     número de archivo de store, no por nombre, sumada bajo writeMu al reservar). Con SYNC_ON_WRITE esperar a que el WAL sea durable hasta ese lsn
-//     (group commit). Después anotar confirmada en el archivo de estados con ese lsn y quitar la transacción de las en
-//     curso (despierta a quien la espera).
+//     número de archivo de store, no por nombre, sumada bajo writeMu al reservar). Anotar el lsn como la última
+//     confirmación (WaitDurable). Con SYNC_ON_WRITE, y si no es diferida (Deferred, CommitDeferred), esperar a que el
+//     WAL sea durable hasta ese lsn (group commit). Después anotar confirmada en el archivo de estados con ese lsn y
+//     quitar la transacción de las en curso (despierta a quien la espera).
 //
 // La página va al disco después, en un checkpoint, al expulsarla de la caché o por el escritor de fondo, y nunca
 // antes de que el WAL sea durable hasta su pd_lsn («WAL antes que la página»): las escrituras del usuario solo
@@ -188,17 +204,24 @@
 //     puede tener mientras tanto.
 //   - Los locks del mapa de la caché, de la caché del archivo de estados y del catálogo en memoria son hojas: no se
 //     toma otro con ellos tomados. El catálogo nunca se toca con una página bloqueada.
-//   - Locks del motor: closeMu (lectura) → ddlMu → Store.mu; closeMu (lectura) → Store.mu (lectura) → commitMu
+//   - Locks del motor: closeMu (lectura) → ddlMu → txGate → Store.mu (Empty); closeMu (lectura) → txGate (lectura)
+//     (newBatch, Snapshot); closeMu (lectura) → Store.mu (lectura) → commitMu
 //     (lectura) → página → writeMu → contadores (hoja); ckptMu → commitMu (escritura); ckptMu → ddlMu; ckptMu →
 //     HintGate (escritura) → writeMu. Una operación suelta suelta commitMu antes de esperar a otra transacción.
+//     WaitDurable y el escritor del WAL: closeMu (lectura) → syncMu (y pubMu al esperar la publicación), sin páginas.
+//     Verify y Repair: closeMu (lectura) → ckptMu → ddlMu (control, catálogo y data/); Store.vacuumMu → closeMu
+//     (lectura) → Store.mu (escritura) → commitMu (escritura, solo para repetir el conteo) → páginas.
 //   - Marcas de visibilidad: con bloqueo compartido, por OR atómico (y leídas con atomic.LoadUint32); la escritura de
 //     la página al disco calcula la suma sobre una copia. La marca de confirmada solo se pone si el WAL es durable hasta el lsn de confirmación del
 //     grupo de su xid (pregunta 49). La primera marca en una página tras un checkpoint se anota como KindSetHints
 //     (con la imagen de la hoja), con la hoja bloqueada en exclusivo después de soltar el bloqueo compartido de la
 //     lectura; la lectura toma HintGate en compartido para decidir y marcar, y el checkpoint la toma en exclusivo
 //     alrededor de BeginCheckpoint (como DELAY_CHKPT_START): página → HintGate; HintGate → writeMu.
-//   - Limpieza: Store.vacuumMu → closeMu (lectura) → Store.mu (lectura) → páginas (una hoja a la vez) → writeMu; la
-//     cadena de desborde se libera con la hoja ya soltada.
+//   - Limpieza: Store.vacuumMu → closeMu (lectura) → Store.mu (lectura) → páginas (una hoja a la vez; con ella, en
+//     compartido, su hermana derecha para ver si comparte un id, y la página del mapa para poner su bit) → writeMu; la
+//     cadena de desborde se libera con la hoja ya soltada; la meta (KindSetFrozen) al final, sin hojas. Una escritura o
+//     una partición que encuentra la hoja con page.FlagAllVisible borra su bit (página del mapa) con la hoja bloqueada,
+//     antes de reservar su registro. Engine.frozen.mu es una hoja.
 //
 // # Checkpoint
 //
@@ -215,9 +238,11 @@
 //  3. Guardar el catálogo con los contadores y countLSN = el lsn del punto de rehacer (la copia del catálogo y de los
 //     contadores se toma en el paso 1, en el mismo instante, bajo writeMu; si no, la recuperación contaría dos veces).
 //  4. Escribir el registro KindCheckpoint y esperar su fsync.
-//  5. Escribir el control (seq + 1) con el punto de rehacer, checkpointLSN, nextXID y el xid vivo más viejo.
+//  5. Escribir el control (seq + 1) con el punto de rehacer, checkpointLSN, nextXID, el xid vivo más viejo y el
+//     frozenXID del motor (tomado al empezar el paso 1, antes del punto de rehacer).
 //  6. Reciclar los segmentos del WAL anteriores al punto de rehacer (respetando las ranuras, fase 3): se renombran como
 //     repuestos hasta wal.Options.Spares (MAX_WAL_SIZE / 2 / WAL_SEGMENT_SIZE, 4 por omisión) y el resto se borra.
+//  7. Truncar el archivo de estados por debajo de ese frozenXID (xact Truncate: los archivos enteros, de menor a mayor).
 //
 // Un corte entre 3 y 5 deja el control con el punto de rehacer anterior y el catálogo con el nuevo: la recuperación
 // suma a los contadores solo las confirmaciones con lsn ≥ countLSN, así que no cuenta dos veces. Close hace un
@@ -234,18 +259,22 @@
 //
 //  1. Tomar LOCK; leer el control (la copia válida más nueva) y el catálogo. Sin control, el motor es nuevo: guardar un
 //     catálogo vacío, crear el control y abrir el WAL desde wal.Start (segmento 1, desplazamiento 0, lsn 1).
-//     xact.Open antes de rehacer.
+//     xact.Open antes de rehacer, y xact Truncate(frozenXID del control): fija el límite aunque falten archivos y
+//     termina un truncado que un corte dejó a medias.
 //  2. Abrir el WAL con wal.Open(fs, dir, wal.EnvOptions(), redo, rehacer), que recorre desde el punto de rehacer y debe aparecer el registro del checkpoint. Por cada
 //     registro: crear, vaciar y borrar un store se rehacen sobre el catálogo (idempotentes: borrar y vaciar llevan el número
 //     de archivo esperado, y solo actúan si el store todavía lo tiene); los bloques de un store borrado se saltan; con imagen, se restaura sin
 //     condiciones y se aplica el delta (los bloques con imagen o BlockWillInit se fijan con buffer.Pool.PinZero, sin
 //     leer la página del disco, que puede estar rota por el corte); sin imagen, se aplica solo si el pd_lsn de la página es menor que el lsn del
 //     registro (idempotente), con la función de rehacer del dueño del Kind; confirmaciones y abortos van al archivo de
-//     estados (xact SetStatus), y una confirmación con lsn ≥ countLSN suma a los contadores.
+//     estados (xact SetStatus; la confirmación de un xid ya truncado no anota nada, un aborto así es corrupción), y una
+//     confirmación con lsn ≥ countLSN suma a los contadores.
 //  3. wal.Open corta el WAL en su primer registro inválido y deja en largo 0 los segmentos siguientes (un registro viejo
 //     nunca confirmado no puede pasar por válido después). Un registro inválido en un segmento sellado es corrupción:
 //     Open falla.
-//  4. nextXID = el mayor entre el del control y el mayor xid visto + 1. Los xid menores en estado «en curso» se leen
+//  4. nextXID = el mayor entre el del control, el mayor xid visto + 1 y el mayor frozenXID que ponen los KindInitStore
+//     y KindSetFrozen rehechos (un corte puede perder los xid asignados después de esos registros, y un xid reusado
+//     menor que el frozenXID de un store rompería su promesa; lo encontró Verify en TestModelCrash). Los xid menores en estado «en curso» se leen
 //     como abortados (eran transacciones en curso al caerse), sin marcarlos uno por uno: xact Recover(nextXID) fija ese
 //     horizonte y pone en cero los estados desde nextXID (como TrimCLOG de PostgreSQL).
 //  5. Checkpoint de fin de recuperación y state = en producción. Las particiones incompletas las termina la próxima
@@ -276,16 +305,18 @@
 //	variable                 por omisión  qué fija
 //	STORE_CACHE_SIZE         128          tamaño de la caché de páginas, en MB (pregunta 21)
 //	WAL_SEGMENT_SIZE         128          tamaño de cada segmento del WAL, en MB, mínimo 1 (pregunta 27)
-//	SYNC_ON_WRITE            true         una confirmación espera el fsync del WAL
+//	SYNC_ON_WRITE            true         una confirmación espera el fsync del WAL (false = todas diferidas)
 //	CHECKPOINT_TIMEOUT       300          segundos entre checkpoints (pregunta 28)
 //	MAX_WAL_SIZE             1024         MB de WAL que acotan la recuperación; dispara a MAX_WAL_SIZE / 1,9
 //	TRANSACTION_TIMEOUT      600          segundos que puede durar un lote o un snapshot (pregunta 35)
 //	VACUUM_INTERVAL          60           segundos entre vueltas de la limpieza de fondo; 0 = apagada (a confirmar)
 //	VACUUM_THRESHOLD         1000         escrituras desde la última limpieza de fondo para correr otra (a confirmar)
 //	LOCK_TIMEOUT             5            segundos que una escritura espera a otra transacción (pregunta 33)
+//	WAL_WRITER_DELAY         200          ms entre vueltas del escritor de fondo del WAL; 0 = apagado (pregunta 65)
 //	MAX_SLOT_WAL_KEEP_SIZE   4096         MB de WAL que puede retener una ranura (fase 3, pregunta 48)
 //
-// Los archivos de datos son de 1 GB fijos y CHECKPOINT_COMPLETION_TARGET es la constante 0,9, sin variable.
+// Los archivos de datos son de 1 GB fijos, CHECKPOINT_COMPLETION_TARGET es la constante 0,9, FREEZE_MIN_AGE la constante 0 y FREEZE_TABLE_AGE un archivo de
+// estados (134.217.728 xids), sin variable (ver «Congelado y truncado del archivo de estados»).
 // RELSEG_SIZE (del diseño anterior) deja de usarse.
 //
 // # API pública (ola 4 en adelante)
@@ -294,9 +325,13 @@
 // Stores, Checkpoint y las operaciones sueltas Put, Remove, Insert, Update, Delete y Read; además Store.Name y, por
 // adelantado, Store.Count (el contador vivo: incluye las escrituras que se están confirmando, a confirmar en la fase
 // 2). Hecho en la ola 5A: NewBatch, Commit, Rollback, PutIn, RemoveIn, InsertIn, UpdateIn, DeleteIn, ReadIn,
-// Snapshot, SnapshotFor, Snapshot.Close y ReadAt. Hecho en la ola 5C: Vacuum. Errores públicos en msg.go: ErrLocked, ErrClosed, ErrFailed,
-// ErrBadID, ErrValueTooLarge, ErrBadName, ErrStoreNotFound, ErrStoreDropped, ErrConflict, ErrSerialization,
-// ErrTimeout, ErrTxDone, ErrOtherEngine, ErrCorrupt.
+// Snapshot, SnapshotFor, Snapshot.Close y ReadAt. Hecho en la ola 5C: Vacuum. Hecho en la fase 2: Exists, ExistsIn,
+// ExistsAt, Empty, ForEachAt, CountAt y la API secundaria de recorridos (Keys, KeysAfter, KeysPrefix, ForEach,
+// ForEachPrefix, ForEachRange, ForEachBorrowed y sus variantes …At), y Store.Deferred (Put, Remove, Insert, Update,
+// Delete), Batch.CommitDeferred, Engine.WaitDurable, GetVersion, GetVersionIn y GetVersionAt. Hecho en la fase 3:
+// Engine.Verify y Engine.Repair (con Report y Finding, report.go). Errores públicos en msg.go: ErrLocked,
+// ErrClosed, ErrFailed, ErrBadID, ErrValueTooLarge, ErrBadName, ErrStoreNotFound, ErrStoreDropped, ErrConflict,
+// ErrSerialization, ErrTimeout, ErrTxDone, ErrOtherEngine, ErrBusy, ErrCorrupt.
 //
 //	// Motor
 //	func Open(dir string) (*Engine, error)                    // 1A: control + WAL desde el último checkpoint
@@ -312,8 +347,10 @@
 //	func (v *Snapshot) Close() error                          // 1B (5A)
 //	func (e *Engine) Checkpoint() error                       // 1A
 //	func (e *Engine) Vacuum() error                           // 1B (5C)
-//	func (e *Engine) Verify() error                           // 3
-//	func (e *Engine) Repair() error                           // 3
+//	func (e *Engine) WaitDurable() error                      // 2 (hecho): lo confirmado hasta ahora, en disco
+//	func (b *Batch) CommitDeferred() error                    // 2 (hecho): Commit sin esperar el fsync
+//	func (e *Engine) Verify() (Report, error)                 // 3 (hecho): revisa sin cambiar nada
+//	func (e *Engine) Repair() (Report, error)                 // 3 (hecho): arregla lo reparable, con WAL
 //	func (e *Engine) Stats() et.Json                          // 3 (también OnStats)
 //
 //	// Store: operaciones sueltas (cada una es su propia transacción y confirma al volver)
@@ -323,9 +360,11 @@
 //	func (s *Store) Update(id string, data []byte) (bool, error)
 //	func (s *Store) Delete(id string) (bool, error)
 //	func (s *Store) Read(id string) ([]byte, bool, error)
-//	func (s *Store) Exists(id string) (bool, error)          // 2
-//	func (s *Store) Count() int64                            // 2
-//	func (s *Store) Empty() error                            // 2
+//	func (s *Store) Exists(id string) (bool, error)          // 2 (hecho)
+//	func (s *Store) Count() int64                            // 1A: el contador, O(1)
+//	func (s *Store) Empty() error                            // 2 (hecho): ErrBusy con lotes o snapshots abiertos
+//	func (s *Store) GetVersion(id string) ([]byte, uint64, bool, error) // 2 (hecho): Read con la versión
+//	func (s *Store) Deferred() Deferred                      // 2 (hecho): Put, Remove, Insert, Update, Delete sin fsync
 //
 //	// Store: dentro de un lote (1B, ola 5A salvo ExistsIn)
 //	func (s *Store) PutIn(tx *Batch, id string, data []byte) error
@@ -334,16 +373,30 @@
 //	func (s *Store) UpdateIn(tx *Batch, id string, data []byte) (bool, error)
 //	func (s *Store) DeleteIn(tx *Batch, id string) (bool, error)
 //	func (s *Store) ReadIn(tx *Batch, id string) ([]byte, bool, error)
-//	func (s *Store) ExistsIn(tx *Batch, id string) (bool, error)   // 2
+//	func (s *Store) ExistsIn(tx *Batch, id string) (bool, error)   // 2 (hecho)
+//	func (s *Store) GetVersionIn(tx *Batch, id string) ([]byte, uint64, bool, error) // 2 (hecho)
 //
 //	// Store: sobre un snapshot (ReadAt: 1B, ola 5A)
 //	func (s *Store) ReadAt(v *Snapshot, id string) ([]byte, bool, error)
-//	func (s *Store) ExistsAt(v *Snapshot, id string) (bool, error)  // 2
-//	func (s *Store) ForEachAt(v *Snapshot, fn func(id string, data []byte) (bool, error), asc bool, offset, limit int) error // 2
-//	func (s *Store) CountAt(v *Snapshot) (int64, error)              // 2
+//	func (s *Store) ExistsAt(v *Snapshot, id string) (bool, error)  // 2 (hecho)
+//	func (s *Store) GetVersionAt(v *Snapshot, id string) ([]byte, uint64, bool, error) // 2 (hecho)
+//	func (s *Store) ForEachAt(v *Snapshot, fn func(id string, data []byte) (bool, error), asc bool, offset, limit int) error // 2 (hecho)
+//	func (s *Store) CountAt(v *Snapshot) (int64, error)              // 2 (hecho): recorre, O(n)
+//	func (s *Store) ForEachPrefixAt(v, prefix, fn, asc, offset, limit) error       // 2 (hecho)
+//	func (s *Store) ForEachRangeAt(v, from, to, fn, asc, offset, limit) error      // 2 (hecho): [from, to)
+//	func (s *Store) ForEachBorrowedAt(v *Snapshot, fn) error                       // 2 (hecho): ascendente, data prestado
 //
-// Después, como API secundaria: Keys, ForEach, GetVersion, Deferred/WaitDurable (fase 2) y Sync, WalSince,
-// ApplyWalEntry (fase 3, por transacción confirmada y en orden de confirmación).
+//	// Store: API secundaria de recorridos (2, hecha; cada uno con un snapshot propio)
+//	func (s *Store) Keys(asc bool, offset, limit int) ([]string, error)
+//	func (s *Store) KeysAfter(after string, limit int) ([]string, error)
+//	func (s *Store) KeysPrefix(prefix string, asc bool, offset, limit int) ([]string, error)
+//	func (s *Store) ForEach(fn func(id string, data []byte) (bool, error), asc bool, offset, limit int) error
+//	func (s *Store) ForEachPrefix(prefix string, fn, asc bool, offset, limit int) error
+//	func (s *Store) ForEachRange(from, to string, fn, asc bool, offset, limit int) error
+//	func (s *Store) ForEachBorrowed(fn func(id string, data []byte) (bool, error)) error
+//
+// Después, como API secundaria: un recorrido dentro de un lote (ForEachIn) (fase 2) y Sync, WalSince, ApplyWalEntry
+// (fase 3, por transacción confirmada y en orden de confirmación).
 //
 // Semántica:
 //
@@ -363,7 +416,18 @@
 //     lote o snapshot de otro motor, ErrOtherEngine.
 //   - Un snapshot es una foto fija de todos los stores del motor para leer y recorrer, sin bloquear a los escritores.
 //     Mientras siga abierto (igual que un lote), la limpieza no quita las versiones que podría ver.
-//   - Lo devuelto por Read es del llamador. Los callbacks de recorridos no pueden escribir en el store.
+//   - Lo devuelto por Read es del llamador, y data en ForEach… también; en ForEachBorrowed… data vale solo dentro de
+//     fn. Un callback de recorrido corre sin nada tomado: puede leer y escribir en el motor (el recorrido no ve lo
+//     escrito después de su snapshot); Empty desde él devuelve ErrBusy (el recorrido tiene su snapshot abierto).
+//   - Exists, ExistsIn y ExistsAt ven lo mismo que Read, ReadIn y ReadAt, sin leer ni copiar el valor.
+//   - Los recorridos entregan la versión visible más nueva de cada id (las lápidas no se ven; con un snapshot, las
+//     versiones viejas que todavía ve aunque haya otras más nuevas sin limpiar) en orden de id por bytes; offset y
+//     limit cuentan ids visibles (limit ≤ 0 = sin límite). Count es el contador (O(1)); CountAt recorre (O(n)).
+//   - Empty vacía el store en O(1) como TRUNCATE; con lotes o snapshots abiertos en el motor devuelve ErrBusy.
+//   - Store.Deferred() y Batch.CommitDeferred confirman sin esperar el fsync: lo confirmado se ve enseguida; un corte
+//     puede perderlo, siempre entero y en el orden del WAL, hasta que Engine.WaitDurable vuelva (o una confirmación
+//     durable posterior, o el escritor de fondo del WAL). GetVersion, GetVersionIn y GetVersionAt son Read, ReadIn y
+//     ReadAt con la versión: el lsn de la versión devuelta (0 si no existe).
 //   - Si el motor quedó inutilizable (ver «Fallos de escritura»), todo devuelve ErrFailed hasta reabrirlo.
 //
 // # Lotes y snapshots (ola 5A)
@@ -398,7 +462,8 @@
 // registro frenaría todos los checkpoints (y, con el RWMutex, a todos los escritores) mientras dure un lote.
 //
 // A confirmar (ola 5A): Close no espera a los lotes abiertos ni los deshace (quedan inservibles con ErrClosed y se
-// leen abortados al reabrir); el xid de un lote sin escrituras queda «en curso» en el archivo de estados, como el de
+// leen abortados al reabrir); sí detiene los temporizadores de TRANSACTION_TIMEOUT de los lotes y snapshots abiertos
+// (Engine.timers, timers.go): uno armado retendría el motor entero, caché incluida, hasta vencer; el xid de un lote sin escrituras queda «en curso» en el archivo de estados, como el de
 // una operación suelta sin efecto; InsertIn no mira antes si el id existe con un valor grande (esa lectura con el
 // snapshot ocultaría un cambio confirmado después, que debe dar ErrSerialization), así que puede escribir y liberar
 // el desborde en vano; no hay detección de interbloqueos entre lotes: dos que se esperan mutuamente salen por
@@ -411,8 +476,9 @@
 //	vacuum.go      Engine.vacuum, Store.vacuum (serializado por store), freeDead, la limpieza de fondo (vacuumer)
 //
 // Vacuum toma el horizonte (xact OldestActive: el xid en curso más viejo o el Xmin más viejo de un lote o snapshot
-// abierto) una vez al empezar y limpia los stores del catálogo de a uno con btree.Vacuum(Horizon, XID 0, Free =
-// overflow.Manager.FreeTail de la versión muerta). Un lote o snapshot que empiece después tiene Xmin ≥ ese horizonte,
+// abierto) una vez al empezar y limpia los stores del catálogo de a uno con btree.Vacuum(Horizon, FreezeLimit,
+// Aggressive, XID 0, Free = overflow.Manager.FreeTail de la versión muerta), que además congela y salta hojas por el
+// mapa de visibilidad (ver «Congelado y truncado del archivo de estados»). Un lote o snapshot que empiece después tiene Xmin ≥ ese horizonte,
 // así que nada de lo que se quita le hace falta. Cada store se limpia con Store.vacuumMu (btree no admite dos
 // limpiezas del mismo árbol) y con el store tomado en lectura como cualquier operación: un DropStore que llega espera
 // a que termine (y frena mientras tanto las operaciones nuevas del store, por el RWMutex), y un store ya borrado se
@@ -422,7 +488,8 @@
 //
 // La limpieza de fondo (como autovacuum, con un criterio simple, a confirmar) mira cada VACUUM_INTERVAL si hubo al
 // menos VACUUM_THRESHOLD escrituras aplicadas (sueltas o de lotes, también las deshechas: dejan versiones muertas)
-// desde su última vuelta y, si las hubo, corre Vacuum. Close marca el motor cerrado (espera a la limpieza del store en
+// desde su última vuelta, o si se asignaron medio archivo de estados de xids (para que el congelado y el truncado
+// sigan también con transacciones que no escriben), y si es así corre Vacuum. Close marca el motor cerrado (espera a la limpieza del store en
 // curso; la siguiente ve ErrClosed), detiene la de fondo y recién después hace el checkpoint final; si el motor quedó
 // inutilizable, la de fondo termina sola.
 //
@@ -438,7 +505,293 @@
 // A confirmar (ola 5C): los valores de VACUUM_INTERVAL y VACUUM_THRESHOLD y el criterio por cantidad de escrituras
 // (PostgreSQL usa la fracción de tuplas muertas por tabla); una cadena de desborde escrita antes de un corte sin que
 // llegara su hoja queda huérfana (ninguna versión la nombra y la limpieza no la ve; la prueba de modelo las cuenta):
-// recuperarlas es de la fase 2 o 3; DropStore espera a la limpieza del store en curso en vez de cortarla.
+// Repair las devuelve a la lista (fase 3, «Verificación y reparación»); DropStore espera a la limpieza del store en curso en vez de cortarla.
+//
+// # Recorridos, Exists y Empty (fase 2)
+//
+//	archivo        qué tiene
+//	scan.go        scanRange (rango [from, to), sentido, offset, limit), scanner, scanAt, keys, keysAfter, countAt,
+//	               exists, existsIn, existsAt
+//	empty.go       Store.empty y Engine.emptyFiles
+//
+// Un recorrido es un btree.Cursor (btree/doc.go): lee una hoja por llamada a Next y entre una y otra no tiene nada
+// fijado ni bloqueado. Por cada hoja, el motor toma Snapshot.mu (lectura; un Close o el tiempo del snapshot esperan a
+// esa hoja), closeMu y Store.mu (lectura), lee la hoja y suelta todo; el valor de desborde de cada id se lee igual,
+// de a uno; recién entonces llama a fn. Así fn corre sin páginas fijadas ni locks del motor («nunca esperar a una
+// transacción ni a un fsync con una página bloqueada» no depende de lo que haga fn) y puede usar el motor, incluso
+// ReadAt con el mismo snapshot o cerrarlo (el recorrido termina con ErrTxDone en la hoja siguiente). Lo que ocupa
+// en RAM es una hoja de versiones (y un valor de desborde a la vez), no crece con el store; solo Keys acumula lo
+// que devuelve. Las hojas siguientes a la primera se fijan con buffer.Ring: un recorrido grande no vacía la caché.
+// Los recorridos sueltos (ForEach, Keys…) toman un snapshot propio sin tiempo máximo y lo cierran con defer, también
+// si fn entra en pánico; con un snapshot, la limpieza no quita nada de lo que el recorrido puede ver.
+//
+// ForEachBorrowed (prestado): la hoja se copia entera a un búfer del cursor que se reutiliza de hoja en hoja y se
+// suelta antes de llamar a fn; data apunta a ese búfer (sin una copia por valor) y vale solo dentro de fn. Se eligió
+// esto en vez de llamar a fn con la página fijada: con la página fijada fn no podría esperar a nada del motor sin
+// arriesgar un bloqueo, y una regla así es fácil de romper desde josefina. Es ascendente porque, hacia atrás, el
+// primer id de cada hoja sobrevive a la hoja siguiente y su valor no puede vivir en el búfer reutilizado.
+//
+// Prefijo y rango: ForEachRange recorre [from, to) ("" = sin límite); ForEachPrefix y KeysPrefix usan [prefix,
+// prefixEnd(prefix)), donde prefixEnd quita los 0xFF del final y suma uno al último byte (sin límite si no queda
+// ninguno). Hacia atrás el cursor baja hasta to (incluido en btree) y saltea ese id.
+//
+// Empty (como TRUNCATE): reserva un número de archivo nuevo, escribe KindEmptyStore (durable), cambia el catálogo
+// (control.Stores.Empty: archivo nuevo, contador 0) y lo guarda, quita las páginas viejas de la caché, borra los
+// archivos viejos y crea el árbol nuevo (KindInitStore), todo con ddlMu; el *Store sigue sirviendo con el archivo
+// nuevo (file y tree cambian con Store.mu en escritura). La recuperación lo rehace como DropStore: si el store
+// todavía tiene el archivo viejo pasa al nuevo con contador 0, y borra los archivos del viejo si ya no son de nadie;
+// los bloques del viejo anteriores al registro se saltan si el catálogo guardado ya tiene el nuevo. Con lotes y
+// snapshots: PostgreSQL toma un lock exclusivo, espera a las transacciones que usan la tabla y los snapshots viejos
+// ven la tabla vacía (TRUNCATE no es MVCC). Acá un lote o snapshot es de todo el motor y no se sabe qué stores va a
+// leer, así que Empty exige que no haya ninguno abierto (Engine.openTx, que suman newBatch y snapshotFor con txGate
+// en lectura): si hay, devuelve ErrBusy enseguida; mientras vacía tiene txGate en escritura y no empieza ninguno.
+// Rechazar en vez de esperar evita que quien llama se bloquee contra su propio snapshot (un Empty dentro de un
+// recorrido, o con un lote suyo abierto) y es MVCC-seguro: nadie puede ver el store antes y después. Las operaciones
+// sueltas en curso del store, la limpieza y Count se esperan con Store.mu.
+//
+// A confirmar (fase 2): Empty es de todo el motor respecto de lotes y snapshots (un lote que nunca toca el store
+// también lo frena); el borrado de los archivos viejos no espera al checkpoint (como DropStore); un corte que pierde
+// el borrado deja archivos huérfanos de un número que ya nadie usa (Verify los encuentra y Repair los borra); KeysAfter y offset recorren lo anterior dentro de
+// la página (offset es O(offset)); no hay recorrido dentro de un lote (ForEachIn).
+//
+// # Escritura diferida y versiones (fase 2)
+//
+//	archivo        qué tiene
+//	durable.go     Deferred, syncCommit, noteCommit, waitDurable, walWriter
+//	version.go     getVersion, getVersionIn, getVersionAt
+//
+// Escritura diferida (tareas 38 y 39 de F-23; como synchronous_commit = off de PostgreSQL): Store.Deferred() da
+// Put, Remove, Insert, Update y Delete que confirman sin esperar el fsync, Batch.CommitDeferred es Commit sin
+// esperarlo y Engine.WaitDurable espera a que todo lo confirmado antes de llamar (cualquier store: el WAL es uno) esté
+// en disco. El orden de un cambio es el mismo salvo el paso 10: se reserva, escribe y publica el registro, se anota
+// su lsn en Engine.lastCommit (el mayor, con CAS) y se marca confirmada en el archivo de estados sin esperar el
+// fsync. lastCommit sube antes de marcar confirmada: todo lo visible al llamar a WaitDurable está por debajo, y
+// WaitDurable es wal.WaitDurable(lastCommit), que espera la publicación de lo anterior y hace un fsync compartido
+// (group commit). Las confirmaciones durables y las diferidas usan el mismo camino; lo único que cambia es la espera.
+//
+// Garantías y por qué valen:
+//
+//   - Visibilidad: lo diferido se ve enseguida (lecturas sueltas, lotes y snapshots nuevos), aunque no sea durable,
+//     como en PostgreSQL. Una lectura o una condición que no escribe (un Insert que encuentra el id, un Update sin
+//     cambios) no espera el fsync de lo que vio: si un corte pierde la versión diferida, lo que contestó deja de valer.
+//   - Atomicidad: una escritura suelta es un registro KindLeafWrite con FlagCommit (más, antes, los de su desborde) y
+//     un lote confirma con un único KindCommit. La recuperación rehace un prefijo contiguo del WAL (lsn = anterior + 1,
+//     CRC; el primer registro inválido corta), así que un cambio diferido queda entero o no queda: sin su registro de
+//     hoja no hay versión (un desborde ya escrito queda huérfano, como ya pasaba), y sin el KindCommit las versiones
+//     del lote son de un xid que se lee abortado.
+//   - Orden: lo durable es siempre un prefijo del WAL (durable sube solo sobre lo publicado contiguo), así que si una
+//     confirmación durable sigue a una diferida en el WAL, la diferida también queda en disco.
+//   - «WAL antes que la página»: la caché, el escritor de fondo y el checkpoint esperan el WAL durable hasta el pd_lsn
+//     de cada página antes de escribirla, y el archivo de estados hasta el mayor lsn de confirmación de sus grupos: una
+//     página o un estado de una confirmación diferida nunca llegan al disco antes que su registro. El checkpoint
+//     espera además el WAL durable hasta el punto de rehacer (waitChanges) antes de guardar el catálogo con los
+//     contadores, así Count tras un corte es el de lo que sobrevivió.
+//   - Regla 49 (ninguna marca de confirmada antes de que el lsn de confirmación sea durable): btree solo pone
+//     EntryXidCommitted si xact.HintAllowed(estado, lsn de grupo, wal.Durable()); con una confirmación diferida el lsn
+//     de su grupo (el mayor de los 32 xids) está por encima de Durable y la marca no se pone hasta que el fsync llega
+//     (TestDeferredHintWaitsDurable). La limpieza decide por la marca o, sin ella, por el estado, y lo que quita va en
+//     el WAL detrás de la confirmación que hizo muerta a la versión vieja: no puede llegar al disco sin ella.
+//
+// El escritor de fondo del WAL (walWriter, como el walwriter de PostgreSQL) hace cada 200 ms un WaitDurable si
+// lastCommit pasó a Durable: lo que puede perder un corte queda acotado a esa pausa más un fsync, también con
+// SYNC_ON_WRITE=false. SYNC_ON_WRITE=false vuelve diferidas todas las confirmaciones del motor (Put, Commit…);
+// Deferred y CommitDeferred lo son siempre, también con SYNC_ON_WRITE=true, que es la forma de diferir solo a quien
+// agrupa sus propias confirmaciones y mantener durable al resto. Los registros de crear, vaciar y borrar un store y
+// el de checkpoint esperan siempre su fsync (y con él lo diferido anterior).
+//
+// Forma frente a josefina (internal/pebble): allí KV.Deferred() da un Writer (Insert, Update, Delete) y WaitDurable
+// está en cada KV y en cada Index pero sincroniza el WAL único del nodo; Commit(b) de un lote nunca espera. Acá
+// Deferred es un valor del store con las mismas operaciones más Put y Remove (sirve como ese Writer), WaitDurable
+// está en el Engine porque el WAL es del motor (un método por store prometería algo que no es por store), y el lote
+// tiene Commit durable y CommitDeferred, en vez de un modo del lote fijado al crearlo, porque se decide al confirmar.
+//
+// Versiones (concurrencia optimista): GetVersion, GetVersionIn y GetVersionAt son Read, ReadIn y ReadAt con el lsn de
+// la versión devuelta, que ya está en la clave de la entrada (id ascendente, lsn descendente): no cuesta nada más.
+// Cambia con cada escritura que aplica (un Update sin cambios o un Insert que no escribe no la cambian), nunca baja,
+// sobrevive a checkpoints, limpieza, particiones y reabrir, y es 0 si el id no existe; la de un cambio propio de un
+// lote es la que verán los demás si confirma. Como el lsn sigue al WAL, tras un corte que pierde una escritura
+// diferida su número puede volver a usarse para otra: una versión leída de algo diferido solo vale mientras no haya
+// un corte o tras WaitDurable. No hay UpdateIfVersion/DeleteIfVersion: el patrón es un lote (GetVersionIn y la
+// escritura en el mismo lote; si otra transacción cambió el id después de empezar el lote, la escritura da
+// ErrSerialization, TestOptimisticBatchPattern), y josefina compara sus versiones bajo su propio lock de modelo y
+// guarda la suya dentro del valor (decisión 46), así que una escritura condicional por versión no tendría quien la use.
+//
+// A confirmar (fase 2): la pausa de 200 ms del escritor del WAL (constante); que una lectura no espere el fsync de lo
+// diferido que ve (como PostgreSQL); que GetVersion devuelva el lsn y no un contador por id.
+//
+// # Congelado y truncado del archivo de estados (fase 2)
+//
+//	archivo        qué tiene
+//	frozen.go      frozenXIDs (frozenXID de cada store y del control), engineFrozen, vacuumOptions, freezeStore
+//
+// Tarea 62 de F-23, decisión 44 («congelado con mapa de visibilidad», como relfrozenxid/datfrozenxid de PostgreSQL):
+// el archivo de estados crece con cada transacción (2 bits por xid, en disco); el congelado lo acota. No hay vuelta de
+// xid (son de 64 bits): el congelado solo sirve para borrar archivos de estados viejos.
+//
+//   - Congelar: la limpieza marca EntryFrozen en toda versión confirmada con xid < FreezeLimit = horizonte −
+//     FREEZE_MIN_AGE, en el mismo KindLeafVacuum que quita las muertas de la hoja (con imagen tras un checkpoint, como
+//     todo cambio: «WAL antes que la página»). El registro va en el WAL detrás de la confirmación de esas versiones (que
+//     terminó antes de tomar el horizonte), así que ningún prefijo del WAL tiene la versión congelada sin su
+//     confirmación: la regla 49 no hace falta (es para las marcas sin WAL). Una abortada nunca se congela: está muerta
+//     y se quita en esa misma pasada (en línea) o se marca «liberándose» (desborde), y una «liberándose» se lee
+//     abortada por su marca sin consultar el archivo de estados.
+//   - Mapa de visibilidad: una hoja que queda con todo visible para todos (confirmado con xid < horizonte o congelado,
+//     sin «liberándose» ni muertas, sin partición incompleta y sin compartir un id con una vecina) lleva
+//     page.FlagAllVisible (en el mismo KindLeafVacuum) y su bit VMAllVisible, o VMAllFrozen si además todo quedó
+//     congelado (KindVMSet, después, con la hoja todavía bloqueada). Toda escritura o partición de una hoja con
+//     page.FlagAllVisible borra antes su bit (KindVMClear, con la hoja bloqueada, antes del registro de la hoja, que
+//     apaga la marca de la página): en todo prefijo del WAL, bit puesto ⇒ marca en la página ⇒ sin cambios desde que la
+//     limpieza la vio. Como PD_ALL_VISIBLE, la marca de la página ahorra mirar el mapa en cada escritura.
+//   - Saltar: con dos niveles o más, la limpieza recorre las hojas por los enlaces del nivel 1 (copiados con la página
+//     bloqueada en compartido) y salta sin leerla cada hoja enlazada cuyo bit es VMAllFrozen (o VMAllVisible si no es
+//     agresiva); desde cada hoja que lee sigue a la derecha hasta el enlace siguiente, así ve las hojas nuevas de
+//     particiones posteriores a la copia. Saltar es seguro porque una hoja con bit no se partió desde que se puso (la
+//     partición lo borra) y lo que una partición posterior se lleve está congelado o es de un xid ≥ horizonte.
+//   - frozenXID del store (página meta, KindSetFrozen): una pasada que terminó sin saltar hojas solo todo-visibles
+//     (btree VacuumStats.Complete, como el bit all-frozen de PostgreSQL) lo sube al menor xid que dejó sin congelar,
+//     acotado por el horizonte. Un store nuevo (Create, Empty) nace con el xid vivo más viejo: ninguna transacción que
+//     pueda escribir en él tiene uno menor.
+//   - frozenXID del motor (control): el menor de los stores del catálogo, tomado al empezar el paso 1 del checkpoint
+//     (lo que lo justifica —los congelados de las hojas y la meta— tiene lsn anterior al punto de rehacer y queda en
+//     disco con el checkpoint); un store que el motor todavía no leyó cuenta con el frozenXID del control al abrir
+//     (cota baja de todos). DropStore y Empty olvidan el archivo viejo: dejan de retenerlo.
+//   - Truncar: el paso 7 del checkpoint, después de guardar el control, llama a xact Truncate(frozenXID): borra los
+//     archivos enteros por debajo. Status de un xid truncado devuelve confirmada sin leer el disco: por debajo del
+//     frozenXID toda versión está congelada (que no consulta), «liberándose» (que no consulta) o ya no existe. Un corte
+//     a mitad deja un prefijo de archivos borrado; Open vuelve a llamar a Truncate con el frozenXID del control.
+//
+// Decisiones (a confirmar): FREEZE_MIN_AGE = 0, se congela toda versión confirmada visible para todos la primera vez
+// que la limpieza pasa por su hoja (el registro casi siempre ya hace falta para quitar las muertas, y no hay vuelta de
+// xid que justifique esperar); así una hoja todo-visible queda también todo-congelada y cada pasada normal ya es
+// completa. FREEZE_TABLE_AGE = un archivo de estados (134.217.728 xids): si el frozenXID de un store quedó así de
+// detrás del horizonte, su pasada es agresiva (no salta las hojas solo todo-visibles, que con FREEZE_MIN_AGE 0 solo
+// quedan de una configuración anterior). Con eso el disco del archivo de estados queda acotado por lo que separa al
+// horizonte del xid vivo más viejo más dos archivos (el de la frontera y el actual), en vez de crecer para siempre. Un
+// árbol de una sola hoja (sin nivel 1) o sin mapa se recorre entero. La hoja de un id cuyas versiones siguen en la
+// vecina no lleva bits hasta que la limpieza quita esas versiones (se mira la hermana derecha). Un store que nunca
+// tuvo una pasada completa (formato anterior, frozenXID 0 en su meta) cuenta con el frozenXID del control.
+//
+// # Diseño recursivo (fase 2)
+//
+// Tarea 41 de F-23, solo en pruebas (store/recursive_test.go, package store_test, solo API pública): las piezas de
+// una base de datos se arman encima del store.
+//
+//   - Índice secundario: la colección users (id → JSON) tiene un store por índice, users_by_city, con claves
+//     valor\x00id y valor vacío (el orden del árbol agrupa por valor y luego por id; el valor no puede tener NUL).
+//     El documento y sus entradas van en el mismo lote: ReadIn del documento viejo, RemoveIn de la entrada vieja solo
+//     si el campo cambió, PutIn de la nueva y del documento. Dos lotes sobre el mismo documento chocan en su id
+//     (ErrSerialization o ErrConflict) y el perdedor se deshace y reintenta. Consulta: ForEachPrefixAt(valor\x00)
+//     sobre un snapshot y ReadAt del documento con ese mismo snapshot.
+//   - Catálogo: un store catalog (nombre → definición con sus índices) que se escribe en el mismo lote que los
+//     primeros documentos; se lee con un snapshot al abrir. Engine.Store y DropStore no van en lotes (confirman
+//     solos), así que el catálogo es la verdad: un store que no describe es huérfano y se borra al abrir.
+//   - Se comprueba: 8 escritores concurrentes (mitad con CommitDeferred) sobre 48 ids, con lectores que en cada
+//     snapshot comparan índice y recorrido completo, y al final índice vs. documentos; y tres cortes de proceso
+//     (SIGKILL al hijo que escribe) tras los que índice y datos coinciden y cada lote confirmado está. El corte de
+//     proceso no pierde lo no sincronizado (eso lo cubre TestModelCrash con crashfs, que no es público).
+//
+// Costo por nivel (Apple M5, macOS, un documento por lote, -benchtime 2s; Commit espera el fsync con F_FULLFSYNC):
+//
+//	benchmark                          Commit                CommitDeferred
+//	PutPlain (sin índice)              4,05 ms, 39 allocs    7,8 µs, 40 allocs
+//	PutIndexed idx=1                   4,01 ms, 54 allocs    15,5 µs, 58 allocs
+//	PutIndexed idx=2                   4,01 ms, 67 allocs    18,5 µs, 71 allocs
+//
+//	consulta de 200 de 20.000 documentos    ns/op       allocs/op
+//	QueryByIndex (prefijo + ReadAt)         586 µs      4.049
+//	ScanFilter (recorrer y decodificar)     9,1 ms      280.270
+//
+// Con fsync el índice no cuesta nada visible (el fsync es todo); sin él, el primer índice duplica la CPU de la
+// escritura y cada uno más suma unos 3 µs. La consulta por índice es 15 veces más rápida que el recorrido con 1 %
+// de selectividad.
+//
+// Índice único (pregunta 67): sin API nueva. El índice único usa como clave el valor solo (sin \x00id) y se escribe
+// con InsertIn en el mismo lote que el documento: si el valor ya existe, InsertIn devuelve false (duplicado), y dos
+// lotes concurrentes que escriben la misma clave chocan con ErrSerialization (no hay write skew porque escriben la
+// misma clave). Al cambiar el valor, el lote borra la clave vieja con DeleteIn.
+//
+// Decidido no hacer por ahora: un recorrido dentro de un lote (ForEachIn, pregunta 64: se recorre con un snapshot,
+// ForEachAt, y dentro del lote se lee por id con ReadIn) y DDL dentro del lote (pregunta 66, fase 3: hoy
+// Engine.Store/DropStore confirman solos y un catálogo encima limpia los huérfanos al abrir).
+//
+// # Verificación y reparación (fase 3)
+//
+//	archivo         qué tiene
+//	report.go       Report, Finding, FindingKind (las clases de hallazgo), MaxFindings
+//	verify.go       check (Verify y Repair), el control, el catálogo, los archivos de data/, checkStore, checkHandle
+//	storecheck.go   storeCheck: el inventario de páginas de un store, el conteo, el mapa, el congelado, fixCount
+//
+// Tarea 45 de F-23 (pregunta 29). Verify revisa con el motor abierto y no cambia nada (ni marcas de visibilidad: su
+// recorrido no las pone). Repair hace el mismo recorrido y arregla cada cosa reparable al encontrarla. Los dos
+// devuelven un Report: los totales (stores, páginas del árbol, de cadenas, libres y sin dueño, versiones, ids vivos,
+// archivos huérfanos) y los hallazgos (Kind, Store, File, Block y Blocks, Desc, Repairable, Repaired), con
+// String() para imprimir; guarda con detalle los primeros MaxFindings = 1.000 y cuenta todos (Total), así un motor
+// muy dañado no da un informe que crezca con las páginas. El error de Verify y Repair es solo ErrClosed o ErrFailed
+// (la caché o el WAL fallaron); el daño va en el informe. cmd/storecheck es el comando: go run ./cmd/storecheck -dir
+// <dir> [-repair] (sale con 0 sin pendientes, 1 con hallazgos sin arreglar, 2 si no pudo revisar).
+//
+// Qué se revisa, en este orden:
+//
+//  1. Con ckptMu y ddlMu (ningún checkpoint ni DDL mientras tanto, unos milisegundos): el control leído del disco
+//     (válido, su punto de rehacer es el vigente del WAL, checkpointLSN ≥ punto de rehacer, frozenXID ≤ nextXID); el
+//     catálogo leído sin tocar catalog.tmp (control.CatalogFile.Read: los mismos stores con los mismos números que el
+//     de memoria, nextFileNo no mayor); y data/: los números de archivo que ningún store tiene son huérfanos (de un
+//     DropStore o Empty cortados entre el catálogo y el borrado) y los nombres que no son de archivos de datos se
+//     informan sin tocarlos.
+//  2. Cada store del catálogo, de a uno, con Store.vacuumMu → closeMu (lectura) → Store.mu en escritura: espera a sus
+//     operaciones en curso y frena las nuevas de ese store mientras dura (como DropStore); los otros stores, los lotes
+//     que no lo tocan, los checkpoints y el escritor de fondo siguen. Un store sin abrir se abre solo si su página meta
+//     existe: uno sin meta (Store lo crearía vacío) o con la meta ilegible se informa sin abrirlo.
+//  3. El árbol con btree.VerifyWith (la estructura de btree.Verify, con buffer.Ring para no vaciar la caché): cada
+//     página del árbol se anota en un bitset de dueños; por cada hoja ya soltada, el conteo (por id, la versión más
+//     nueva confirmada decide, como Count; el estado sale de las marcas o del archivo de estados, sin marcar), las
+//     versiones sin congelar con xid menor que el frozenXID del store (y ese frozenXID no mayor que nextXID), las
+//     cadenas de desborde (overflow.Manager.Pages: cada página de desborde, del xid de la versión, en su posición y
+//     con su trozo; de una versión «liberándose», solo lo que todavía es suyo) y su bit del mapa de visibilidad (un
+//     bit puesto exige page.FlagAllVisible y todas las versiones congeladas o confirmadas con xid menor que el
+//     horizonte; VMAllFrozen, todas congeladas). Si el árbol no pasa (una hoja ilegible, un enlace roto), lo demás del
+//     store no es confiable y no se mira ni se repara.
+//  4. La lista de libres (fsm.Manager.WalkFree): cada página es libre, existe y no tiene otro dueño (un bucle o una
+//     página del árbol en la lista se ven ahí).
+//  5. Los bits del mapa en bloques que no son hojas o no existen (fsm.Manager.ForEachVM).
+//  6. Las páginas sin dueño: las que no son meta, árbol, cadena viva ni lista de libres, agrupadas en tramos seguidos
+//     de la misma clase (en ceros —un PinNew sin registro—, vacías —sacadas de la lista sin usar—, libres fuera de la
+//     lista, ilegibles, páginas del árbol inalcanzables y de desborde, que son cadenas huérfanas: escritas antes de
+//     un corte sin que llegara su hoja, o de un Free cortado).
+//  7. Count: el conteo contra el contador. Las confirmaciones de lotes no toman el store, así que si el conteo no
+//     coincide con el contador de antes ni con el de después del recorrido se repite solo el conteo con commitMu en
+//     escritura (ninguna confirmación en curso en todo el motor, el tiempo de recorrer las hojas de ese store).
+//
+// Qué repara Repair (cada arreglo con su registro del WAL, así un corte en medio deja un motor que abre y cuyo Verify
+// solo informa lo que faltó, TestRepairCrash):
+//
+//   - Archivos huérfanos: los borra (smgr.Unlink y los que queden por nombre, fsync de data/); sin WAL, como el
+//     borrado de DropStore, porque los números no se reutilizan y borrarlos es idempotente.
+//   - Páginas sin dueño y cadenas huérfanas: las devuelve a la lista de libres con fsm.Manager.Reclaim (un KindFreePush
+//     con BlockWillInit sobre la página fijada sin leerla, así también una ilegible), solo si en ese store no hay nada
+//     que haga dudar de quién es cada página (ninguna cadena viva rota, página repetida ni lista de libres dañada).
+//   - Bits del mapa de visibilidad mal puestos: los borra (KindVMClear); borrar un bit siempre es seguro (lo pierde
+//     solo la limpieza, que vuelve a leer la hoja).
+//   - Count: lo corrige con una confirmación propia (KindCommit de un xid nuevo sin versiones, con lo que suma al
+//     store), hecha con commitMu en escritura y esperando su fsync; la recuperación la rehace como cualquier otra.
+//
+// Qué no repara (lo informa sin tocarlo, y el store sigue legible en lo que no depende de eso): una página del
+// árbol ilegible o una estructura que no pasa btree.Verify, una cadena viva rota (ese valor se perdió: Read del id da
+// error), una página con dos dueños, la lista de libres apuntando a una página que no es libre o con un bucle (haría
+// falta reescribir la cabeza en la meta con un registro nuevo), una versión sin congelar por debajo del frozenXID (el
+// frozenXID no baja), un store sin meta, el control y el catálogo (Open ya falla si no se leen, y uno que no coincide
+// con el motor no tiene arreglo seguro), un bit del mapa en una página del mapa ilegible, y el WAL (wal.Open ya lo
+// valida al abrir: corta en el primer registro inválido y falla si está en un segmento sellado).
+//
+// Memoria: dos bitsets por el store que se revisa (dueños y hojas: un bit por bloque, 16 KB cada uno por archivo de
+// datos de 1 GB), las entradas de una hoja, los bits de una página del mapa (hasta 32.640) y hasta MaxFindings
+// hallazgos; nada crece con las claves. Medido en un M5 sobre disco real: 2 MB de datos en 1,9 ms, 19 MB en 19 ms y
+// 97 MB (1.000.000 ids y 1.000 valores de 20 KB) en 119 ms, con unos 68 B asignados por versión (los ids que copia
+// cada hoja, basura enseguida) y el heap en uso subiendo unos 3 MB.
+//
+// A confirmar (fase 3): que Repair deje sin tocar un store dañado salvo sus bits del mapa; que la lista de libres
+// dañada no se reconstruya; los MaxFindings; que una hoja con bits y una versión de otra transacción en curso cuente
+// como bit mal puesto (lo es: la limpieza nunca la deja así).
 //
 // # Implementación del motor (ola 4)
 //

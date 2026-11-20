@@ -35,10 +35,11 @@ func (e *Engine) snapshotFor(timeout time.Duration) *Snapshot {
 		return v
 	}
 	defer e.leave()
+	e.openTxn()
 	v.snap, v.id = e.txs.TakeSnapshot()
 	if timeout > 0 {
 		v.mu.Lock() // el temporizador puede disparar antes de que se guarde
-		v.timer = time.AfterFunc(timeout, func() { v.release(ErrTimeout) })
+		v.timer = e.timers.after(timeout, func() { v.release(ErrTimeout) })
 		v.mu.Unlock()
 	}
 	return v
@@ -55,10 +56,9 @@ func (v *Snapshot) release(why error) {
 		return
 	}
 	v.err = why
-	if v.timer != nil {
-		v.timer.Stop()
-	}
+	v.e.timers.stop(v.timer)
 	v.e.txs.ReleaseSnapshot(v.id)
+	v.e.closeTxn()
 }
 
 /**
@@ -76,14 +76,23 @@ func (v *Snapshot) close() error {
 * @return []byte: copia del valor, bool: si existe, error: ErrOtherEngine, ErrTxDone, ErrTimeout…
 **/
 func (s *Store) readAt(v *Snapshot, id string) ([]byte, bool, error) {
+	cur, found, err := s.readVersionAt(v, id)
+	return cur.value, found, err
+}
+
+/**
+* readVersionAt devuelve la versión de id que ve el snapshot v, con su lsn (ReadAt y GetVersionAt).
+* @param v *Snapshot, id string
+* @return current, bool, error: ErrOtherEngine, ErrTxDone, ErrTimeout…
+**/
+func (s *Store) readVersionAt(v *Snapshot, id string) (current, bool, error) {
 	if v.e != s.e {
-		return nil, false, ErrOtherEngine
+		return current{}, false, ErrOtherEngine
 	}
 	v.mu.RLock()
 	defer v.mu.RUnlock()
 	if v.err != nil {
-		return nil, false, v.err
+		return current{}, false, v.err
 	}
-	cur, found, err := s.readVersion(id, &v.snap)
-	return cur.value, found, err
+	return s.readVersion(id, &v.snap)
 }

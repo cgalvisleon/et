@@ -21,8 +21,9 @@ const (
 	KindInsertPivot Kind = 18 // enlace a la derecha nueva en el padre; quita OpaqueIncompleteSplit a la hija
 	KindNewRoot     Kind = 19 // raíz nueva y página meta
 	KindInitStore   Kind = 20 // página meta y hoja raíz vacía de un store nuevo (BlockWillInit)
-	KindLeafVacuum  Kind = 21 // limpieza: quita versiones muertas de una hoja (fase 1B)
+	KindLeafVacuum  Kind = 21 // limpieza: quita versiones muertas de una hoja (fase 1B) y congela las visibles (fase 2)
 	KindSetHints    Kind = 22 // marcas de visibilidad: la primera marca tras un checkpoint, con la imagen de la hoja
+	KindSetFrozen   Kind = 23 // frozenXID nuevo en la página meta de un store (fase 2, congelado)
 )
 
 // De overflow (32–39).

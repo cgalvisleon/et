@@ -10,6 +10,23 @@
 // hay en una página; no decide páginas enteras. Depende de page, smgr (Manager, FileNo, Fork) y wal (Flusher), por
 // sus interfaces: se prueba con dobles.
 //
+// # Dónde vive la memoria
+//
+// Los búferes están en un solo arena reservado fuera del heap de Go, como la memoria compartida de PostgreSQL
+// (decisión 62 de F-23): en darwin, linux y los BSD es un mmap anónimo y privado (arena_mmap.go); en el resto
+// (windows) es un []uint64 del heap (arena_heap.go). Fuera del heap el GC no lo recorre ni lo cuenta para su meta, así
+// el proceso no crece al doble de la caché: con 128 MB de caché, un motor ocupa unos 150 MB de RSS en vez de 280. El
+// arena solo guarda bytes de páginas, nunca punteros de Go. Está alineado a la página del SO (los búferes, a 8). Las
+// copias para escribir (scratch) siguen en el heap.
+//
+// Tocar el arena liberado (Munmap) es un SIGSEGV, no un error, así que se libera solo cuando nada puede tocarlo:
+// toda lectura o escritura de d.data se hace con el búfer fijado (handle, flush, read, PinZero); toda fijada pasa por
+// pinLocked, que con d.mu tomado rechaza la caché cerrada; Close marca closed, espera al escritor de fondo y llama a
+// freeArena, que mira los pins de todos los búferes bajo d.mu y libera solo si están todos en 0 (tras closed los pins
+// solo bajan). Si alguno sigue fijado (un Handle sin Release), lo libera el último unpin. Al liberar deja d.data en
+// nil: un acceso tardío es un pánico de índice y el GC no ve punteros a un rango que el runtime podría reutilizar.
+// Orden: arenaMu → d.mu. Un motor que no se cierra no devuelve su arena (no lo libera el GC).
+//
 // # Bloqueos
 //
 // El bloqueo de contenido es un RWMutex por búfer, corto. El mapa (Tag → búfer) se reparte en particiones, cada una
@@ -25,12 +42,12 @@
 //
 // # Implementación (ola 2)
 //
-// Open(Config) reserva los búferes en un solo arena (Buffers, o STORE_CACHE_SIZE con EnvBuffers) y arranca el
-// escritor de fondo (BgWriterDelay; negativo = sin él). Cada búfer tiene un descriptor con tres locks, en este orden:
-// io (serializa sus escrituras al disco: dos escritores nunca escriben el mismo búfer a la vez) → content (el
-// bloqueo de contenido) → mu (encabezado: tag, estado, pins, uso, sucia; corto). Las NumPartitions particiones del
-// mapa se toman solas: buscar en el mapa y fijar el búfer son dos pasos, y si el búfer cambió de página entre medio
-// se repite.
+// Open(Config) reserva los búferes en un solo arena fuera del heap (Buffers, o STORE_CACHE_SIZE con EnvBuffers) y
+// arranca el escritor de fondo (BgWriterDelay; negativo = sin él); Close lo detiene y libera el arena. Cada búfer
+// tiene un descriptor con tres locks, en este orden: io (serializa sus escrituras al disco: dos escritores nunca
+// escriben el mismo búfer a la vez) → content (el bloqueo de contenido) → mu (encabezado: tag, estado, pins, uso,
+// sucia; corto). Las NumPartitions particiones del mapa se toman solas: buscar en el mapa y fijar el búfer son dos
+// pasos, y si el búfer cambió de página entre medio se repite.
 //
 // Cargar una página sigue BufferAlloc: elegir una víctima (fijada y limpia; si estaba sucia se escribe antes),
 // publicar el tag nuevo en el mapa (si otro ya lo publicó, se usa el suyo), cambiar el tag bajo mu (si alguien fijó

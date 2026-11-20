@@ -18,6 +18,10 @@ func FuzzApplyDelta(f *testing.F) {
 	f.Add(uint8(wal.KindSplit), uint8(1), right)
 	f.Add(uint8(wal.KindInsertPivot), uint8(0), itemDelta(2, encodePivot(key{id: []byte("m"), lsn: 9}, 7)))
 	f.Add(uint8(wal.KindNewRoot), uint8(0), newRootDelta(1, 2, encodePivot(key{id: []byte("m"), lsn: MaxLSN}, 3)))
+	f.Add(uint8(wal.KindLeafVacuum), uint8(0), vacuumDelta(pageVacuum{remove: []page.OffsetNumber{2}, freeze: []page.OffsetNumber{3, 4}, setVisible: true}))
+	f.Add(uint8(wal.KindLeafVacuum), uint8(0), vacuumDelta(pageVacuum{setVisible: true}))
+	f.Add(uint8(wal.KindSetFrozen), uint8(0), le.AppendUint64(nil, 99))
+	f.Add(uint8(wal.KindInitStore), uint8(0), initMetaDelta(1, 42))
 	f.Fuzz(func(t *testing.T, kind, i uint8, delta []byte) {
 		p := append(page.Page(nil), leaf...)
 		if err := applyBlock(wal.Kind(kind), int(i%3), p, delta, 77); err == nil && !isMeta(p) {

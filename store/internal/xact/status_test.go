@@ -266,8 +266,11 @@ func TestTruncate(t *testing.T) {
 	if fileExists(dir, 1) || fileExists(dir, 2) || !fileExists(dir, 3) {
 		t.Fatal("want only file 0003")
 	}
-	if _, _, err := s.Status(5); !errors.Is(err, ErrTruncated) {
-		t.Fatalf("Status of truncated xid: %v", err)
+	if st, lsn, err := s.Status(5); err != nil || st != StatusCommitted || lsn != 0 {
+		t.Fatalf("Status of truncated xid = %d, %d, %v; want committed", st, lsn, err)
+	}
+	if s.Oldest() != 2*XidsPerFile {
+		t.Fatalf("Oldest = %d, want %d", s.Oldest(), 2*XidsPerFile)
 	}
 	if err := s.SetStatus(XidsPerFile+2, StatusCommitted, 4); !errors.Is(err, ErrTruncated) {
 		t.Fatalf("SetStatus of truncated xid: %v", err)
@@ -277,10 +280,66 @@ func TestTruncate(t *testing.T) {
 
 	s = openTest(t, vfs.OS(), dir, fl, 2)
 	defer s.Close()
-	if _, _, err := s.Status(XidsPerFile + 1); !errors.Is(err, ErrTruncated) {
-		t.Fatalf("Status after reopen: %v", err)
-	}
+	wantStatus(t, s, XidsPerFile+1, StatusCommitted) // truncado: se lee confirmado sin leer el disco
 	wantStatus(t, s, 2*XidsPerFile+1, StatusAborted)
+}
+
+// Con archivos de prueba de una página: el xid va al archivo de su página, Truncate borra por debajo del límite sin
+// volver a listar el directorio si ya lo hizo, y Truncate sobre un directorio sin archivos fija el límite igual (el
+// motor lo llama al abrir con el frozenXID del control).
+func TestTruncateSmallFiles(t *testing.T) {
+	dir := t.TempDir()
+	fl := &fakeFlusher{}
+	open := func() *Statuses {
+		s, err := Open(Config{FS: vfs.OS(), Dir: dir, Flusher: fl, CachePages: 2, FilePages: 1})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return s
+	}
+	s := open()
+	for f := page.XID(0); f < 4; f++ {
+		if err := s.SetStatus(f*XidsPerPage+7, StatusAborted, 1); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.Flush(); err != nil {
+		t.Fatal(err)
+	}
+	for n := uint64(1); n <= 4; n++ {
+		if !fileExists(dir, n) {
+			t.Fatalf("file %04d missing", n)
+		}
+	}
+	if err := s.Truncate(3*XidsPerPage - 1); err != nil {
+		t.Fatal(err)
+	}
+	if fileExists(dir, 1) || fileExists(dir, 2) || !fileExists(dir, 3) {
+		t.Fatal("want files 0003 and 0004 only")
+	}
+	wantStatus(t, s, XidsPerPage+7, StatusCommitted) // estaba abortada, pero ya se truncó
+	wantStatus(t, s, 2*XidsPerPage+7, StatusAborted)
+	if err := s.Truncate(3*XidsPerPage - 1); err != nil { // nada nuevo que borrar
+		t.Fatal(err)
+	}
+	s.Close()
+
+	if err := os.Remove(fileName(filepath.Join(dir, Dir), 3)); err != nil {
+		t.Fatal(err)
+	}
+	s = open()
+	defer s.Close()
+	if s.Oldest() != 3*XidsPerPage {
+		t.Fatalf("Oldest after reopen = %d, want %d", s.Oldest(), 3*XidsPerPage)
+	}
+	if err := s.Truncate(3 * XidsPerPage); err != nil {
+		t.Fatal(err)
+	}
+	if s.Oldest() != 3*XidsPerPage {
+		t.Fatalf("Oldest = %d, want %d", s.Oldest(), 3*XidsPerPage)
+	}
+	wantStatus(t, s, 2*XidsPerPage+7, StatusCommitted)
+	wantStatus(t, s, 3*XidsPerPage+7, StatusAborted)
 }
 
 // Recover: en curso por debajo del horizonte = abortada; desde el horizonte, todo vuelve a en curso.

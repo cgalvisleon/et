@@ -56,12 +56,13 @@ func (e *Engine) newBatch() *Batch {
 		return b
 	}
 	defer e.leave()
+	e.openTxn()
 	b.xid = e.txs.Begin()
 	b.snap = e.txs.Snapshot(b.xid)
 	if e.cfg.txTimeout > 0 {
 		b.mu.Lock() // el temporizador puede disparar antes de que se guarde
 		b.deadline = time.Now().Add(e.cfg.txTimeout)
-		b.timer = time.AfterFunc(e.cfg.txTimeout, b.expire)
+		b.timer = e.timers.after(e.cfg.txTimeout, b.expire)
 		b.mu.Unlock()
 	}
 	return b
@@ -142,11 +143,12 @@ func (b *Batch) waitLimit() time.Duration {
 
 /**
 * commit confirma el lote (paso 10 del orden de un cambio): un KindCommit con lo que suma a Count de cada store
-* (sumado a los contadores bajo writeMu), un solo fsync con SYNC_ON_WRITE, confirmada en el archivo de estados y
-* End. Un lote abortado solo se deshace y devuelve por qué abortó.
+* (sumado a los contadores bajo writeMu), un solo fsync con SYNC_ON_WRITE salvo diferido, confirmada en el archivo
+* de estados y End. Un lote abortado solo se deshace y devuelve por qué abortó.
+* @param deferred bool: confirmar sin esperar el fsync (CommitDeferred)
 * @return error: ErrTxDone, ErrSerialization, ErrConflict, ErrTimeout, ErrClosed o ErrFailed
 **/
-func (b *Batch) commit() error {
+func (b *Batch) commit(deferred bool) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if err := b.usableLocked(); err != nil {
@@ -155,7 +157,7 @@ func (b *Batch) commit() error {
 		}
 		return err
 	}
-	return b.finishLocked(true)
+	return b.finishLocked(true, deferred)
 }
 
 /**
@@ -173,7 +175,7 @@ func (b *Batch) rollback() error {
 		b.state = batchDone
 		return nil
 	}
-	return b.finishLocked(false)
+	return b.finishLocked(false, false)
 }
 
 /**
@@ -182,7 +184,7 @@ func (b *Batch) rollback() error {
 * @param err error: por qué
 **/
 func (b *Batch) abortLocked(err error) {
-	if ferr := b.finishLocked(false); ferr != nil && !errors.Is(ferr, ErrClosed) {
+	if ferr := b.finishLocked(false, false); ferr != nil && !errors.Is(ferr, ErrClosed) {
 		err = errors.Join(err, ferr)
 	}
 	b.state, b.err = batchAborted, err
@@ -191,14 +193,13 @@ func (b *Batch) abortLocked(err error) {
 /**
 * finishLocked termina la transacción del lote: confirma (commit) o aborta. Un lote sin escrituras no escribe nada
 * en el WAL (su xid queda «en curso» en el archivo de estados y se lee abortado tras reabrir). Con b.mu tomado.
-* @param commit bool
+* @param commit bool, deferred bool: confirmar sin esperar el fsync
 * @return error
 **/
-func (b *Batch) finishLocked(commit bool) error {
+func (b *Batch) finishLocked(commit, deferred bool) error {
 	b.state = batchDone
-	if b.timer != nil {
-		b.timer.Stop()
-	}
+	b.e.timers.stop(b.timer)
+	defer b.e.closeTxn()
 	defer b.e.txs.End(b.xid)
 	if !b.wrote {
 		return nil
@@ -207,7 +208,7 @@ func (b *Batch) finishLocked(commit bool) error {
 		return err
 	}
 	defer b.e.leave()
-	if err := b.logEnd(commit); err != nil {
+	if err := b.logEnd(commit, deferred); err != nil {
 		return b.e.fail(err)
 	}
 	return nil
@@ -216,11 +217,11 @@ func (b *Batch) finishLocked(commit bool) error {
 /**
 * logEnd escribe el registro de confirmación o aborto y anota el estado, con commitMu en lectura desde antes de
 * reservar hasta anotarlo (el checkpoint no puede dejar el registro antes de su punto de rehacer y el estado fuera
-* del archivo de estados que guarda).
-* @param commit bool
+* del archivo de estados que guarda). Un aborto nunca espera el fsync: sin registro durable, cuenta como abortado.
+* @param commit bool, deferred bool: confirmar sin esperar el fsync
 * @return error
 **/
-func (b *Batch) logEnd(commit bool) error {
+func (b *Batch) logEnd(commit, deferred bool) error {
 	e := b.e
 	e.commitMu.RLock()
 	defer e.commitMu.RUnlock()
@@ -243,8 +244,8 @@ func (b *Batch) logEnd(commit bool) error {
 	if err := res.Write(); err != nil {
 		return err
 	}
-	if commit && e.cfg.syncOnWrite {
-		if err := e.log.WaitDurable(lsn); err != nil {
+	if commit {
+		if err := e.syncCommit(lsn, deferred); err != nil {
 			return err
 		}
 	}

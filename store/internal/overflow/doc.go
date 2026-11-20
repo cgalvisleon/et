@@ -57,8 +57,13 @@
 //
 // A confirmar: un corte a mitad de Free (no de FreeTail) deja liberadas las primeras páginas y la cadena rota; volver
 // a llamar a Free devuelve ErrBadChain y las páginas restantes quedan huérfanas, como las de un Write cortado a medias
-// (páginas sacadas de la lista sin entrada que las apunte). Recuperarlas sería de Verify/Repair (fase 3), como las
-// huérfanas de fsm. La limpieza usa FreeTail, que no tiene ese problema.
+// (páginas sacadas de la lista sin entrada que las apunte). Verify del motor las encuentra (páginas de desborde sin
+// versión) y Repair las devuelve a la lista, como las huérfanas de fsm. La limpieza usa FreeTail, que no tiene ese
+// problema.
+//
+// Pages (fase 3, Verify del motor) recorre las páginas de la cadena de una versión sin copiar el valor: cada una de
+// desborde, del xid de la versión (pd_prune_xid), en su posición y con su trozo, con buffer.Ring; con partial (una
+// versión «liberándose») termina sin error en la primera que ya no es de la versión.
 //
 // Qué no hace: no decide cuándo un valor va a desborde (eso lo dice btree.MaxEntrySize), ni la visibilidad. Depende
 // de page, smgr, buffer, fsm y wal por sus interfaces. Manager (New) implementa Chains; ninguna estructura en RAM

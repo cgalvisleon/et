@@ -97,7 +97,7 @@ Each table lists the main public API of every package. `go doc github.com/cgalvi
 | `queue`      | `New[T](size, maxEvents, period, handler)`, `Push`, `Len`, `Close`                                                                                                                                                                                                                                                             | `q.Push(item)`                                                             |
 | `crontab`    | `New(tag, store, opts...)` (instance; `WithHandler`) or `Load` (global), `CronJob`, `ScheduleJob`, `StopJob`, `StartJob`, `RemoveJob`, `GetJob`, `Http*`; states `pending`→`scheduled`⇄`running`→`finished`/`failed`, `paused`, `missed`, `canceled`; `LastRun`, `WithRetries`, `WithTimeout`; replicas with the same tag elect a leader and fail over | `crontab.CronJob(tag, owner, "0 * * * *", 0, nil, fn)`                     |
 | `resilience` | `New()`, `LoadInstance(Params)`, `Instance.Run`, `IsDone`, `IsFailed`, `Stop`                                                                                                                                                                                                                                                  | `inst, _ := r.LoadInstance(resilience.Params{Fn: send, TotalAttempts: 3})` |
-| `store`      | `Open(dir)` → `Engine` (`Store`, `DropStore`, `Stores`, `Checkpoint`, `Close`) → `Store` (`Put`, `Remove`, `Insert`, `Update`, `Delete`, `Read`, `Count`); PostgreSQL-style engine (F-23) | `s, _ := e.Store("users"); s.Put("id", data)` |
+| `store`      | `Open(dir)` → `Engine` (`Store`, `DropStore`, `Stores`, `Checkpoint`, `Vacuum`, `NewBatch`, `Snapshot`, `SnapshotFor`, `WaitDurable`, `Verify`, `Repair`, `Close`) → `Store` (`Put`, `Remove`, `Insert`, `Update`, `Delete`, `Read`, `GetVersion`, `Exists`, `Count`, `Empty`, `Deferred`, `Keys`, `KeysAfter`, `KeysPrefix`, `ForEach`, `ForEachPrefix`, `ForEachRange`, `ForEachBorrowed`, their `…In(batch, …)` forms, `ReadAt`/`GetVersionAt`/`ExistsAt`/`ForEachAt`/`CountAt(snapshot, …)`); `Batch` (`Commit`, `CommitDeferred`, `Rollback`); PostgreSQL-style engine with MVCC (F-23) | `s, _ := e.Store("users"); s.Put("id", data)` |
 
 ### Security
 
@@ -367,7 +367,7 @@ defer q.Close()
 
 ### Embedded key/value store
 
-`store` is a storage engine for building databases on, modeled on PostgreSQL's storage (F-23): a B+tree on disk in 8 KB pages, a fixed-size page cache (nothing of the index lives in RAM), a page-level WAL with full-page images after each checkpoint, checkpoints in the background, and a recovery that only replays the WAL since the last checkpoint. An engine is a directory (one process at a time) holding several stores of `(id string, data []byte)`; values that don't fit in a leaf go to overflow pages (up to 64 MiB). Each single operation is its own transaction and, with `SYNC_ON_WRITE` (default), returns once the WAL is on disk (writers share each fsync). Available now (phase 1A): `Open`, `Close`, `Store`, `DropStore`, `Stores`, `Checkpoint`; `Put`, `Remove` (blind), `Insert`, `Update`, `Delete` (return whether they wrote), `Read` and `Count`. Batches, snapshots and scans come next. Design and formats: [`store/doc.go`](store/doc.go).
+`store` is a storage engine for building databases on, modeled on PostgreSQL's storage (F-23): a B+tree on disk in 8 KB pages, a fixed-size page cache (nothing of the index lives in RAM), a page-level WAL with full-page images after each checkpoint, checkpoints in the background, and a recovery that only replays the WAL since the last checkpoint. An engine is a directory (one process at a time) holding several stores of `(id string, data []byte)`; values that don't fit in a leaf go to overflow pages (up to 64 MiB). Each single operation is its own transaction and, with `SYNC_ON_WRITE` (default), returns once the WAL is on disk (writers share each fsync). Available now (phases 1A, 1B, the scans, deferred writes and versions of phase 2, and `Verify`/`Repair` of phase 3): `Open`, `Close`, `Store`, `DropStore`, `Stores`, `Checkpoint`; `Put`, `Remove` (blind), `Insert`, `Update`, `Delete` (return whether they wrote), `Read`, `Exists` (without reading the value), `Count` (a counter, O(1)) and `Empty` (O(1), like `TRUNCATE`: returns `ErrBusy` while batches or snapshots are open). Every change writes a new version (MVCC): a single operation reads the newest committed one (Read Committed) and waits up to `LOCK_TIMEOUT` for another writer; a batch (`NewBatch`, the `…In` methods, `Commit`/`Rollback`) is atomic across stores, sees its own changes and reads from its snapshot (Repeatable Read: a conflicting change gives `ErrSerialization`); a `Snapshot` gives consistent reads with `ReadAt`. Batches and snapshots end after `TRANSACTION_TIMEOUT` (`ErrTimeout`). Old versions are removed in the background (`VACUUM_INTERVAL`, `VACUUM_THRESHOLD`) or with `Vacuum()`. Scans walk the linked leaves in id order (ascending or descending, with offset and limit, by prefix or range `[from, to)`) on a snapshot: `ForEach`, `Keys` and `KeysAfter` (paging) take their own, `ForEachAt` and `CountAt` (O(n)) use yours; the callback holds nothing while it runs, `ForEachBorrowed` lends `data` only inside the callback, and large scans use a buffer ring instead of flushing the cache. Deferred writes (like PostgreSQL's `synchronous_commit = off`) are for callers that group their own commits: `store.Deferred()` (`Put`, `Remove`, `Insert`, `Update`, `Delete`) and `batch.CommitDeferred()` commit without waiting for the fsync — visible at once, lost whole (never half) by a crash until `engine.WaitDurable()` returns; a background WAL writer makes them durable within ~200 ms anyway, and `SYNC_ON_WRITE=false` makes every commit deferred. `GetVersion`, `GetVersionIn` and `GetVersionAt` return the value with its version (the LSN that wrote it, 0 if missing) for optimistic concurrency; the conditional write is a batch, which gives `ErrSerialization` if someone changed the id after it began. `engine.Verify()` checks the open engine without changing anything (control, catalog, orphan data files and, one store at a time, its tree, overflow chains, free list, visibility map, frozen XIDs and `Count`) and returns a `Report` of totals and findings; `engine.Repair()` also fixes, through the WAL (crash-safe), what can be fixed without losing anything healthy — orphan files, pages without an owner and orphan chains (back to the free list), wrong visibility bits, a wrong `Count` — and leaves the rest (an unreadable leaf, a broken live chain) reported and untouched; `go run ./cmd/storecheck -dir <dir> [-repair]` prints the report. Design and formats: [`store/doc.go`](store/doc.go).
 
 ```go
 engine, err := store.Open("./data")
@@ -384,6 +384,45 @@ changed, err := customers.Update("c-001", []byte(`{"name":"Ana M."}`)) // false 
 deleted, err := customers.Delete("c-002")                             // false if missing
 err = customers.Remove("c-003")                                       // blind delete
 n := customers.Count()
+
+// A batch: atomic across stores, one fsync on Commit
+orders, _ := engine.Store("orders")
+tx := engine.NewBatch()
+_ = customers.PutIn(tx, "c-001", []byte(`{"name":"Ana","orders":1}`))
+_, _ = orders.InsertIn(tx, "o-001", []byte(`{"customer":"c-001"}`))
+if err := tx.Commit(); err != nil { // ErrSerialization: retry the batch
+    return err
+}
+
+// A snapshot: consistent reads while others write
+view := engine.Snapshot()
+defer view.Close()
+data, found, err = customers.ReadAt(view, "c-001")
+
+// Scans: ids in order on a snapshot; return false to stop
+err = customers.ForEach(func(id string, data []byte) (bool, error) {
+    fmt.Println(id, string(data))
+    return true, nil
+}, true, 0, 100) // ascending, offset 0, at most 100
+page, err := customers.KeysAfter("", 50) // next page: KeysAfter(page[len(page)-1], 50)
+exists, err := customers.Exists("c-001")
+
+// Deferred writes: no fsync per write; one WaitDurable for the whole group
+log := customers.Deferred()
+for _, e := range events {
+    _ = log.Put(e.ID, e.Data) // visible now, durable after WaitDurable
+}
+err = engine.WaitDurable()
+
+// Versions: the LSN of the visible version (0 if missing)
+data, version, found, err := customers.GetVersion("c-001")
+
+// Verify (read-only) or Repair (fixes what it can, crash-safe); the damage goes in the report
+report, err := engine.Verify()
+fmt.Print(report.String()) // totals and one line per finding
+if !report.Clean() {
+    report, err = engine.Repair() // report.Pending(): what is still left
+}
 ```
 
 ### Workflows with `jwf`
@@ -462,7 +501,7 @@ hits, _ := index.Search(ctx, tenantId, projectId, "reset the router", 5, 0.3, em
 | `dt`          | `PRODUCTION` (`true` stores in Redis)                                                                                                                                                                                                                                                                                                                                   |
 | `jwf`, `jsql` | `MAX_AUDIT_LOG` (1000)                                                                                                                                                                                                                                                                                                                                                  |
 | `jwsp`        | `WHATSAPP_API_URL`                                                                                                                                                                                                                                                                                                                                                      |
-| `store`       | `STORE_CACHE_SIZE` (MB, 128), `WAL_SEGMENT_SIZE` (MB, 128), `SYNC_ON_WRITE` (true), `CHECKPOINT_TIMEOUT` (s, 300), `MAX_WAL_SIZE` (MB, 1024), `LOCK_TIMEOUT` (s, 5)                                                                                                                                                                                                                                                                                 |
+| `store`       | `STORE_CACHE_SIZE` (MB, 128), `WAL_SEGMENT_SIZE` (MB, 128), `SYNC_ON_WRITE` (true), `CHECKPOINT_TIMEOUT` (s, 300), `MAX_WAL_SIZE` (MB, 1024), `LOCK_TIMEOUT` (s, 5), `TRANSACTION_TIMEOUT` (s, 600), `VACUUM_INTERVAL` (s, 60; 0 = off), `VACUUM_THRESHOLD` (writes, 1000)                                                                                                                                                                                                                                                                                 |
 | `validator`   | `LANG`                                                                                                                                                                                                                                                                                                                                                                  |
 | `middleware`  | `TELEMETRY_FORMAT` (`text` on a terminal, `json` elsewhere, `off`), `TELEMETRY_LOG` (`all`, `errors`), `LATENCY_LIMIT` (1000 ms, `WARN` above it), `REQUESTS_LIMIT` (400 per second per method and path)                                                                                                                                                                |
 
@@ -473,7 +512,8 @@ go run ./cmd/create      # scaffolding: project, microservice, model, rpc
 go run ./cmd/apigateway  # API gateway (ettp)
 go run ./cmd/server      # TCP node (port 1377); ./cmd/client connects to it
 go run ./cmd/ia          # RAG HTTP API (PORT, default 3300)
-go run ./cmd/store       # store example: Open, Store, Put, Read, Insert, Update, Delete, Remove, Close
+go run ./cmd/store       # store example: Open, Store, Put, Read, Insert, Update, Delete, Remove, batch, snapshot, Vacuum, Close
+go run ./cmd/storecheck -dir <dir> [-repair]  # checks (or repairs) a store engine and prints the report
 ```
 
 Also `cmd/et`, `cmd/daemon`, `cmd/jsql`, `cmd/install`, `cmd/watcher`, `cmd/resilience`, `cmd/wsp` and `cmd/jwf`.

@@ -28,6 +28,7 @@ func (e *Engine) recover() error {
 		return err
 	}
 	redo := wal.Start
+	e.frozen.base = ctl.FrozenXID
 	if fresh {
 		e.cat = control.NewStores()
 	} else if err := e.loadCatalog(); err != nil {
@@ -39,6 +40,9 @@ func (e *Engine) recover() error {
 		e.counts.set(entry.File, entry.Count)
 	}
 	if err := e.openPieces(); err != nil {
+		return err
+	}
+	if err := e.status.Truncate(ctl.FrozenXID); err != nil { // termina un truncado cortado y fija el límite
 		return err
 	}
 
@@ -113,7 +117,7 @@ func (e *Engine) openPieces() error {
 	if e.pool, err = buffer.Open(cfg); err != nil {
 		return err
 	}
-	e.status, err = xact.Open(xact.Config{FS: e.fs, Dir: e.dir, Flusher: e.proxy})
+	e.status, err = xact.Open(xact.Config{FS: e.fs, Dir: e.dir, Flusher: e.proxy, FilePages: e.cfg.xactFilePages})
 	return err
 }
 
@@ -124,7 +128,7 @@ func (e *Engine) openPieces() error {
 * @return error
 **/
 func (e *Engine) finishRecovery(r *redoState) error {
-	next := max(r.nextXID, r.maxXID+1, 1)
+	next := max(r.nextXID, r.maxXID+1, 1, e.cfg.firstXID)
 	if err := e.status.Recover(next); err != nil {
 		return err
 	}
@@ -153,6 +157,9 @@ type redoState struct {
 **/
 func (r *redoState) apply(rec *wal.Record) error {
 	r.maxXID = max(r.maxXID, rec.XID)
+	if frozen, ok := btree.RecordFrozenXID(rec); ok {
+		r.nextXID = max(r.nextXID, frozen) // ningún xid nuevo por debajo del frozenXID de un store
+	}
 	if rec.Kind != wal.KindCheckpoint {
 		r.replayed++
 	}
@@ -175,11 +182,13 @@ func (r *redoState) dispatch(rec *wal.Record) error {
 	case k == wal.KindCommit:
 		return r.commit(rec)
 	case k == wal.KindAbort:
-		return r.e.status.SetStatus(rec.XID, xact.StatusAborted, rec.LSN)
+		return r.e.status.SetStatus(rec.XID, xact.StatusAborted, rec.LSN) // truncado: ErrTruncated, corrupción
 	case k == wal.KindCreateStore:
 		return r.createStore(rec)
 	case k == wal.KindDropStore:
 		return r.dropStore(rec)
+	case k == wal.KindEmptyStore:
+		return r.emptyStore(rec)
 	case k >= wal.KindLeafWrite && k < wal.KindOverflowWrite:
 		return r.blocks(rec, btree.Redo)
 	case k >= wal.KindOverflowWrite && k < wal.KindFreePush:
@@ -222,7 +231,21 @@ func (r *redoState) commit(rec *wal.Record) error {
 			r.e.counts.add(file, delta)
 		}
 	}
-	return r.e.status.SetStatus(rec.XID, xact.StatusCommitted, rec.LSN)
+	return r.setCommitted(rec)
+}
+
+/**
+* setCommitted anota confirmada la transacción de un registro. Un xid ya truncado se lee confirmado (y por debajo del
+* frozenXID ningún registro puede seguir en el WAL a rehacer): no hay nada que anotar.
+* @param rec *wal.Record
+* @return error
+**/
+func (r *redoState) setCommitted(rec *wal.Record) error {
+	err := r.e.status.SetStatus(rec.XID, xact.StatusCommitted, rec.LSN)
+	if errors.Is(err, xact.ErrTruncated) {
+		return nil
+	}
+	return err
 }
 
 /**
@@ -254,10 +277,43 @@ func (r *redoState) dropStore(rec *wal.Record) error {
 		return fmt.Errorf(MSG_BAD_RECORD, ErrCorrupt, rec.LSN, rec.Kind, "bad store data")
 	}
 	r.e.cat.Drop(name, file)
+	return r.unlinkUnused(file)
+}
+
+/**
+* emptyStore rehace el vaciado de un store: si todavía tiene el archivo viejo pasa al nuevo con el contador en 0 (los
+* bloques del nuevo, empezando por su KindInitStore, vienen después en el WAL) y, si el viejo ya no es de ningún
+* store, borra sus archivos, también los que un corte dejó.
+* @param rec *wal.Record
+* @return error
+**/
+func (r *redoState) emptyStore(rec *wal.Record) error {
+	old, file, name, ok := decodeEmptyMain(rec.Main)
+	if !ok {
+		return fmt.Errorf(MSG_BAD_RECORD, ErrCorrupt, rec.LSN, rec.Kind, "bad empty store data")
+	}
+	emptied, err := r.e.cat.Empty(name, old, file)
+	if err != nil {
+		return err
+	}
+	if emptied {
+		r.e.counts.set(file, 0)
+	}
+	return r.unlinkUnused(old)
+}
+
+/**
+* unlinkUnused borra los archivos y las páginas en caché de un número que ya no es de ningún store (los números no
+* se reutilizan); si sigue en uso no hace nada.
+* @param file smgr.FileNo
+* @return error
+**/
+func (r *redoState) unlinkUnused(file smgr.FileNo) error {
 	if _, alive := r.e.cat.ByFile(file); alive {
 		return nil
 	}
 	r.e.counts.remove(file)
+	r.e.frozen.forget(file)
 	r.e.pool.DropFile(file)
 	return r.e.sm.Unlink(file)
 }
@@ -285,5 +341,5 @@ func (r *redoState) blocks(rec *wal.Record, redo func(buffer.Pool, smgr.Manager,
 	if rec.LSN >= r.countLSN {
 		r.e.counts.add(file, leafCountDelta(rec.Flags))
 	}
-	return r.e.status.SetStatus(rec.XID, xact.StatusCommitted, rec.LSN)
+	return r.setCommitted(rec)
 }

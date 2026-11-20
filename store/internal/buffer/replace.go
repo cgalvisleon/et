@@ -78,7 +78,7 @@ func (p *pool) victim(strategy Strategy) (*desc, error) {
 }
 
 /**
-* tryPin fija el búfer si nadie lo tiene fijado y su uso no pasa de maxUsage.
+* tryPin fija el búfer si nadie lo tiene fijado, su uso no pasa de maxUsage y la caché sigue abierta.
 * @param d *desc, maxUsage uint8
 * @return bool
 **/
@@ -88,15 +88,14 @@ func (p *pool) tryPin(d *desc, maxUsage uint8) bool {
 	if d.pins != 0 || d.usage > maxUsage {
 		return false
 	}
-	d.pins = 1
-	return true
+	return p.pinLocked(d)
 }
 
 /**
 * clockSweep recorre los búferes desde la manecilla: baja el contador de uso de los que no están fijados y fija el
 * primero que encuentra libre con uso 0 (StrategyGetBuffer). Si da una vuelta entera sin bajar ningún contador,
 * todos están fijados.
-* @return *desc: fijado (pins = 1), error: ErrNoBuffers
+* @return *desc: fijado (pins = 1), error: ErrNoBuffers, ErrClosed
 **/
 func (p *pool) clockSweep() (*desc, error) {
 	n := uint64(len(p.descs))
@@ -106,8 +105,11 @@ func (p *pool) clockSweep() (*desc, error) {
 		d.mu.Lock()
 		switch {
 		case d.pins == 0 && d.usage == 0:
-			d.pins = 1
+			ok := p.pinLocked(d)
 			d.mu.Unlock()
+			if !ok {
+				return nil, ErrClosed
+			}
 			return d, nil
 		case d.pins == 0:
 			d.usage--

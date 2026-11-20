@@ -10,8 +10,11 @@
 //   - Mapa de visibilidad (fork smgr.ForkVM, fase 1B/2, pregunta 44): VMBitsPerBlock = 2 bits por bloque del fork
 //     principal —VMAllVisible (todas sus versiones visibles para todos) y VMAllFrozen (todas congeladas)—. Una
 //     página del mapa es un encabezado de página (pd_special = page.Size) seguido del mapa desde el byte
-//     page.HeaderSize: VMBlocksPerPage = 32.640 bloques por página. Cambiar una hoja borra sus bits (KindVMClear,
-//     en el mismo registro de la hoja cuando se puede); la limpieza los pone (KindVMSet).
+//     page.HeaderSize: VMBlocksPerPage = 32.640 bloques por página. Cambiar una hoja borra sus bits (KindVMClear, un
+//     registro propio con la hoja bloqueada y antes del de la hoja, solo si la hoja tiene page.FlagAllVisible); la
+//     limpieza los pone (KindVMSet, después de su KindLeafVacuum, con la hoja bloqueada). Así en todo prefijo del WAL
+//     un bit puesto implica una hoja sin cambios desde que la limpieza la vio (btree/doc.go, «Congelado y mapa de
+//     visibilidad»). Solo las hojas llevan bits.
 //
 // Qué no hace: no busca espacio dentro de una hoja (eso es del árbol: pd_lower/pd_upper). Depende de page, smgr,
 // buffer (Pool, Handle) y wal (Log) por sus interfaces. Manager (New) implementa FreeList y VisibilityMap; Redo
@@ -27,7 +30,7 @@
 // en cero, bloqueada en exclusivo para quien la pidió, que la inicia en su propio registro con BlockWillInit. Una
 // página nueva (lista vacía) sale de buffer.Pool.PinNew en ceros, sin registro: si el corte llega antes del registro
 // de quien la pidió, queda una página en ceros sin dueño (como en PostgreSQL), que no se pierde del archivo pero
-// tampoco vuelve a la lista (a confirmar: la recuperación de páginas huérfanas sería de Verify/Repair, fase 3).
+// tampoco vuelve a la lista hasta que Repair del motor la devuelve (ver «Verificación y reparación»).
 //
 // # Mapa de visibilidad
 //
@@ -38,6 +41,15 @@
 // bits; la primera escritura en ella la inicia en el mismo registro. Set extiende el fork si no cubre el bloque
 // (bajo un mutex propio, hoja); Get de un bloque fuera del mapa devuelve 0. Como en PostgreSQL, VMAllFrozen implica
 // VMAllVisible (Set pone los dos) y poner bits que ya están o borrar los que no están no escribe registro.
+//
+// # Verificación y reparación (fase 3)
+//
+// Para Verify y Repair del motor (store/doc.go): WalkFree recorre la lista desde la meta sin cambiar nada (cada página
+// libre y menor que el largo del fork, nunca más pasos que bloques; con buffer.Ring); ForEachVM entrega cada bloque
+// con bits en el mapa (copiados de una página del mapa a la vez, ya soltada); Reclaim devuelve a la lista una página
+// que nadie usa sea cual sea su contenido: la fija con PinZero (sin leerla, así también una ilegible) y la inicia con
+// el mismo KindFreePush que Free (BlockWillInit), sin la comprobación de doble liberación (una página libre fuera de la
+// lista ya tiene page.OpaqueFree). Free sigue siendo la de uso normal.
 //
 // # Registros del WAL (deltas, little-endian)
 //

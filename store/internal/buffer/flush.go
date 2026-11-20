@@ -118,6 +118,8 @@ func (p *pool) FlushAll(pace func(written, total int)) error {
 			if err != nil {
 				return err
 			}
+		} else if p.closed.Load() {
+			return ErrClosed
 		}
 		if pace != nil {
 			pace(i+1, len(list))
@@ -148,7 +150,7 @@ func (p *pool) dirtyList() []pending {
 }
 
 /**
-* pinIfTag fija el búfer si todavía tiene la página tag.
+* pinIfTag fija el búfer si todavía tiene la página tag y la caché sigue abierta.
 * @param d *desc, tag Tag
 * @return bool
 **/
@@ -158,8 +160,7 @@ func (p *pool) pinIfTag(d *desc, tag Tag) bool {
 	if d.state != stateValid || d.tag != tag {
 		return false
 	}
-	d.pins++
-	return true
+	return p.pinLocked(d)
 }
 
 /**
@@ -241,7 +242,7 @@ func (p *pool) bgWriteRound() error {
 }
 
 /**
-* pinIfReusableDirty fija el búfer si está sucio, sin pins y con uso 0.
+* pinIfReusableDirty fija el búfer si está sucio, sin pins, con uso 0 y la caché sigue abierta.
 * @param d *desc
 * @return bool
 **/
@@ -251,6 +252,5 @@ func (p *pool) pinIfReusableDirty(d *desc) bool {
 	if d.state != stateValid || !d.dirty || d.pins != 0 || d.usage != 0 {
 		return false
 	}
-	d.pins++
-	return true
+	return p.pinLocked(d)
 }

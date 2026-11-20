@@ -57,6 +57,9 @@ func (t *BTree) splitAndFinish(h buffer.Handle, n node, atEnd bool, xid page.XID
 **/
 func (t *BTree) split(h buffer.Handle, n node, atEnd bool, xid page.XID) error {
 	plan, err := planSplit(n, atEnd)
+	if err == nil {
+		err = t.clearVisible(n) // la izquierda se arma de nuevo, sin page.FlagAllVisible
+	}
 	if err != nil {
 		h.Release()
 		return err

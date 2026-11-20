@@ -7,7 +7,9 @@ import (
 	"github.com/cgalvisleon/et/store/internal/btree"
 	"github.com/cgalvisleon/et/store/internal/buffer"
 	"github.com/cgalvisleon/et/store/internal/overflow"
+	"github.com/cgalvisleon/et/store/internal/page"
 	"github.com/cgalvisleon/et/store/internal/wal"
+	"github.com/cgalvisleon/et/store/internal/xact"
 )
 
 const (
@@ -26,6 +28,17 @@ const (
 
 	// walTriggerDivisor: el checkpoint por volumen salta a MAX_WAL_SIZE / (1 + completionTarget).
 	walTriggerDivisor = 1 + completionTarget
+
+	// freezeMinAge (FREEZE_MIN_AGE, constante): 0 = se congela toda versión confirmada visible para todos la primera
+	// vez que la limpieza pasa por su hoja (ver «Congelado» en doc.go).
+	freezeMinAge = 0
+
+	// freezeTableAge (FREEZE_TABLE_AGE, constante): con el frozenXID de un store un archivo de estados entero detrás
+	// del horizonte, la limpieza es agresiva (no salta las hojas solo todo-visibles).
+	freezeTableAge = xact.XidsPerFile
+
+	// vacuumXids: la limpieza de fondo corre también cada medio archivo de estados de xids asignados.
+	vacuumXids = xact.XidsPerFile / 2
 )
 
 // config es lo configurable del motor: Open la lee del entorno y las pruebas la fijan a mano.
@@ -39,8 +52,16 @@ type config struct {
 	buffers           int           // STORE_CACHE_SIZE, en búferes de 8 KB
 	bgWriterDelay     time.Duration // pausa del escritor de fondo de la caché (0 = la de buffer)
 	checkEvery        time.Duration // cada cuánto mira el checkpointer si toca un checkpoint
+	walWriterDelay    time.Duration // WAL_WRITER_DELAY (ms): cada cuánto el escritor del WAL hace durable lo confirmado sin fsync (0 = apagado)
 	vacuumEvery       time.Duration // VACUUM_INTERVAL: cada cuánto mira la limpieza de fondo (0 = apagada)
 	vacuumWrites      int64         // VACUUM_THRESHOLD: escrituras desde la última limpieza de fondo para correr otra
+	vacuumXids        uint64        // xids asignados desde la última limpieza de fondo para correr otra
+	freezeMinAge      uint64        // se congela lo confirmado con xid < horizonte − freezeMinAge (FREEZE_MIN_AGE)
+	freezeTableAge    uint64        // limpieza agresiva si el frozenXID del store está así de detrás (FREEZE_TABLE_AGE)
+
+	// Solo pruebas: páginas por archivo de estados (0 = xact.PagesPerFile) y primer xid de un motor nuevo (0 = 1).
+	xactFilePages int
+	firstXID      page.XID
 }
 
 /**
@@ -57,8 +78,12 @@ func envConfig() config {
 		wal:               wal.EnvOptions(),
 		buffers:           buffer.EnvBuffers(),
 		checkEvery:        time.Second,
+		walWriterDelay:    time.Duration(max(envar.GetInt64("WAL_WRITER_DELAY", 200), 0)) * time.Millisecond,
 		vacuumEvery:       time.Duration(max(envar.GetInt64("VACUUM_INTERVAL", 60), 0)) * time.Second,
 		vacuumWrites:      max(envar.GetInt64("VACUUM_THRESHOLD", 1000), 0),
+		vacuumXids:        vacuumXids,
+		freezeMinAge:      freezeMinAge,
+		freezeTableAge:    freezeTableAge,
 	}
 }
 

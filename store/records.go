@@ -19,6 +19,9 @@ const (
 	// storeMainHeader: fileNo(4) nameLen(2), seguido del nombre (KindCreateStore y KindDropStore).
 	storeMainHeader = 6
 
+	// emptyMainHeader: oldFileNo(4) newFileNo(4) nameLen(2), seguido del nombre (KindEmptyStore).
+	emptyMainHeader = 10
+
 	// commitMainHeader: time(8) storeCount(4), seguido de storeCount × [fileNo(4) delta(8)] (KindCommit).
 	commitMainHeader = 12
 	commitStoreSize  = 12
@@ -30,6 +33,7 @@ type checkpointInfo struct {
 	nextXID page.XID
 	oldest  page.XID
 	time    int64
+	frozen  page.XID // el frozenXID del motor que guarda el control (no va en el registro)
 }
 
 /**
@@ -97,6 +101,37 @@ func decodeStoreMain(b []byte) (smgr.FileNo, string, bool) {
 		return 0, "", false
 	}
 	return file, string(b[storeMainHeader:]), true
+}
+
+/**
+* encodeEmptyMain arma los datos de KindEmptyStore: el número de archivo viejo, el nuevo y el nombre.
+* @param old, file smgr.FileNo, name string: de 1 a MaxNameLen bytes
+* @return []byte
+**/
+func encodeEmptyMain(old, file smgr.FileNo, name string) []byte {
+	b := make([]byte, emptyMainHeader+len(name))
+	le.PutUint32(b[0:], uint32(old))
+	le.PutUint32(b[4:], uint32(file))
+	le.PutUint16(b[8:], uint16(len(name)))
+	copy(b[emptyMainHeader:], name)
+	return b
+}
+
+/**
+* decodeEmptyMain lee los datos de KindEmptyStore.
+* @param b []byte
+* @return smgr.FileNo: el viejo, smgr.FileNo: el nuevo, string, bool: false si no tiene la forma del formato
+**/
+func decodeEmptyMain(b []byte) (smgr.FileNo, smgr.FileNo, string, bool) {
+	if len(b) < emptyMainHeader {
+		return 0, 0, "", false
+	}
+	old, file := smgr.FileNo(le.Uint32(b[0:])), smgr.FileNo(le.Uint32(b[4:]))
+	n := int(le.Uint16(b[8:]))
+	if old == 0 || file == 0 || old == file || n == 0 || n > MaxNameLen || len(b) != emptyMainHeader+n {
+		return 0, 0, "", false
+	}
+	return old, file, string(b[emptyMainHeader:]), true
 }
 
 /**

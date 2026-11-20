@@ -12,7 +12,7 @@ import (
 
 /**
 * Redo rehace un registro de btree (KindInitStore, KindLeafWrite, KindSplit, KindInsertPivot, KindNewRoot,
-* KindLeafVacuum, KindSetHints) durante la recuperación. Por cada bloque: si el fork es más corto, lo extiende; con imagen, la restaura sin condiciones y
+* KindLeafVacuum, KindSetHints, KindSetFrozen) durante la recuperación. Por cada bloque: si el fork es más corto, lo extiende; con imagen, la restaura sin condiciones y
 * aplica el delta; con BlockWillInit, inicia la página entera; si no, aplica el delta solo si pd_lsn < lsn del
 * registro. Así es idempotente. Los bloques con imagen o BlockWillInit se fijan con buffer.Pool.PinZero: la página en
 * disco puede estar rota por el corte. Es una función del paquete porque corre dentro de wal.Open.
@@ -48,6 +48,7 @@ var shapes = map[wal.Kind][]blockRule{
 	wal.KindNewRoot:     {{willInit: true}, {meta: true}, {}},
 	wal.KindLeafVacuum:  {{}},
 	wal.KindSetHints:    {{}},
+	wal.KindSetFrozen:   {{meta: true}},
 }
 
 /**

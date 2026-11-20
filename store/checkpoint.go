@@ -10,7 +10,8 @@ import (
 )
 
 /**
-* checkpoint hace un checkpoint (pasos 1–6 de «Checkpoint» en doc.go). Cualquier fallo deja el motor inutilizable.
+* checkpoint hace un checkpoint (pasos 1–7 de «Checkpoint» en doc.go; el 7 trunca el archivo de estados por debajo
+* del frozenXID que guardó el control). Cualquier fallo deja el motor inutilizable.
 * @param state control.State: StateInProduction, o StateShutdown en el de Close
 * @param spread bool: repartir la escritura de páginas en el 90 % del intervalo (el checkpoint de fondo)
 * @return error
@@ -52,6 +53,10 @@ func (e *Engine) checkpoint(state control.State, spread bool) error {
 		return e.fail(err)
 	}
 	e.stepDone(6)
+	if err := e.status.Truncate(info.frozen); err != nil {
+		return e.fail(err)
+	}
+	e.stepDone(7)
 	e.lastCheckpoint.Store(start.UnixNano())
 	return nil
 }
@@ -67,14 +72,15 @@ func (e *Engine) stepDone(step int) {
 }
 
 /**
-* beginCheckpoint es el paso 1: bajo el writeMu del WAL fija el punto de rehacer y, en ese mismo instante, toma el
-* siguiente xid, el xid vivo más viejo y los contadores. Lo hace con hintGate en exclusivo: ninguna lectura está
-* decidiendo o poniendo una marca de visibilidad sin WAL mientras se mueve el punto de rehacer (DELAY_CHKPT_START).
+* beginCheckpoint es el paso 1: toma el frozenXID del motor (antes del punto de rehacer: lo que lo justifica ya
+* está en el WAL) y, bajo el writeMu del WAL, fija el punto de rehacer y, en ese mismo instante, toma el siguiente
+* xid, el xid vivo más viejo y los contadores. Lo hace con hintGate en exclusivo: ninguna lectura está decidiendo o
+* poniendo una marca de visibilidad sin WAL mientras se mueve el punto de rehacer (DELAY_CHKPT_START).
 * @param now time.Time
 * @return checkpointInfo, map[smgr.FileNo]int64: los contadores al punto de rehacer, error
 **/
 func (e *Engine) beginCheckpoint(now time.Time) (checkpointInfo, map[smgr.FileNo]int64, error) {
-	info := checkpointInfo{time: now.UnixNano()}
+	info := checkpointInfo{time: now.UnixNano(), frozen: e.engineFrozen()}
 	var counts map[smgr.FileNo]int64
 	e.hintGate.Lock()
 	defer e.hintGate.Unlock()
@@ -167,6 +173,7 @@ func (e *Engine) writeControl(state control.State, info checkpointInfo, lsn page
 		CheckpointLSN:   lsn,
 		NextXID:         info.nextXID,
 		OldestActiveXID: info.oldest,
+		FrozenXID:       info.frozen,
 	}
 	if e.hasControl {
 		return e.ctl.Write(c)

@@ -186,7 +186,7 @@ func (m *Manager) ownedPrefix(file smgr.FileNo, ref Ref, owner page.XID) ([]page
 	var blocks []page.BlockNumber
 	block := ref.First
 	for seq := 0; seq < pagesOf(ref.Len); seq++ {
-		next, owned, err := m.ownPage(file, block, seq, ref.Len, owner)
+		next, owned, err := m.ownPage(file, block, seq, ref.Len, owner, buffer.Normal)
 		if err != nil || !owned {
 			return blocks, err
 		}
@@ -200,10 +200,11 @@ func (m *Manager) ownedPrefix(file smgr.FileNo, ref Ref, owner page.XID) ([]page
 * ownPage dice si la página block es todavía la página seq de la cadena de owner (un valor de total bytes) y, si lo
 * es, la valida como readPage.
 * @param file smgr.FileNo, block page.BlockNumber, seq int, total uint32, owner page.XID
+* @param strategy buffer.Strategy: buffer.Ring en los recorridos de Verify
 * @return page.BlockNumber: la siguiente, bool: si es de owner, error: ErrBadChain si es suya y está dañada
 **/
-func (m *Manager) ownPage(file smgr.FileNo, block page.BlockNumber, seq int, total uint32, owner page.XID) (page.BlockNumber, bool, error) {
-	h, err := m.pool.Pin(buffer.Tag{File: file, Fork: smgr.ForkMain, Block: block}, buffer.Normal)
+func (m *Manager) ownPage(file smgr.FileNo, block page.BlockNumber, seq int, total uint32, owner page.XID, strategy buffer.Strategy) (page.BlockNumber, bool, error) {
+	h, err := m.pool.Pin(buffer.Tag{File: file, Fork: smgr.ForkMain, Block: block}, strategy)
 	if err != nil {
 		return 0, false, err
 	}

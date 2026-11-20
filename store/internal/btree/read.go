@@ -71,6 +71,26 @@ func (t *BTree) visible(e entry, snap *xact.Snapshot, hs *hints) (bool, error) {
 * @return Version, bool: si hay una versión viva visible, error
 **/
 func (t *BTree) Lookup(id string, snap *xact.Snapshot) (Version, bool, error) {
+	return t.lookup(id, snap, true)
+}
+
+/**
+* Exists dice si id tiene una versión viva visible para snap (nil = la más nueva confirmada), como Lookup pero sin
+* copiar el valor en línea ni leer el de desborde.
+* @param id string, snap *xact.Snapshot
+* @return bool, error
+**/
+func (t *BTree) Exists(id string, snap *xact.Snapshot) (bool, error) {
+	_, found, err := t.lookup(id, snap, false)
+	return found, err
+}
+
+/**
+* lookup es Lookup; withValue dice si copia el valor en línea de la versión encontrada.
+* @param id string, snap *xact.Snapshot, withValue bool
+* @return Version, bool, error
+**/
+func (t *BTree) lookup(id string, snap *xact.Snapshot, withValue bool) (Version, bool, error) {
 	if err := checkID(id); err != nil {
 		return Version{}, false, err
 	}
@@ -101,7 +121,10 @@ func (t *BTree) Lookup(id string, snap *xact.Snapshot) (Version, bool, error) {
 		}
 		var ok bool
 		if ok, err = t.visible(e, snap, &hs); err == nil && ok {
-			v := e.version() // copia: e apunta a la página, que no se toca después de soltarla
+			v := e.header() // copia: e apunta a la página, que no se toca después de soltarla
+			if withValue {
+				v = e.version()
+			}
 			h.Release()
 			return v, v.Flags&EntryTombstone == 0, nil
 		}

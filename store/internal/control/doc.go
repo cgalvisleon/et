@@ -26,7 +26,7 @@
 //	 64   8 checkpointLSN    lsn del registro de checkpoint (≥ redoLSN); la recuperación debe encontrarlo
 //	 72   8 nextXID          el siguiente xid a asignar al tomar el punto de rehacer
 //	 80   8 oldestActiveXID  el xid vivo más viejo en ese momento (0 si ninguno)
-//	 88   8 frozenXID        reservado (fase 2, congelado): los xid menores se tratan como confirmados y el archivo de estados se trunca por debajo
+//	 88   8 frozenXID        el del motor (fase 2, congelado): el menor de los stores al checkpoint; los xid menores se leen confirmados y el archivo de estados se trunca por debajo
 //	 96 256 slots            reservado (fase 3): SlotCount ranuras de retención del WAL de SlotSize bytes: nombre (24, relleno con ceros) + restartLSN (8)
 //	352 156 reservado        en cero
 //	508   4 crc              CRC-32C de los bytes 0–507
@@ -60,7 +60,8 @@
 // los bytes (CRC, magia, versión, ceros reservados, rangos, que cada entrada quepa antes de leerla) y lo aceptado se
 // vuelve a codificar igual byte a byte. Una copia del control solo vale en el lugar que le toca por su seq. Tras un
 // fallo de escritura o de Sync, Write, Create y Save devuelven ErrFailed hasta reabrir (no se reintenta un fsync).
-// Create nunca pisa un control con una copia válida. Load rechaza un catálogo de más de 1 GiB (a confirmar).
+// Create nunca pisa un control con una copia válida. CatalogFile.Read lee y valida el catálogo como Load sin borrar
+// un catalog.tmp sobrante (Verify del motor no cambia nada). Load rechaza un catálogo de más de 1 GiB (a confirmar).
 //
 // Stores es el catálogo en memoria (nombre → Entry), seguro con varias goroutines y con un lock hoja. Los números de
 // archivo empiezan en FirstFileNo = 1 y no se reutilizan (AllocFileNo). Create, Drop y Empty son idempotentes para

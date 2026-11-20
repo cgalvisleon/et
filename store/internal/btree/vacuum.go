@@ -5,20 +5,57 @@ import (
 	"slices"
 
 	"github.com/cgalvisleon/et/store/internal/buffer"
+	"github.com/cgalvisleon/et/store/internal/fsm"
 	"github.com/cgalvisleon/et/store/internal/page"
 	"github.com/cgalvisleon/et/store/internal/wal"
 	"github.com/cgalvisleon/et/store/internal/xact"
 )
 
-// vacuumHeaderSize es el encabezado del delta de KindLeafVacuum: nMark(2) nRemove(2).
-const vacuumHeaderSize = 2 + 2
+const (
+	// vacuumHeaderSize es el encabezado del delta de KindLeafVacuum: nMark(2) nRemove(2).
+	vacuumHeaderSize = 2 + 2
+
+	// freezeHeaderSize es el encabezado del congelado, al final del delta: nFreeze(2) pageFlags(2).
+	freezeHeaderSize = 2 + 2
+
+	// vacuumSetVisible, en pageFlags del delta: la hoja queda con page.FlagAllVisible.
+	vacuumSetVisible uint16 = 1 << 0
+)
 
 // leafPlan es lo que la limpieza hace en una hoja: marcar «liberándose» las versiones muertas con desborde, quitar
-// las demás muertas, y las versiones cuyas cadenas hay que liberar (las recién marcadas y las que ya lo estaban).
+// las demás muertas, congelar las visibles para todos, las versiones cuyas cadenas hay que liberar (las recién
+// marcadas y las que ya lo estaban) y, si la hoja queda toda visible o toda congelada, sus bits del mapa.
 type leafPlan struct {
 	mark   []page.OffsetNumber
 	remove []page.OffsetNumber
+	freeze []page.OffsetNumber
 	chains []Version
+	kept   []keptEntry // versiones que no se quitan, en orden de número
+
+	busy       bool // queda una versión que no es visible para todos (o «liberándose»)
+	shared     bool // la hoja comparte un id con una vecina: no lleva bits (la limpieza no puede saltarla)
+	vmBits     fsm.VMBits
+	oldest     page.XID // el menor xid de lo que queda sin congelar
+	setVisible bool     // el registro pone page.FlagAllVisible
+}
+
+// keptEntry es una versión que la limpieza deja en la hoja, con lo que hace falta para congelarla.
+type keptEntry struct {
+	off    page.OffsetNumber
+	xid    page.XID
+	status xact.Status
+	frozen bool
+}
+
+// pageVacuum es el cambio de un KindLeafVacuum en una hoja.
+type pageVacuum struct {
+	mark, remove, freeze []page.OffsetNumber
+	setVisible           bool
+}
+
+// empty dice si el cambio no hace nada.
+func (pv pageVacuum) empty() bool {
+	return len(pv.mark)+len(pv.remove)+len(pv.freeze) == 0 && !pv.setVisible
 }
 
 // vacuumGroup son las versiones de un id que la limpieza está mirando, de la más nueva a la más vieja.
@@ -30,60 +67,236 @@ type vacuumGroup struct {
 	behind    bool              // detrás de la versión de referencia queda una versión que no se quita
 }
 
+// vacuumRun es una pasada de la limpieza sobre el árbol.
+type vacuumRun struct {
+	t     *BTree
+	opts  VacuumOptions
+	st    VacuumStats
+	carry vacuumGroup // el último id de la hoja recorrida antes (sus versiones pueden seguir en la siguiente)
+}
+
+// parentLinks son los enlaces de una página del nivel 1, copiados con ella bloqueada, y su hermana derecha.
+type parentLinks struct {
+	downs []page.BlockNumber
+	next  page.BlockNumber
+}
+
 /**
-* Vacuum limpia el store (como VACUUM, fase 1): recorre las hojas de izquierda a derecha por sus enlaces, una
-* bloqueada a la vez, y quita las versiones que ningún snapshot puede ver: las de transacciones abortadas, las que
-* reemplazó una versión confirmada visible para todos (xid < Horizon) y la lápida que queda sin versiones detrás. Las
-* que tienen desborde se marcan «liberándose» en el mismo registro (KindLeafVacuum), se libera su cadena con
-* opts.Free y recién entonces se quitan (pregunta 58): un corte a mitad deja la versión marcada y la próxima pasada
-* sigue desde donde quedó. El espacio se reutiliza dentro de la hoja (las hojas vacías quedan: borrarlas es de la fase
-* 2). Puede correr con lecturas y escrituras; quien llama no corre dos limpiezas del mismo store a la vez.
+* Vacuum limpia el store (como VACUUM): quita las versiones que ningún snapshot puede ver (las de transacciones
+* abortadas, las que reemplazó una versión confirmada visible para todos —xid < Horizon— y la lápida que queda sin
+* versiones detrás), congela las confirmadas con xid < FreezeLimit y anota en el mapa de visibilidad las hojas que
+* quedan todo-visibles o todo-congeladas. Con mapa y un árbol de dos niveles o más recorre las hojas por los enlaces
+* del nivel 1 y salta, sin leerlas, las que el mapa da por todo-congeladas (y sin Aggressive, también las
+* todo-visibles); si no, recorre todas por sus enlaces. Las versiones con desborde se marcan «liberándose» en el
+* mismo registro (KindLeafVacuum), se libera su cadena con opts.Free y recién entonces se quitan (pregunta 58). Puede
+* correr con lecturas y escrituras; quien llama no corre dos limpiezas del mismo store a la vez.
 * @param opts VacuumOptions
 * @return VacuumStats, error
 **/
 func (t *BTree) Vacuum(opts VacuumOptions) (VacuumStats, error) {
-	var st VacuumStats
-	h, n, _, err := t.descend(minusInf, 0, buffer.Exclusive, false)
-	if err != nil {
-		return st, err
-	}
-	var carry vacuumGroup
-	for {
-		blk, next, last, level := n.blk, n.o.Next, n.rightmost(), n.o.Level
-		plan, err := t.planLeaf(n, opts, &carry)
-		if err != nil {
-			h.Release()
-			return st, err
-		}
-		if err := t.vacuumPage(h, plan.mark, plan.remove, opts.XID); err != nil {
-			return st, err
-		}
-		st.Leaves++
-		st.Removed += len(plan.remove)
-		if err := t.freeChains(blk, plan.chains, opts, &st); err != nil {
-			return st, err
-		}
-		if last {
-			return st, nil
-		}
-		if h, n, err = t.lockNode(next, buffer.Exclusive); err != nil {
-			return st, err
-		}
-		if n.o.Level != level {
-			h.Release()
-			return st, corruptAt(next, "right sibling at level %d, expected %d", n.o.Level, level)
+	opts.FreezeLimit = min(opts.FreezeLimit, opts.Horizon)
+	r := &vacuumRun{t: t, opts: opts}
+	r.st.FrozenXID = opts.Horizon
+	m, err := t.readMeta()
+	if err == nil {
+		if m.level == 0 || t.vm == nil {
+			err = r.leftmostChain()
+		} else {
+			err = r.byParents()
 		}
 	}
+	r.st.Complete = err == nil && r.st.SkippedVisible == 0
+	return r.st, err
 }
 
 /**
-* planLeaf decide, con la hoja bloqueada en exclusivo, qué versiones quitar y cuáles marcar. carry es el último id de
-* la hoja anterior (sus versiones pueden seguir en esta) y al volver es el último de esta.
+* leftmostChain recorre todas las hojas desde la de más a la izquierda por sus enlaces, sin saltar ninguna.
+* @return error
+**/
+func (r *vacuumRun) leftmostChain() error {
+	h, n, _, err := r.t.descend(minusInf, 0, buffer.Share, false)
+	if err != nil {
+		return err
+	}
+	first := n.blk
+	h.Release()
+	return r.chain(first, 0)
+}
+
+/**
+* byParents recorre las hojas por los enlaces del nivel 1, de izquierda a derecha. Cada página del nivel 1 se lee con
+* bloqueo compartido y se copian sus enlaces (también los de la siguiente, para saber dónde termina la última cadena);
+* cada enlace es una hoja que puede saltarse por el mapa, y desde una hoja leída se sigue a la derecha hasta el enlace
+* siguiente: así se ven las hojas nuevas de particiones posteriores a la copia (o sin enlace en el padre todavía).
+* @return error
+**/
+func (r *vacuumRun) byParents() error {
+	h, n, _, err := r.t.descend(minusInf, 1, buffer.Share, false)
+	if err != nil {
+		return err
+	}
+	cur, err := readParentLinks(h, n)
+	for err == nil {
+		var nxt parentLinks
+		if cur.next != 0 {
+			if nxt, err = r.t.parentLinksAt(cur.next); err != nil {
+				return err
+			}
+		}
+		for i, d := range cur.downs {
+			stop := page.BlockNumber(0)
+			if i+1 < len(cur.downs) {
+				stop = cur.downs[i+1]
+			} else if len(nxt.downs) > 0 {
+				stop = nxt.downs[0]
+			}
+			if err = r.downlink(d, stop); err != nil {
+				return err
+			}
+		}
+		if cur.next == 0 {
+			return nil
+		}
+		cur = nxt
+	}
+	return err
+}
+
+/**
+* parentLinksAt bloquea en compartido la página blk del nivel 1 y copia sus enlaces.
+* @param blk page.BlockNumber
+* @return parentLinks, error
+**/
+func (t *BTree) parentLinksAt(blk page.BlockNumber) (parentLinks, error) {
+	h, n, err := t.lockNode(blk, buffer.Share)
+	if err != nil {
+		return parentLinks{}, err
+	}
+	if n.o.Level != 1 {
+		h.Release()
+		return parentLinks{}, corruptAt(blk, "right sibling at level %d, expected 1", n.o.Level)
+	}
+	return readParentLinks(h, n)
+}
+
+/**
+* readParentLinks copia los enlaces de una página del nivel 1 bloqueada y la suelta.
+* @param h buffer.Handle, n node
+* @return parentLinks, error
+**/
+func readParentLinks(h buffer.Handle, n node) (parentLinks, error) {
+	defer h.Release()
+	pl := parentLinks{next: n.o.Next}
+	for off := n.firstData(); off <= n.maxOff(); off++ {
+		v, err := n.pivotAt(off)
+		if err != nil {
+			return parentLinks{}, err
+		}
+		pl.downs = append(pl.downs, v.downlink())
+	}
+	return pl, nil
+}
+
+/**
+* downlink limpia la hoja de un enlace del padre (o la salta por el mapa) y las que la siguen por la derecha hasta
+* stop. Saltar es seguro: el bit solo lo pone la limpieza con la hoja sin partición incompleta, y toda escritura o
+* partición de la hoja lo borra antes de cambiarla, así que una hoja con el bit puesto no tiene a su derecha páginas
+* fuera de la copia de los enlaces (y lo que una partición posterior se lleve está congelado o es de un xid ≥ Horizon).
+* @param d, stop page.BlockNumber
+* @return error
+**/
+func (r *vacuumRun) downlink(d, stop page.BlockNumber) error {
+	bits, err := r.t.vm.Get(r.t.file, d)
+	if err != nil {
+		return err
+	}
+	frozen, visible := bits&fsm.VMAllFrozen != 0, bits&fsm.VMAllVisible != 0
+	if frozen || (visible && !r.opts.Aggressive) {
+		r.st.Skipped++
+		if !frozen {
+			r.st.SkippedVisible++
+		}
+		r.carry = vacuumGroup{} // la hoja saltada no comparte ids con la siguiente (no tendría bits)
+		return nil
+	}
+	return r.chain(d, stop)
+}
+
+/**
+* chain limpia la hoja blk y las que la siguen por la derecha hasta stop (sin incluirla; 0 = hasta el final).
+* @param blk, stop page.BlockNumber
+* @return error
+**/
+func (r *vacuumRun) chain(blk, stop page.BlockNumber) error {
+	for blk != 0 && blk != stop {
+		next, err := r.leaf(blk)
+		if err != nil {
+			return err
+		}
+		blk = next
+	}
+	return nil
+}
+
+/**
+* leaf limpia una hoja bloqueada en exclusivo: planea, registra el KindLeafVacuum, pone los bits del mapa, la suelta y
+* libera las cadenas de lo que quedó «liberándose».
+* @param blk page.BlockNumber
+* @return page.BlockNumber: la hermana derecha, error
+**/
+func (r *vacuumRun) leaf(blk page.BlockNumber) (page.BlockNumber, error) {
+	h, n, err := r.t.lockNode(blk, buffer.Exclusive)
+	if err != nil {
+		return 0, err
+	}
+	if !n.leaf() {
+		h.Release()
+		return 0, corruptAt(blk, "vacuum reached a page of level %d", n.o.Level)
+	}
+	next := n.o.Next
+	plan, err := r.t.planLeaf(n, r.opts, &r.carry)
+	if err == nil {
+		err = r.t.vacuumLeaf(h, n, plan, r.opts.XID)
+	}
+	h.Release()
+	if err != nil {
+		return 0, err
+	}
+	r.st.Leaves++
+	r.st.Removed += len(plan.remove)
+	r.st.Frozen += len(plan.freeze)
+	r.st.FrozenXID = min(r.st.FrozenXID, plan.oldest)
+	return next, r.t.freeChains(blk, plan.chains, r.opts, &r.st)
+}
+
+/**
+* vacuumLeaf registra y aplica el KindLeafVacuum de la hoja (si hay algo que hacer) y después pone sus bits del mapa,
+* todo con la hoja bloqueada en exclusivo: así ninguna escritura se cruza entre la marca de la página y el bit. El
+* registro de la hoja va antes que el del mapa (y lo escribe antes de pedir la página del mapa: nunca se espera entre
+* Reserve y Write).
+* @param h buffer.Handle, n node: la hoja, plan leafPlan, xid page.XID
+* @return error
+**/
+func (t *BTree) vacuumLeaf(h buffer.Handle, n node, plan leafPlan, xid page.XID) error {
+	pv := pageVacuum{mark: plan.mark, remove: plan.remove, freeze: plan.freeze, setVisible: plan.setVisible}
+	if err := t.logVacuum(h, pv, xid); err != nil {
+		return err
+	}
+	if plan.vmBits == 0 || t.vm == nil {
+		return nil
+	}
+	return t.vm.Set(t.file, n.blk, plan.vmBits)
+}
+
+/**
+* planLeaf decide, con la hoja bloqueada en exclusivo, qué versiones quitar, cuáles marcar y cuáles congelar, y qué
+* bits del mapa le tocan. carry es el último id de la hoja anterior (sus versiones pueden seguir en esta) y al volver
+* es el último de esta.
 * @param n node, opts VacuumOptions, carry *vacuumGroup
 * @return leafPlan, error
 **/
 func (t *BTree) planLeaf(n node, opts VacuumOptions, carry *vacuumGroup) (leafPlan, error) {
-	var plan leafPlan
+	plan := leafPlan{oldest: opts.Horizon}
 	var g *vacuumGroup
 	for off := n.firstData(); off <= n.maxOff(); off++ {
 		e, err := n.entryAt(off)
@@ -93,6 +306,8 @@ func (t *BTree) planLeaf(n node, opts VacuumOptions, carry *vacuumGroup) (leafPl
 		if g == nil || !bytes.Equal(g.id, e.id()) {
 			if g != nil {
 				plan.endGroup(g)
+			} else if bytes.Equal(carry.id, e.id()) {
+				plan.shared = true // el primer id viene de la hoja anterior
 			}
 			g = startGroup(e.id(), carry)
 		}
@@ -100,14 +315,56 @@ func (t *BTree) planLeaf(n node, opts VacuumOptions, carry *vacuumGroup) (leafPl
 			return leafPlan{}, err
 		}
 	}
-	if g != nil {
-		if !continuesRight(n, g.id) {
+	if g != nil { // una hoja vacía deja pasar el grupo de la anterior
+		if continuesRight(n, g.id) {
+			shared, err := t.rightStartsWith(n, g.id)
+			if err != nil {
+				return leafPlan{}, err
+			}
+			plan.shared = plan.shared || shared
+		} else {
 			plan.endGroup(g)
 		}
 		*carry = *g
 	}
 	slices.Sort(plan.remove)
+	plan.finish(n, opts)
 	return plan, nil
+}
+
+/**
+* finish decide, con todo lo que queda en la hoja, qué se congela (confirmada y xid < FreezeLimit), el menor xid sin
+* congelar y los bits del mapa: todo-visible si todo lo que queda es visible para todos, todo-congelada si además todo
+* queda congelado. Una hoja con partición incompleta o que comparte un id con una vecina no lleva bits.
+* @param n node, opts VacuumOptions
+**/
+func (plan *leafPlan) finish(n node, opts VacuumOptions) {
+	allFrozen := true
+	for _, k := range plan.kept {
+		if _, removed := slices.BinarySearch(plan.remove, k.off); removed {
+			continue
+		}
+		committed := k.status == xact.StatusCommitted
+		if !k.frozen && !(committed && k.xid < opts.Horizon) {
+			plan.busy = true
+		}
+		switch {
+		case k.frozen:
+		case committed && k.xid < opts.FreezeLimit:
+			plan.freeze = append(plan.freeze, k.off)
+		default:
+			allFrozen = false
+			plan.oldest = min(plan.oldest, k.xid)
+		}
+	}
+	if plan.busy || plan.shared || n.incomplete() {
+		return
+	}
+	plan.vmBits = fsm.VMAllVisible
+	if allFrozen {
+		plan.vmBits = fsm.VMAllFrozen
+	}
+	plan.setVisible = n.p.Flags()&page.FlagAllVisible == 0
 }
 
 /**
@@ -125,12 +382,13 @@ func startGroup(id []byte, carry *vacuumGroup) *vacuumGroup {
 
 /**
 * planEntry decide una versión: ya «liberándose» (seguir liberando), muerta (detrás de la de referencia, o abortada),
-* la de referencia (confirmada y visible para todos) o viva (se queda).
+* la de referencia (confirmada y visible para todos) o viva (se queda). Las que quedan van a plan.kept.
 * @param plan *leafPlan, g *vacuumGroup, off page.OffsetNumber, e entry, opts VacuumOptions
 * @return error: el del archivo de estados
 **/
 func (t *BTree) planEntry(plan *leafPlan, g *vacuumGroup, off page.OffsetNumber, e entry, opts VacuumOptions) error {
 	if e.freeing() {
+		plan.busy = true
 		if opts.Free != nil {
 			plan.chains = append(plan.chains, e.version())
 		}
@@ -141,23 +399,27 @@ func (t *BTree) planEntry(plan *leafPlan, g *vacuumGroup, off page.OffsetNumber,
 		return nil
 	}
 	st, err := t.statusOf(e, nil)
-	switch {
-	case err != nil:
+	if err != nil {
 		return err
-	case st == xact.StatusAborted:
+	}
+	if st == xact.StatusAborted {
 		plan.dead(g, off, e, opts)
-	case st == xact.StatusCommitted && (e.flags()&EntryFrozen != 0 || e.xid() < opts.Horizon):
+		return nil
+	}
+	frozen := e.flags()&EntryFrozen != 0
+	if st == xact.StatusCommitted && (frozen || e.xid() < opts.Horizon) {
 		g.anchored, g.anchorLSN = true, e.lsn()
 		if e.tombstone() {
 			g.tomb = off
 		}
 	}
+	plan.kept = append(plan.kept, keptEntry{off: off, xid: e.xid(), status: st, frozen: frozen})
 	return nil
 }
 
 /**
 * dead anota una versión muerta: se quita, o se marca «liberándose» si tiene desborde (y hay con qué liberarlo; si no,
-* se queda).
+* se queda y la hoja no puede quedar toda visible).
 * @param g *vacuumGroup, off page.OffsetNumber, e entry, opts VacuumOptions
 **/
 func (plan *leafPlan) dead(g *vacuumGroup, off page.OffsetNumber, e entry, opts VacuumOptions) {
@@ -165,12 +427,17 @@ func (plan *leafPlan) dead(g *vacuumGroup, off page.OffsetNumber, e entry, opts 
 	case e.flags()&EntryOverflow == 0:
 		plan.remove = append(plan.remove, off)
 	case opts.Free != nil:
+		plan.busy = true // sigue en la hoja hasta que se libere su cadena
 		plan.mark = append(plan.mark, off)
 		v := e.version()
 		v.Flags |= EntryFreeing
 		plan.chains = append(plan.chains, v)
-	case g.anchored:
-		g.behind = true
+	default:
+		plan.busy = true
+		plan.oldest = min(plan.oldest, e.xid())
+		if g.anchored {
+			g.behind = true
+		}
 	}
 }
 
@@ -201,19 +468,44 @@ func continuesRight(n node, id []byte) bool {
 }
 
 /**
-* vacuumPage registra y aplica un KindLeafVacuum sobre la hoja bloqueada en exclusivo (si hay algo que hacer), la
-* suelta y escribe el registro.
-* @param h buffer.Handle, mark, remove []page.OffsetNumber: en orden ascendente, xid page.XID
+* rightStartsWith dice si la hermana derecha de la hoja todavía empieza con versiones de id: la bloquea en compartido
+* con la hoja bloqueada (de izquierda a derecha, como latest). Cuando la limpieza ya quitó esas versiones, la clave alta
+* sigue nombrando el id pero la hoja ya no comparte nada y puede llevar bits: una versión nueva del id va siempre a la
+* izquierda de la clave alta, así que la hermana no vuelve a tener ese id.
+* @param n node: la hoja, no la de más a la derecha; id []byte
+* @return bool, error
+**/
+func (t *BTree) rightStartsWith(n node, id []byte) (bool, error) {
+	h, rn, err := t.lockNode(n.o.Next, buffer.Share)
+	if err != nil {
+		return false, err
+	}
+	defer h.Release()
+	if rn.o.Level != n.o.Level {
+		return false, corruptAt(rn.blk, "right sibling at level %d, expected %d", rn.o.Level, n.o.Level)
+	}
+	if rn.dataCount() == 0 {
+		return false, nil
+	}
+	e, err := rn.entryAt(rn.firstData())
+	if err != nil {
+		return false, err
+	}
+	return bytes.Equal(e.id(), id), nil
+}
+
+/**
+* logVacuum registra, aplica y escribe un KindLeafVacuum sobre la hoja bloqueada en exclusivo (si hay algo que
+* hacer). La hoja sigue bloqueada al volver.
+* @param h buffer.Handle, pv pageVacuum: listas en orden ascendente, xid page.XID
 * @return error
 **/
-func (t *BTree) vacuumPage(h buffer.Handle, mark, remove []page.OffsetNumber, xid page.XID) error {
-	if len(mark) == 0 && len(remove) == 0 {
-		h.Release()
+func (t *BTree) logVacuum(h buffer.Handle, pv pageVacuum, xid page.XID) error {
+	if pv.empty() {
 		return nil
 	}
-	refs := []wal.BlockRef{{Delta: vacuumDelta(mark, remove)}}
+	refs := []wal.BlockRef{{Delta: vacuumDelta(pv)}}
 	res, err := t.logChange(wal.KindLeafVacuum, xid, 0, refs, []buffer.Handle{h}, nil)
-	h.Release()
 	if err != nil {
 		return err
 	}
@@ -266,7 +558,9 @@ func (t *BTree) removeFreeing(blk page.BlockNumber, vs []Version, xid page.XID) 
 				break
 			}
 			next := n.o.Next
-			if err := t.vacuumPage(h, nil, offs, xid); err != nil {
+			err = t.logVacuum(h, pageVacuum{remove: offs}, xid)
+			h.Release()
+			if err != nil {
 				return removed, err
 			}
 			removed, offs = removed+len(offs), nil
@@ -280,51 +574,116 @@ func (t *BTree) removeFreeing(blk page.BlockNumber, vs []Version, xid page.XID) 
 			}
 		}
 	}
-	err = t.vacuumPage(h, nil, offs, xid)
+	err = t.logVacuum(h, pageVacuum{remove: offs}, xid)
+	h.Release()
 	return removed + len(offs), err
 }
 
 /**
 * vacuumDelta arma el delta de KindLeafVacuum: nMark(2) nRemove(2), los números a marcar «liberándose» y los números
-* a quitar, cada lista en orden ascendente.
-* @param mark, remove []page.OffsetNumber
+* a quitar y, si congela o marca la página, nFreeze(2) pageFlags(2) y los números a congelar; cada lista en orden
+* ascendente. Sin congelado el delta es el de la fase 1B.
+* @param pv pageVacuum
 * @return []byte
 **/
-func vacuumDelta(mark, remove []page.OffsetNumber) []byte {
-	b := le.AppendUint16(nil, uint16(len(mark)))
-	b = le.AppendUint16(b, uint16(len(remove)))
-	for _, off := range append(slices.Clone(mark), remove...) {
+func vacuumDelta(pv pageVacuum) []byte {
+	b := le.AppendUint16(nil, uint16(len(pv.mark)))
+	b = le.AppendUint16(b, uint16(len(pv.remove)))
+	b = appendOffsets(b, pv.mark)
+	b = appendOffsets(b, pv.remove)
+	if len(pv.freeze) == 0 && !pv.setVisible {
+		return b
+	}
+	var flags uint16
+	if pv.setVisible {
+		flags = vacuumSetVisible
+	}
+	b = le.AppendUint16(b, uint16(len(pv.freeze)))
+	b = le.AppendUint16(b, flags)
+	return appendOffsets(b, pv.freeze)
+}
+
+/**
+* appendOffsets agrega números de ítem de 2 bytes.
+* @param b []byte, offs []page.OffsetNumber
+* @return []byte
+**/
+func appendOffsets(b []byte, offs []page.OffsetNumber) []byte {
+	for _, off := range offs {
 		b = le.AppendUint16(b, uint16(off))
 	}
 	return b
 }
 
 /**
-* parseVacuum lee el delta de KindLeafVacuum: algo que hacer, largos exactos, cada lista estrictamente ascendente y
-* sin números en las dos.
-* @param delta []byte
-* @return mark, remove []page.OffsetNumber, error: ErrBadRecord
+* readOffsets lee n números de ítem de 2 bytes.
+* @param b []byte: con al menos 2n bytes, n int
+* @return []page.OffsetNumber
 **/
-func parseVacuum(delta []byte) ([]page.OffsetNumber, []page.OffsetNumber, error) {
+func readOffsets(b []byte, n int) []page.OffsetNumber {
+	offs := make([]page.OffsetNumber, n)
+	for i := range offs {
+		offs[i] = page.OffsetNumber(le.Uint16(b[2*i:]))
+	}
+	return offs
+}
+
+/**
+* parseVacuum lee el delta de KindLeafVacuum: algo que hacer, largos exactos, cada lista estrictamente ascendente y
+* sin números comunes entre listas, y solo marcas de página conocidas.
+* @param delta []byte
+* @return pageVacuum, error: ErrBadRecord
+**/
+func parseVacuum(delta []byte) (pageVacuum, error) {
 	if len(delta) < vacuumHeaderSize {
-		return nil, nil, badRecord(wal.KindLeafVacuum, "vacuum delta too short")
+		return pageVacuum{}, badRecord(wal.KindLeafVacuum, "vacuum delta too short")
 	}
 	nm, nr := int(le.Uint16(delta)), int(le.Uint16(delta[2:]))
-	if nm+nr == 0 || len(delta) != vacuumHeaderSize+2*(nm+nr) {
-		return nil, nil, badRecord(wal.KindLeafVacuum, "bad vacuum delta length")
+	base := vacuumHeaderSize + 2*(nm+nr)
+	if len(delta) < base {
+		return pageVacuum{}, badRecord(wal.KindLeafVacuum, "bad vacuum delta length")
 	}
-	offs := make([]page.OffsetNumber, nm+nr)
-	for i := range offs {
-		offs[i] = page.OffsetNumber(le.Uint16(delta[vacuumHeaderSize+2*i:]))
+	pv := pageVacuum{mark: readOffsets(delta[vacuumHeaderSize:], nm), remove: readOffsets(delta[vacuumHeaderSize+2*nm:], nr)}
+	if rest := delta[base:]; len(rest) > 0 {
+		if err := parseFreeze(rest, &pv); err != nil {
+			return pageVacuum{}, err
+		}
 	}
-	mark, remove := offs[:nm], offs[nm:]
-	if !ascending(mark) || !ascending(remove) || slices.ContainsFunc(mark, func(o page.OffsetNumber) bool {
-		_, found := slices.BinarySearch(remove, o)
+	if pv.empty() || !ascending(pv.mark) || !ascending(pv.remove) || !ascending(pv.freeze) ||
+		shares(pv.mark, pv.remove) || shares(pv.freeze, pv.mark) || shares(pv.freeze, pv.remove) {
+		return pageVacuum{}, badRecord(wal.KindLeafVacuum, "vacuum offsets empty, out of order or repeated")
+	}
+	return pv, nil
+}
+
+/**
+* parseFreeze lee la parte del congelado del delta: nFreeze(2) pageFlags(2) y los números.
+* @param b []byte, pv *pageVacuum
+* @return error: ErrBadRecord
+**/
+func parseFreeze(b []byte, pv *pageVacuum) error {
+	if len(b) < freezeHeaderSize {
+		return badRecord(wal.KindLeafVacuum, "bad vacuum delta length")
+	}
+	nf, flags := int(le.Uint16(b)), le.Uint16(b[2:])
+	if len(b) != freezeHeaderSize+2*nf || flags&^vacuumSetVisible != 0 || (nf == 0 && flags == 0) {
+		return badRecord(wal.KindLeafVacuum, "bad vacuum freeze data")
+	}
+	pv.freeze = readOffsets(b[freezeHeaderSize:], nf)
+	pv.setVisible = flags&vacuumSetVisible != 0
+	return nil
+}
+
+/**
+* shares dice si dos listas ascendentes tienen algún número en común.
+* @param a, b []page.OffsetNumber
+* @return bool
+**/
+func shares(a, b []page.OffsetNumber) bool {
+	return slices.ContainsFunc(a, func(o page.OffsetNumber) bool {
+		_, found := slices.BinarySearch(b, o)
 		return found
-	}) {
-		return nil, nil, badRecord(wal.KindLeafVacuum, "vacuum offsets out of order or repeated")
-	}
-	return mark, remove, nil
+	})
 }
 
 /**
@@ -343,13 +702,14 @@ func ascending(offs []page.OffsetNumber) bool {
 
 /**
 * applyLeafVacuum aplica el delta de KindLeafVacuum a la hoja (la misma función al limpiar y al rehacer): valida todos
-* los números, marca EntryFreeing en las versiones con desborde de mark, quita las de remove y compacta la página
-* (page.Repair). No cambia la clave alta ni los enlaces.
+* los números, marca EntryFreeing en las versiones con desborde de mark, EntryFrozen en las de freeze (nunca en una
+* «liberándose»), page.FlagAllVisible si el delta lo pide, quita las de remove y compacta la página (page.Repair). No
+* cambia la clave alta ni los enlaces.
 * @param p page.Page, delta []byte
 * @return error: ErrBadRecord si un número no cae en una entrada de la hoja
 **/
 func applyLeafVacuum(p page.Page, delta []byte) error {
-	mark, remove, err := parseVacuum(delta)
+	pv, err := parseVacuum(delta)
 	if err != nil {
 		return err
 	}
@@ -358,7 +718,33 @@ func applyLeafVacuum(p page.Page, delta []byte) error {
 		return badRecord(wal.KindLeafVacuum, "not a leaf")
 	}
 	n := node{p: p, o: o}
-	for _, off := range append(slices.Clone(mark), remove...) {
+	if err := checkVacuumEntries(n, pv); err != nil {
+		return err
+	}
+	if err := orEntries(p, pv.mark, EntryFreeing); err != nil {
+		return err
+	}
+	if err := orEntries(p, pv.freeze, EntryFrozen); err != nil {
+		return err
+	}
+	if pv.setVisible {
+		p.SetFlags(p.Flags() | page.FlagAllVisible)
+	}
+	if err := p.DeleteItems(pv.remove); err != nil {
+		return badRecord(wal.KindLeafVacuum, err.Error())
+	}
+	return p.Repair()
+}
+
+/**
+* checkVacuumEntries valida que cada número caiga en una entrada de datos de la hoja, que solo se marquen
+* «liberándose» versiones con desborde y que no se congele una «liberándose».
+* @param n node, pv pageVacuum
+* @return error: ErrBadRecord
+**/
+func checkVacuumEntries(n node, pv pageVacuum) error {
+	all := slices.Concat(pv.mark, pv.remove, pv.freeze)
+	for _, off := range all {
 		if off < n.firstData() || off > n.maxOff() {
 			return badRecord(wal.KindLeafVacuum, "offset outside the leaf's entries")
 		}
@@ -366,18 +752,27 @@ func applyLeafVacuum(p page.Page, delta []byte) error {
 		if err != nil {
 			return badRecord(wal.KindLeafVacuum, err.Error())
 		}
-		if slices.Contains(mark, off) && (e.flags()&EntryOverflow == 0) {
+		if _, marked := slices.BinarySearch(pv.mark, off); marked && e.flags()&EntryOverflow == 0 {
 			return badRecord(wal.KindLeafVacuum, "only an overflow version can be freeing")
 		}
+		if _, frozen := slices.BinarySearch(pv.freeze, off); frozen && e.freeing() {
+			return badRecord(wal.KindLeafVacuum, "a freeing version cannot be frozen")
+		}
 	}
-	for _, off := range mark {
+	return nil
+}
+
+/**
+* orEntries agrega una marca a las entradas de la hoja con un OR atómico.
+* @param p page.Page, offs []page.OffsetNumber, flag EntryFlags
+* @return error: ErrBadRecord si una entrada no se puede marcar
+**/
+func orEntries(p page.Page, offs []page.OffsetNumber, flag EntryFlags) error {
+	for _, off := range offs {
 		b, _ := p.Item(off)
-		if !entry(b).orFlags(EntryFreeing) {
+		if !entry(b).orFlags(flag) {
 			return badRecord(wal.KindLeafVacuum, "cannot mark an entry")
 		}
 	}
-	if err := p.DeleteItems(remove); err != nil {
-		return badRecord(wal.KindLeafVacuum, err.Error())
-	}
-	return p.Repair()
+	return nil
 }

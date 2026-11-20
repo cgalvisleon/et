@@ -37,6 +37,14 @@ type Config struct {
 	// DELAY_CHKPT_START de PostgreSQL). Sin ella, una marca puesta justo cuando empieza un checkpoint se anota en el
 	// WAL después (ver «Marcas de visibilidad» en doc.go). *sync.RWMutex la cumple.
 	HintGate HintGate
+
+	// VM es el mapa de visibilidad del store (fsm.Manager lo cumple); nil = sin mapa: la limpieza recorre todas las
+	// hojas y no pone bits (pruebas).
+	VM fsm.VisibilityMap
+
+	// FrozenXID es el frozenXID que Create pone en la meta de un store nuevo: ninguna versión del store puede tener un
+	// xid menor (el motor pasa el xid vivo más viejo al crearlo).
+	FrozenXID page.XID
 }
 
 // HintGate es la compuerta entre las marcas de visibilidad y el comienzo de un checkpoint.
@@ -55,6 +63,7 @@ type BTree struct {
 	log    wal.Log
 	status StatusReader
 	gate   HintGate
+	vm     fsm.VisibilityMap
 
 	// fastLeaf es la pista de la inserción rápida: la última hoja de más a la derecha donde se escribió (0 = ninguna).
 	// Solo es una pista: se comprueba con la hoja bloqueada antes de usarla.
@@ -78,12 +87,13 @@ func Open(cfg Config) (*BTree, error) {
 		return nil, ErrConfig
 	}
 	return &BTree{file: cfg.File, pool: cfg.Pool, sm: cfg.Smgr, free: cfg.Free, log: cfg.Log, status: cfg.Status,
-		gate: cfg.HintGate}, nil
+		gate: cfg.HintGate, vm: cfg.VM}, nil
 }
 
 /**
-* Create crea el store: su fork principal (si falta) y, en un KindInitStore, la página meta (bloque 0) y una hoja raíz
-* vacía (bloque 1), las dos con BlockWillInit. Quien llama garantiza que nadie más usa el store mientras tanto.
+* Create crea el store: su fork principal (si falta) y, en un KindInitStore, la página meta (bloque 0, con
+* cfg.FrozenXID) y una hoja raíz vacía (bloque 1), las dos con BlockWillInit. Quien llama garantiza que nadie más usa
+* el store mientras tanto.
 * @param cfg Config
 * @return *BTree, error: ErrExists si el store ya tiene páginas
 **/
@@ -117,7 +127,7 @@ func Create(cfg Config) (*BTree, error) {
 		return nil, corrupt("new store got blocks %d and %d", metaH.Tag().Block, rootH.Tag().Block)
 	}
 	refs := []wal.BlockRef{
-		{Flags: wal.BlockWillInit, Delta: blockDelta(rootBlock)},
+		{Flags: wal.BlockWillInit, Delta: initMetaDelta(rootBlock, cfg.FrozenXID)},
 		{Flags: wal.BlockWillInit},
 	}
 	res, err := t.logChange(wal.KindInitStore, 0, 0, refs, []buffer.Handle{metaH, rootH}, nil)
@@ -147,10 +157,19 @@ func (t *BTree) tag(blk page.BlockNumber) buffer.Tag {
 * @return buffer.Handle, node, error: con error no queda nada fijado
 **/
 func (t *BTree) lockNode(blk page.BlockNumber, mode buffer.LockMode) (buffer.Handle, node, error) {
+	return t.lockNodeWith(blk, mode, buffer.Normal)
+}
+
+/**
+* lockNodeWith es lockNode con la estrategia de reemplazo de la caché (buffer.Ring en los recorridos grandes).
+* @param blk page.BlockNumber, mode buffer.LockMode, strategy buffer.Strategy
+* @return buffer.Handle, node, error: con error no queda nada fijado
+**/
+func (t *BTree) lockNodeWith(blk page.BlockNumber, mode buffer.LockMode, strategy buffer.Strategy) (buffer.Handle, node, error) {
 	if blk == MetaBlock {
 		return nil, node{}, corruptAt(blk, "link to the meta page")
 	}
-	h, err := t.pool.Pin(t.tag(blk), buffer.Normal)
+	h, err := t.pool.Pin(t.tag(blk), strategy)
 	if err != nil {
 		return nil, node{}, err
 	}

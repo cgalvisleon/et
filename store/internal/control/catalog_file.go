@@ -51,6 +51,21 @@ func (f *catalogFile) Load() (Catalog, error) {
 	return c, nil
 }
 
+// Read lee y valida el catálogo sin borrar un catalog.tmp sobrante (Verify del motor no cambia nada).
+func (f *catalogFile) Read() (Catalog, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	b, err := f.readAll()
+	if err != nil {
+		return Catalog{}, err
+	}
+	c, err := decodeCatalog(b)
+	if err != nil {
+		return Catalog{}, fmt.Errorf("%s: %w", f.path, err)
+	}
+	return c, nil
+}
+
 // removeTemp borra catalog.tmp si existe. Se busca en el directorio para no depender del error de cada vfs.
 func (f *catalogFile) removeTemp() error {
 	names, err := f.fs.ReadDir(f.dir)

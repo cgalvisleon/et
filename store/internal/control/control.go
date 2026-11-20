@@ -96,6 +96,9 @@ type CatalogFile interface {
 	// Load lee el catálogo; un catalog.tmp sobrante se ignora y se borra.
 	Load() (Catalog, error)
 
+	// Read lee y valida el catálogo como Load, sin tocar nada (ni un catalog.tmp sobrante): Verify del motor.
+	Read() (Catalog, error)
+
 	// Save reemplaza el catálogo de forma atómica (tmp, Sync, rename, SyncDir).
 	Save(c Catalog) error
 }

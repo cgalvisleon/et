@@ -60,7 +60,8 @@
 //	                confirmada: no hay KindCommit aparte y su delta de Count va en FlagCountAdd/FlagCountSub
 //	KindOverflowWrite (overflow) una página de desborde nueva (BlockWillInit) con su trozo del valor
 //
-// Los demás Kind de btree, overflow y fsm están en kind.go.
+// Los demás Kind de btree, overflow y fsm están en kind.go (KindSetFrozen, 23, es el frozenXID de la meta de un store;
+// KindLeafVacuum también congela).
 //
 // # Abrir y recuperar
 //

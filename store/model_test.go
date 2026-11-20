@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cgalvisleon/et/store/internal/btree"
 	"github.com/cgalvisleon/et/store/internal/crashfs"
+	"github.com/cgalvisleon/et/store/internal/xact"
 )
 
 // state es el contenido de un motor: store → id → valor. Un store ausente y uno vacío valen lo mismo.
@@ -63,10 +63,11 @@ func unionNames(a, b state) []string {
 
 // op es una operación al azar de la prueba de modelo.
 type op struct {
-	kind  string // put, remove, insert, update, delete, read, drop, checkpoint, vacuum, batch, snapshot
-	store string
-	id    string
-	value string
+	kind     string // put, remove, insert, update, delete, read, drop, empty, checkpoint, vacuum, batch, snapshot, scan, waitdurable
+	store    string
+	id       string
+	value    string
+	deferred bool // una escritura suelta con Deferred, o un lote con CommitDeferred
 
 	// Lote (kind batch): sus operaciones, si termina con Rollback y lo que debe devolver cada una. wants se arma en
 	// el generador con su largo y lo llena apply: las copias de op comparten el arreglo.
@@ -76,7 +77,28 @@ type op struct {
 }
 
 func (o op) String() string {
-	return fmt.Sprintf("%s %s/%.20q (%d B)", o.kind, o.store, o.id, len(o.value))
+	kind := o.kind
+	if o.deferred {
+		kind += " (deferred)"
+	}
+	return fmt.Sprintf("%s %s/%.20q (%d B)", kind, o.store, o.id, len(o.value))
+}
+
+/**
+* durable dice si, al volver op, todo lo confirmado hasta ella es seguro durable (el WAL es durable hasta su lsn, y
+* con él lo anterior): una escritura no diferida que cambió el estado (o un Put, que siempre escribe), un checkpoint o
+* WaitDurable. Las que no escriben (un Insert que no aplica, un lote deshecho) no hacen fsync.
+* @param before, after state: el estado antes y después de op
+* @return bool
+**/
+func (o op) durable(before, after state) bool {
+	switch o.kind {
+	case "checkpoint", "waitdurable":
+		return true
+	case "put":
+		return !o.deferred
+	}
+	return !o.deferred && !before.equal(after)
 }
 
 /**
@@ -103,7 +125,7 @@ func (o op) apply(s state) bool {
 		return exists || o.kind == "remove"
 	case "read":
 		return exists
-	case "drop":
+	case "drop", "empty":
 		delete(s, o.store)
 	case "batch":
 		local := s.clone()
@@ -122,8 +144,9 @@ func (o op) apply(s state) bool {
 // generator arma operaciones al azar sobre pocos stores e ids, para que choquen: valores chicos y grandes (desborde),
 // ids cortos y algunos largos (particiones), checkpoints, limpiezas y bajas de stores de vez en cuando.
 type generator struct {
-	rng *rand.Rand
-	ids []string
+	rng      *rand.Rand
+	ids      []string
+	deferred bool // también escrituras diferidas, lotes con CommitDeferred y WaitDurable (solo la prueba de modelo)
 }
 
 /**
@@ -156,6 +179,10 @@ func (g *generator) next() op {
 		o.kind = "checkpoint"
 	case r < 18:
 		o.kind = "vacuum"
+	case r < 22:
+		o.kind = "empty"
+	case r < 32:
+		o.kind = "scan"
 	case r < 70:
 		return g.batch()
 	case r < 85:
@@ -172,7 +199,24 @@ func (g *generator) next() op {
 		o.kind = "remove"
 	}
 	o.value = g.value()
+	if g.deferred {
+		g.makeDeferred(&o)
+	}
 	return o
+}
+
+/**
+* makeDeferred vuelve diferida una de cada cuatro escrituras sueltas y cambia una de cada 40 operaciones por
+* WaitDurable.
+* @param o *op
+**/
+func (g *generator) makeDeferred(o *op) {
+	switch {
+	case g.rng.IntN(40) == 0:
+		o.kind = "waitdurable"
+	case o.kind == "put", o.kind == "insert", o.kind == "update", o.kind == "delete", o.kind == "remove":
+		o.deferred = g.rng.IntN(4) == 0
+	}
 }
 
 /**
@@ -185,7 +229,7 @@ func (g *generator) batch() op {
 	for len(o.sub) < 2+g.rng.IntN(11) {
 		sub := g.next()
 		switch sub.kind {
-		case "drop", "checkpoint", "vacuum", "batch", "snapshot":
+		case "drop", "empty", "checkpoint", "vacuum", "batch", "snapshot", "scan", "waitdurable":
 			continue
 		}
 		if g.rng.IntN(5) == 0 {
@@ -194,6 +238,7 @@ func (g *generator) batch() op {
 		o.sub = append(o.sub, sub)
 	}
 	o.wants = make([]bool, len(o.sub))
+	o.deferred = g.deferred && !o.rollback && g.rng.IntN(4) == 0
 	return o
 }
 
@@ -224,6 +269,8 @@ func (o op) run(e *Engine) (bool, error) {
 		return true, e.Checkpoint()
 	case "vacuum":
 		return true, e.Vacuum()
+	case "waitdurable":
+		return true, e.WaitDurable()
 	case "drop":
 		if !slices.Contains(e.Stores(), o.store) {
 			return true, nil
@@ -233,24 +280,40 @@ func (o op) run(e *Engine) (bool, error) {
 	switch o.kind {
 	case "batch":
 		return true, o.runBatch(e)
-	case "snapshot":
-		return true, nil // los snapshots los maneja crashDuring; para los demás no hacen nada
+	case "snapshot", "scan":
+		return true, nil // los snapshots y recorridos los maneja crashDuring; para los demás no hacen nada
 	}
 	s, err := e.Store(o.store)
 	if err != nil {
 		return false, err
 	}
+	if o.kind == "empty" {
+		return true, s.Empty()
+	}
+	var w writer = s
+	if o.deferred {
+		w = s.Deferred()
+	}
 	switch o.kind {
 	case "put":
-		return true, s.Put(o.id, []byte(o.value))
+		return true, w.Put(o.id, []byte(o.value))
 	case "remove":
-		return true, s.Remove(o.id)
+		return true, w.Remove(o.id)
 	case "insert":
-		return s.Insert(o.id, []byte(o.value))
+		return w.Insert(o.id, []byte(o.value))
 	case "update":
-		return s.Update(o.id, []byte(o.value))
+		return w.Update(o.id, []byte(o.value))
 	}
-	return s.Delete(o.id)
+	return w.Delete(o.id)
+}
+
+// writer son las escrituras sueltas que tienen igual Store y Deferred.
+type writer interface {
+	Put(id string, data []byte) error
+	Remove(id string) error
+	Insert(id string, data []byte) (bool, error)
+	Update(id string, data []byte) (bool, error)
+	Delete(id string) (bool, error)
 }
 
 /**
@@ -279,7 +342,11 @@ func (o op) runBatch(e *Engine) error {
 		case "delete":
 			got, err = s.DeleteIn(tx, sub.id)
 		case "read":
-			_, got, err = s.ReadIn(tx, sub.id)
+			if len(sub.value)%2 == 0 {
+				_, got, err = s.ReadIn(tx, sub.id)
+			} else {
+				got, err = s.ExistsIn(tx, sub.id)
+			}
 		}
 		if err != nil {
 			return err
@@ -288,8 +355,11 @@ func (o op) runBatch(e *Engine) error {
 			return fmt.Errorf("in a batch, %v returned %v, model says %v", sub, got, o.wants[i])
 		}
 	}
-	if o.rollback {
+	switch {
+	case o.rollback:
 		return tx.Rollback()
+	case o.deferred:
+		return tx.CommitDeferred()
 	}
 	return tx.Commit()
 }
@@ -327,21 +397,120 @@ func (o openSnap) check(e *Engine, ids []string) error {
 				return fmt.Errorf("snapshot: store %s id %.20q = %v (%d B), want %v (%d B)",
 					name, id, found, len(got), exists, len(want))
 			}
+			if found, err = s.ExistsAt(o.v, id); err != nil || found != exists {
+				return fmt.Errorf("snapshot: ExistsAt store %s id %.20q = %v, %v; want %v", name, id, found, err, exists)
+			}
+		}
+		if err := checkScan(o.want[name], func(fn func(string, []byte) (bool, error)) error {
+			return s.ForEachAt(o.v, fn, true, 0, 0)
+		}); err != nil {
+			return fmt.Errorf("snapshot: ForEachAt store %s: %w", name, err)
+		}
+		if n, err := s.CountAt(o.v); err != nil || n != int64(len(o.want[name])) {
+			return fmt.Errorf("snapshot: CountAt store %s = %d, %v; want %d", name, n, err, len(o.want[name]))
+		}
+	}
+	return nil
+}
+
+/**
+* checkScan comprueba que un recorrido entregue exactamente los ids y valores de want, en orden ascendente.
+* @param want map[string]string, each func(fn) error: el recorrido
+* @return error: el del recorrido o la primera diferencia
+**/
+func checkScan(want map[string]string, each func(fn func(string, []byte) (bool, error)) error) error {
+	var prev string
+	n := 0
+	err := each(func(id string, data []byte) (bool, error) {
+		if n > 0 && id <= prev {
+			return false, fmt.Errorf("id %.20q after %.20q", id, prev)
+		}
+		if v, ok := want[id]; !ok || v != string(data) {
+			return false, fmt.Errorf("id %.20q = %d B, want %v (%d B)", id, len(data), ok, len(v))
+		}
+		prev, n = id, n+1
+		return true, nil
+	})
+	if err == nil && n != len(want) {
+		err = fmt.Errorf("%d ids, want %d", n, len(want))
+	}
+	return err
+}
+
+/**
+* scanStep compara con el estado confirmado un recorrido al azar de un store: ForEach entero, ForEachBorrowed, una
+* ventana de Keys (asc o desc, offset y limit) y KeysAfter paginado hasta el final. Solo lo llama la goroutine de
+* las operaciones, así que done no cambia mientras tanto.
+* @param e *Engine, gen *generator, done state
+* @return error
+**/
+func scanStep(e *Engine, gen *generator, done state) error {
+	name := []string{"a", "b", "c"}[gen.rng.IntN(3)]
+	s, err := e.Store(name)
+	if err != nil {
+		return err
+	}
+	want := done[name]
+	if err := checkScan(want, func(fn func(string, []byte) (bool, error)) error { return s.ForEach(fn, true, 0, 0) }); err != nil {
+		return fmt.Errorf("ForEach store %s: %w", name, err)
+	}
+	if err := checkScan(want, s.ForEachBorrowed); err != nil {
+		return fmt.Errorf("ForEachBorrowed store %s: %w", name, err)
+	}
+	ids := slices.Sorted(maps.Keys(want))
+	asc, offset, limit := gen.rng.IntN(2) == 0, gen.rng.IntN(len(ids)+2), gen.rng.IntN(20)
+	ref := slices.Clone(ids)
+	if !asc {
+		slices.Reverse(ref)
+	}
+	from := min(offset, len(ref))
+	to := len(ref)
+	if limit > 0 {
+		to = min(from+limit, len(ref))
+	}
+	keys, err := s.Keys(asc, offset, limit)
+	if err != nil || !slices.Equal(keys, ref[from:to]) {
+		return fmt.Errorf("Keys(%v, %d, %d) store %s = %d ids, %v; want %d", asc, offset, limit, name, len(keys), err, to-from)
+	}
+	var paged []string
+	for after := ""; ; {
+		page, err := s.KeysAfter(after, 1+gen.rng.IntN(15))
+		if err != nil {
+			return err
+		}
+		if len(page) == 0 {
+			break
+		}
+		paged, after = append(paged, page...), page[len(page)-1]
+	}
+	if !slices.Equal(paged, ids) {
+		return fmt.Errorf("KeysAfter store %s: %d ids, want %d", name, len(paged), len(ids))
+	}
+	for range 4 {
+		id := gen.ids[gen.rng.IntN(len(gen.ids))]
+		_, exists := want[id]
+		if found, err := s.Exists(id); err != nil || found != exists {
+			return fmt.Errorf("Exists store %s id %.20q = %v, %v; want %v", name, id, found, err, exists)
 		}
 	}
 	return nil
 }
 
 // TestModelCrash es la prueba de modelo con cortes del motor entero: operaciones al azar contra un mapa en memoria
-// (sueltas, lotes de varias operaciones en varios stores que a veces terminan con Rollback, y snapshots que comparan
+// (sueltas, Empty, recorridos —ForEach, ForEachBorrowed, Keys, KeysAfter paginado, Exists— comparados con el modelo,
+// lotes de varias operaciones en varios stores que a veces terminan con Rollback, y snapshots que comparan
 // su vista unas operaciones después), sobre crashfs, con checkpoints y limpiezas (Vacuum) a mano y de fondo (la
 // limpieza de fondo, en la mitad de las semillas); un corte en un momento al azar (entre operaciones o en medio de
-// una) en los tres modos y varias semillas. Al reabrir, el contenido es exactamente el estado tras la última
-// operación confirmada o tras la que estaba en curso (un lote entero o nada; nunca se pierde una confirmada:
-// SYNC_ON_WRITE), Count coincide, btree.Verify pasa en cada store y, tras una limpieza, ninguna página está repetida
+// una) en los tres modos y varias semillas. Una de cada cuatro escrituras sueltas es diferida (Deferred), uno de cada
+// cuatro lotes confirmados usa CommitDeferred y a veces se llama a WaitDurable. Al reabrir, el contenido es
+// exactamente el estado tras alguna operación desde la última que dejó todo durable (una escritura no diferida que
+// escribió, un checkpoint, WaitDurable) hasta la que estaba en curso: las diferidas sin esperar pueden perderse, pero
+// solo enteras y en orden del WAL (un lote entero o nada; nunca se pierde una confirmada durable), Count coincide, btree.Verify pasa en cada store y, tras una limpieza, ninguna página está repetida
 // en la lista de libres ni es a la vez libre y de una cadena viva (las huérfanas de cadenas escritas antes de un corte
-// sin su hoja se cuentan, no se rechazan); el motor acepta escrituras y un segundo y un tercer corte también se
-// recuperan.
+// sin su hoja se cuentan, no se rechazan), y Engine.Verify solo encuentra lo que explica un corte (páginas sin dueño,
+// cadenas y archivos huérfanos), que Repair deja limpio; el motor acepta escrituras y un segundo y un tercer corte también se
+// recuperan. Los archivos de estados son de prueba (una página) y el primer xid está junto al final del primero:
+// tras reabrir, toda versión por debajo del límite truncado está congelada, y al cerrar el primer archivo ya no está.
 func TestModelCrash(t *testing.T) {
 	seeds := 8
 	if testing.Short() {
@@ -367,31 +536,40 @@ func TestModelCrash(t *testing.T) {
 func runModel(t *testing.T, mode crashfs.Mode, seed uint64) {
 	base := crashfs.New()
 	gen := newGenerator(seed)
-	confirmed := state{}
-	var pending *state // el estado si la operación en curso al cortar llegó a ser durable
-	cfg := testConfig()
+	gen.deferred = true
+	candidates := []state{{}} // los estados que puede tener el motor tras el corte
+	// Archivos de estados de una página y el primer xid junto al final del primero: se llena enseguida y se trunca.
+	cfg := smallXact(xact.XidsPerPage - 10)
 	cfg.checkpointTimeout = []time.Duration{time.Hour, 40 * time.Millisecond, 5 * time.Millisecond}[seed%3]
 	cfg.checkEvery = 5 * time.Millisecond
 	cfg.buffers = 32
 	if seed%2 == 1 {
 		cfg.vacuumEvery, cfg.vacuumWrites = 3*time.Millisecond, 20
 	}
+	if seed%4 >= 2 {
+		cfg.walWriterDelay = 2 * time.Millisecond
+	}
 
 	for round := range 3 {
 		proc := newProc(base)
 		e := openTest(t, proc, cfg)
-		confirmed = checkRecovered(t, e, confirmed, pending)
+		confirmed := checkRecovered(t, e, candidates)
 		verifyTrees(t, e)
 		vacuumAndAudit(t, e, confirmed)
+		checkAfterCrash(t, e)
 		t.Logf("round %d: replayed %d records, %d stores", round, e.replayed, len(e.Stores()))
 		target := 20 + gen.rng.IntN(1500)
-		confirmed, pending = crashDuring(t, e, proc, gen, confirmed, target, mode, seed+uint64(round))
+		candidates = crashDuring(t, e, proc, gen, confirmed, target, mode, seed+uint64(round))
 	}
 	e := openTest(t, newProc(base), cfg)
-	confirmed = checkRecovered(t, e, confirmed, pending)
+	confirmed := checkRecovered(t, e, candidates)
 	verifyTrees(t, e)
 	vacuumAndAudit(t, e, confirmed)
+	checkAfterCrash(t, e)
 	mustOK(t, e.Close())
+	if files := xactFiles(t, base); slices.Contains(files, "0001") {
+		t.Fatalf("status files %v: 0001 not truncated", files)
+	}
 }
 
 /**
@@ -411,6 +589,7 @@ func vacuumAndAudit(t *testing.T, e *Engine, want state) {
 		s := mustStore(t, e, name)
 		s.vacuumMu.Lock() // la limpieza de fondo puede estar a medias
 		orphans += auditStore(t, s).orphans()
+		checkLeaves(t, s, e.status.Oldest())
 		s.vacuumMu.Unlock()
 	}
 	t.Logf("after Vacuum: %d orphan blocks", orphans)
@@ -420,13 +599,15 @@ func vacuumAndAudit(t *testing.T, e *Engine, want state) {
 * crashDuring corre operaciones en una goroutine y corta el disco cuando van target confirmadas (a veces en medio de
 * la siguiente). Comprueba que cada operación confirmada devolvió lo que dice el modelo y que Close del motor viejo
 * no se cuelga.
-* @return state: el estado tras la última confirmada, *state: el estado si la que estaba en curso llegó a durable
+* @return []state: los estados posibles tras el corte, desde el de la última operación que dejó todo durable hasta el
+* de la que estaba en curso (las diferidas del medio pueden perderse, en orden)
 **/
 func crashDuring(t *testing.T, e *Engine, proc *procFS, gen *generator, start state, target int,
-	mode crashfs.Mode, seed uint64) (state, *state) {
+	mode crashfs.Mode, seed uint64) []state {
 	var (
 		mu       sync.Mutex
 		done     = start.clone()
+		chain    = []state{done} // estados desde la última operación que dejó todo durable
 		inFlight *state
 		killed   atomic.Bool
 		reached  = make(chan struct{})
@@ -439,15 +620,29 @@ func crashDuring(t *testing.T, e *Engine, proc *procFS, gen *generator, start st
 		defer close(finished)
 		for n := 1; ; n++ {
 			o := gen.next()
-			if o.kind == "snapshot" {
-				if err := snapshotStep(e, gen, &snaps, done); err != nil && !killed.Load() {
-					t.Errorf("%v", err)
+			for o.kind == "snapshot" || o.kind == "scan" { // no cuentan como operación: la siguiente sí
+				step := func() error { return scanStep(e, gen, done) }
+				if o.kind == "snapshot" {
+					step = func() error { return snapshotStep(e, gen, &snaps, done) }
+				}
+				if err := step(); err != nil {
+					if !killed.Load() {
+						t.Errorf("%v", err)
+					}
 					return
 				}
-				o = gen.next() // el snapshot no cuenta como operación: la siguiente sí
-				for o.kind == "snapshot" {
-					o = gen.next()
+				o = gen.next()
+			}
+			if o.kind == "empty" { // Empty no corre con snapshots abiertos (ErrBusy): se comparan y cierran antes
+				for _, open := range snaps {
+					if err := open.check(e, gen.ids); err != nil {
+						if !killed.Load() {
+							t.Errorf("%v", err)
+						}
+						return
+					}
 				}
+				snaps = nil
 			}
 			if o.kind == "drop" {
 				for _, open := range snaps {
@@ -471,7 +666,10 @@ func crashDuring(t *testing.T, e *Engine, proc *procFS, gen *generator, start st
 				t.Errorf("%v returned %v, model says %v", o, got, want)
 			}
 			mu.Lock()
-			done, inFlight = after, nil
+			if o.durable(done, after) {
+				chain = chain[:0]
+			}
+			done, inFlight, chain = after, nil, append(chain, after)
 			mu.Unlock()
 			if n == target {
 				close(reached)
@@ -492,7 +690,11 @@ func crashDuring(t *testing.T, e *Engine, proc *procFS, gen *generator, start st
 
 	mu.Lock()
 	defer mu.Unlock()
-	return done, inFlight
+	if inFlight != nil {
+		chain = append(chain, *inFlight)
+	}
+	t.Logf("crash with %d possible states", len(chain))
+	return chain
 }
 
 /**
@@ -529,22 +731,39 @@ func closeWithin(t *testing.T, e *Engine, limit time.Duration) {
 }
 
 /**
-* checkRecovered comprueba que el motor reabierto tenga exactamente confirmed o pending (si no es nil) y devuelve
-* el que tiene.
+* checkRecovered comprueba que el motor reabierto tenga exactamente uno de los estados candidates y devuelve el que
+* tiene.
+* @param t *testing.T, e *Engine, candidates []state: el primero es el último seguro durable
+* @return state
+**/
+func checkRecovered(t *testing.T, e *Engine, candidates []state) state {
+	t.Helper()
+	got := engineState(t, e)
+	for i := len(candidates) - 1; i >= 0; i-- {
+		if got.equal(candidates[i]) {
+			if len(candidates) > 1 {
+				t.Logf("recovered possible state %d of %d", i+1, len(candidates))
+			}
+			return candidates[i]
+		}
+	}
+	t.Fatalf("recovered state is none of the %d possible ones; against the last durable one:\n%s",
+		len(candidates), diffState(got, candidates[0]))
+	return nil
+}
+
+/**
+* recoveredOneOf es checkRecovered con el estado confirmado y, si no es nil, el de la operación en curso.
 * @param t *testing.T, e *Engine, confirmed state, pending *state
 * @return state
 **/
-func checkRecovered(t *testing.T, e *Engine, confirmed state, pending *state) state {
+func recoveredOneOf(t *testing.T, e *Engine, confirmed state, pending *state) state {
 	t.Helper()
-	got := engineState(t, e)
-	if got.equal(confirmed) {
-		return confirmed
+	candidates := []state{confirmed}
+	if pending != nil {
+		candidates = append(candidates, *pending)
 	}
-	if pending != nil && got.equal(*pending) {
-		return *pending
-	}
-	t.Fatalf("recovered state is neither the confirmed nor the pending one:\n%s", diffState(got, confirmed))
-	return nil
+	return checkRecovered(t, e, candidates)
 }
 
 /**
@@ -558,12 +777,10 @@ func engineState(t *testing.T, e *Engine) state {
 	for _, name := range e.Stores() {
 		s := mustStore(t, e, name)
 		ids := map[string]string{}
-		err := s.tree.Scan("", nil, func(v btree.Version) (bool, error) {
-			value, err := s.valueOf(v)
-			ids[v.ID] = string(value)
-			return true, err
-		})
-		mustOK(t, err)
+		mustOK(t, s.ForEach(func(id string, data []byte) (bool, error) {
+			ids[id] = string(data)
+			return true, nil
+		}, true, 0, 0))
 		if s.Count() != int64(len(ids)) {
 			t.Fatalf("store %q: Count = %d, has %d ids", name, s.Count(), len(ids))
 		}
@@ -645,11 +862,11 @@ func crashAtStep(t *testing.T, mode crashfs.Mode, step int) {
 	closeWithin(t, e, 10*time.Second)
 
 	e = openTest(t, newProc(base), testConfig())
-	checkRecovered(t, e, model, nil)
+	recoveredOneOf(t, e, model, nil)
 	verifyTrees(t, e)
 	runOps(100)
 	mustOK(t, e.Close())
 	e = openTest(t, newProc(base), testConfig())
 	defer e.Close()
-	checkRecovered(t, e, model, nil)
+	recoveredOneOf(t, e, model, nil)
 }

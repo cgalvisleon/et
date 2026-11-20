@@ -9,7 +9,8 @@
 //	go run ./test/storebench -n 1000000
 //	go run ./test/storebench -n 10000000 -batch 20000
 //	go run ./test/storebench -n 1000000 -reopen=false   # un solo motor: el RSS es el de una apertura
-//	go run ./test/storebench -n 0 -rate 2s              # solo Put/s durable vs diferido con 1 y 8 escritores
+//	go run ./test/storebench -n 0 -rate 2s              # solo Put/s durable vs diferido con 1, 8 y 64 escritores
+//	go run ./test/storebench -n 0 -rate 2s -writers 1,8 # otros números de escritores
 package main
 
 import (
@@ -37,7 +38,8 @@ func main() {
 	size := flag.Int("value", 100, "bytes por valor")
 	dir := flag.String("dir", "", "directorio del motor (vacío = uno temporal que se borra)")
 	reopen := flag.Bool("reopen", true, "cerrar, volver a abrir y leer (false = solo cargar)")
-	rate := flag.Duration("rate", 0, "si no es 0, mide Put/s durable y diferido con 1 y 8 escritores durante ese tiempo")
+	rate := flag.Duration("rate", 0, "si no es 0, mide Put/s durable y diferido durante ese tiempo por medida")
+	writers := flag.String("writers", "1,8,64", "escritores de cada medida de -rate, separados por coma")
 	flag.Parse()
 
 	path := *dir
@@ -49,7 +51,7 @@ func main() {
 	}
 
 	if *rate > 0 {
-		writeRates(path, *rate, *size)
+		writeRates(path, *rate, *size, parseWriters(*writers))
 	}
 	if *n <= 0 {
 		return
@@ -71,9 +73,9 @@ func main() {
 	fmt.Printf("Open tras Close: %v (Count %d)\n", openTime, keys.Count())
 
 	cold := readRandom(keys, *n, 100_000)
-	fmt.Printf("lectura al azar (100.000, fría al principio): p50 %v p99 %v\n", cold.p50, cold.p99)
+	fmt.Printf("lectura al azar (100.000, fría al principio): p50 %v p99 %v p999 %v\n", cold.p50, cold.p99, cold.p999)
 	warm := readHot(keys, 1_000, 200_000)
-	fmt.Printf("lectura en caché (1.000 claves × 200): p50 %v p99 %v\n", warm.p50, warm.p99)
+	fmt.Printf("lectura en caché (1.000 claves × 200): p50 %v p99 %v p999 %v\n", warm.p50, warm.p99, warm.p999)
 	report("tras abrir y leer")
 	check(engine.Close())
 }
@@ -104,13 +106,13 @@ func load(path string, n, batch, size int) {
 
 /**
 * writeRates mide Put sueltos por segundo, durables (esperan su fsync, group commit) y diferidos (Deferred, con un
-* WaitDurable al final que entra en la cuenta), con 1 y 8 escritores, cada medida en su store.
-* @param path string, d time.Duration: cuánto dura cada medida, size int: bytes por valor
+* WaitDurable al final que entra en la cuenta), con cada número de escritores de counts, cada medida en su store.
+* @param path string, d time.Duration: cuánto dura cada medida, size int: bytes por valor, counts []int: escritores
 **/
-func writeRates(path string, d time.Duration, size int) {
+func writeRates(path string, d time.Duration, size int, counts []int) {
 	engine, err := store.Open(path)
 	check(err)
-	for _, writers := range []int{1, 8} {
+	for _, writers := range counts {
 		for _, deferred := range []bool{false, true} {
 			s, err := engine.Store(fmt.Sprintf("rate-%d-%v", writers, deferred))
 			check(err)
@@ -156,7 +158,7 @@ func writeFor(engine *store.Engine, s *store.Store, writers int, deferred bool, 
 }
 
 // latency es el resumen de una serie de lecturas.
-type latency struct{ p50, p99 time.Duration }
+type latency struct{ p50, p99, p999 time.Duration }
 
 /**
 * readRandom lee count claves al azar entre las n cargadas.
@@ -200,13 +202,31 @@ func readHot(s *store.Store, hot, count int) latency {
 }
 
 /**
-* summarize da la mediana y el percentil 99.
+* summarize da la mediana y los percentiles 99 y 99,9.
 * @param times []time.Duration
 * @return latency
 **/
 func summarize(times []time.Duration) latency {
 	slices.Sort(times)
-	return latency{p50: times[len(times)/2], p99: times[len(times)*99/100]}
+	n := len(times)
+	return latency{p50: times[n/2], p99: times[n*99/100], p999: times[n*999/1000]}
+}
+
+/**
+* parseWriters lee la lista de escritores de -writers ("1,8,64").
+* @param list string
+* @return []int
+**/
+func parseWriters(list string) []int {
+	var counts []int
+	for _, part := range strings.Split(list, ",") {
+		w, err := strconv.Atoi(strings.TrimSpace(part))
+		if err != nil || w < 1 {
+			log.Fatalf("-writers: %q no es un número de escritores", part)
+		}
+		counts = append(counts, w)
+	}
+	return counts
 }
 
 /**

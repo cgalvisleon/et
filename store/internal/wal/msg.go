@@ -18,6 +18,8 @@ const (
 	MSG_KEEP_AHEAD      = "wal: keep segment %d is past the active segment %d"
 	MSG_BAD_IMAGE       = "wal: invalid page image: %s"
 	MSG_NO_ROOM         = "%w: %d bytes ready, %d needed: %w"
+	MSG_NOT_SEALED      = "wal: segment %d is not sealed (the active segment is %d)"
+	MSG_SEGMENT_EMPTY   = "wal: %w: sealed segment %d has no valid first record"
 )
 
 var (

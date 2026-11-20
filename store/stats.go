@@ -49,7 +49,15 @@ type Stats struct {
 	// Disco lleno o lento
 	ReadOnly  bool  // el motor quedó de solo lectura por un disco lleno: hay que cerrarlo y abrirlo
 	DiskFull  int64 // operaciones rechazadas con ErrDiskFull sin tocar el motor (se pueden reintentar)
-	Throttled int64 // escrituras frenadas: esperaron a un checkpoint porque el WAL pasaba de 2 × MAX_WAL_SIZE
+	Throttled int64 // escrituras frenadas: esperaron a un checkpoint (o al archivador) porque el WAL pasaba de 2 × MAX_WAL_SIZE
+
+	// Archivo continuo del WAL (WAL_ARCHIVE)
+	Archive         bool   // el archivo está activo
+	ArchivedSegment uint64 // el último segmento archivado (SetArchived)
+	ArchivePending  int64  // segmentos sellados que esperan al archivador
+	ArchiveRetained int64  // bytes de esos segmentos en el disco
+	ArchiveGap      uint64 // primer segmento tras la última pérdida de continuidad (0 = nunca): un respaldo anterior no llega más allá
+	ArchiveLost     int64  // veces que WAL_ARCHIVE_MAX_SIZE soltó WAL sin archivar desde Open
 
 	// Presión (Engine.Pressure)
 	Pressure      float64       // qué tan cerca está de frenar a los escritores: 0 = nada, ≥ 1 = ya frena
@@ -83,6 +91,7 @@ type engineMetrics struct {
 	openSnapshots  atomic.Int64
 	diskFull       atomic.Int64 // operaciones rechazadas con ErrDiskFull sin tocar el motor
 	throttled      atomic.Int64 // escrituras que tuvieron que esperar a un checkpoint (throttle)
+	archiveLost    atomic.Int64 // veces que el tope del archivo soltó WAL sin archivar
 	commitLatency  metric.Histogram
 	readLatency    metric.Histogram
 }
@@ -151,6 +160,11 @@ func (e *Engine) stats() Stats {
 		Writes:  e.writes.Load(),
 		Commits: m.commits.Load(),
 
+		Archive:         e.archive.on,
+		ArchiveRetained: e.archiveRetained(),
+		ArchiveGap:      e.archive.gap.Load(),
+		ArchiveLost:     m.archiveLost.Load(),
+
 		ReadOnly:  e.readOnly(),
 		DiskFull:  m.diskFull.Load(),
 		Throttled: m.throttled.Load(),
@@ -160,6 +174,10 @@ func (e *Engine) stats() Stats {
 		FsyncLatency:  latencyOf(e.log.SyncLatency()),
 	}
 	st.Pressure, st.PressureCause = e.pressure()
+	if st.Archive {
+		st.ArchivedSegment = e.archive.next.Load() - 1
+		st.ArchivePending = st.ArchiveRetained / e.cfg.wal.SegmentSize
+	}
 	if oldest > frozen {
 		st.FrozenAge = uint64(oldest - frozen)
 	}

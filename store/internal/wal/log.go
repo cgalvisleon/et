@@ -23,15 +23,22 @@ type WAL struct {
 
 	// writeMu: reservas, rotación, punto de rehacer, reciclado y cierre.
 	writeMu sync.Mutex
-	active  *segment         // se cambia con writeMu y syncMu tomados: WaitDurable lo lee solo con syncMu
-	sizes   map[uint64]int64 // fin de lo escrito en cada segmento anterior al activo (para SizeSince)
-	maxNum  uint64           // el mayor segmento que existe: los mayores que el activo son repuestos reciclados
+	active  *segment            // se cambia con writeMu y syncMu tomados: WaitDurable lo lee solo con syncMu
+	sizes   map[uint64]Position // fin de lo escrito en cada segmento anterior al activo (SizeSince, SegmentInfo)
+	maxNum  uint64              // el mayor segmento que existe: los mayores que el activo son repuestos reciclados
 	// nextReady: el segmento siguiente al activo existe y está preasignado entero (Options.Preallocate).
 	nextReady bool
 	written   atomic.Int64  // bytes reservados desde Open (Written); se escribe con writeMu
+	activeNum atomic.Uint64 // el número del segmento activo (ActiveSegment); se escribe con writeMu
 	lastLSN   atomic.Uint64 // último lsn reservado; se escribe con writeMu
 	redo      atomic.Pointer[Position]
 	closed    atomic.Bool // se pone con writeMu y syncMu tomados
+
+	// forcing y forceFrom: el modo respaldo (ForceImages). Con forcing > 0, la imagen de página entera se decide
+	// contra max(punto de rehacer, forceFrom). holds: los segmentos que Recycle no debe tocar (Hold), por número.
+	forcing   int
+	forceFrom page.LSN
+	holds     map[uint64]int
 
 	// pubMu: qué escrituras terminaron.
 	pubMu     sync.Mutex
@@ -85,8 +92,8 @@ func Open(fsys vfs.FS, dir string, opts Options, redo Position, fn func(rec *Rec
 		nums = []uint64{1}
 	}
 
-	sizes := map[uint64]int64{}
-	end, err := scan(fsys, walDir, redo, fn, func(num uint64, end int64) { sizes[num] = end })
+	sizes := map[uint64]Position{}
+	end, err := scan(fsys, walDir, redo, opts.StopLSN, fn, func(end Position) { sizes[end.Segment] = end })
 	if err != nil {
 		return nil, end, err
 	}
@@ -113,6 +120,7 @@ func Open(fsys vfs.FS, dir string, opts Options, redo Position, fn func(rec *Rec
 		finished: map[page.LSN]bool{},
 	}
 	w.pubCond = sync.NewCond(&w.pubMu)
+	w.activeNum.Store(end.Segment)
 	last := uint64(end.LSN - 1)
 	w.lastLSN.Store(last)
 	w.published.Store(last)
@@ -142,7 +150,7 @@ func cutTail(fsys vfs.FS, dir string, end Position, nums []uint64) error {
 
 // Scan implementa Reader sobre los segmentos de este WAL.
 func (w *WAL) Scan(from Position, fn func(rec *Record) error) (Position, error) {
-	return scan(w.fs, w.dir, from, fn, nil)
+	return scan(w.fs, w.dir, from, 0, fn, nil)
 }
 
 // reservation es el lugar reservado de un registro ya codificado (sin lsn ni crc).
@@ -151,6 +159,7 @@ type reservation struct {
 	seg     *segment
 	offset  int64
 	buf     []byte
+	size    int64
 	lsn     page.LSN
 	written bool
 }
@@ -158,6 +167,11 @@ type reservation struct {
 // LSN es el lsn asignado.
 func (r *reservation) LSN() page.LSN {
 	return r.lsn
+}
+
+// End es la posición siguiente al registro.
+func (r *reservation) End() Position {
+	return Position{Segment: r.seg.num, Offset: r.offset + r.size, LSN: r.lsn + 1}
 }
 
 // Write completa el lsn y el crc, escribe el registro en su lugar y lo publica. Se llama una vez.
@@ -198,7 +212,7 @@ func (w *WAL) Reserve(rec *Record, underLock func(lsn page.LSN)) (Reservation, e
 	if err := w.writable(); err != nil {
 		return nil, err
 	}
-	if needsImage(rec, w.RedoPoint().LSN) {
+	if needsImage(rec, w.imageLSN()) {
 		return nil, ErrNeedImage
 	}
 	seg, offset, err := w.allocate(int64(size))
@@ -210,7 +224,7 @@ func (w *WAL) Reserve(rec *Record, underLock func(lsn page.LSN)) (Reservation, e
 	if underLock != nil {
 		underLock(lsn)
 	}
-	return &reservation{w: w, seg: seg, offset: offset, buf: buf, lsn: lsn}, nil
+	return &reservation{w: w, seg: seg, offset: offset, buf: buf, size: int64(size), lsn: lsn}, nil
 }
 
 // writable devuelve por qué no se puede escribir (cerrado o fallado), o nil. Con writeMu tomado.
@@ -278,8 +292,9 @@ func (w *WAL) rotate() error {
 	w.syncMu.Lock()
 	w.active = &segment{num: num, file: file, allocated: w.opts.SegmentSize}
 	w.nextReady = false
+	w.activeNum.Store(num)
 	w.syncMu.Unlock()
-	w.sizes[old.num] = old.size
+	w.sizes[old.num] = Position{Segment: old.num, Offset: old.size, LSN: page.LSN(w.lastLSN.Load()) + 1}
 	return old.file.Close()
 }
 
@@ -402,16 +417,24 @@ func (w *WAL) Recycle(keep Position) error {
 	if err != nil {
 		return err
 	}
+	limit := keep.Segment
+	for num := range w.holds {
+		limit = min(limit, num)
+	}
 	changed := false
 	for _, num := range nums {
-		if num >= keep.Segment {
+		if num >= limit {
 			break
 		}
 		if err := w.recycleOne(num); err != nil {
 			return err
 		}
-		delete(w.sizes, num)
 		changed = true
+	}
+	for num := range w.sizes { // también las anotaciones de SegmentInfo de segmentos ya reciclados
+		if num < limit {
+			delete(w.sizes, num)
+		}
 	}
 	if !changed {
 		return nil
@@ -421,6 +444,69 @@ func (w *WAL) Recycle(keep Position) error {
 		return failedError(err)
 	}
 	return nil
+}
+
+// imageLSN es el lsn contra el que se decide la imagen de página entera: una página con pd_lsn menor la necesita en
+// su próximo cambio. Es el punto de rehacer vigente o, en modo respaldo, el inicio del respaldo si es mayor. Con
+// writeMu tomado.
+func (w *WAL) imageLSN() page.LSN {
+	lsn := w.RedoPoint().LSN
+	if w.forcing > 0 {
+		lsn = max(lsn, w.forceFrom)
+	}
+	return lsn
+}
+
+// ForceImages empieza el modo respaldo (como forcePageWrites de PostgreSQL): hasta llamar a release, la primera
+// modificación de cada página desde el lsn devuelto lleva su imagen entera, aunque ya la haya tenido desde el último
+// checkpoint. Se cuenta: varios respaldos a la vez. release se llama una vez.
+func (w *WAL) ForceImages() (page.LSN, func()) {
+	w.writeMu.Lock()
+	defer w.writeMu.Unlock()
+	from := page.LSN(w.lastLSN.Load()) + 1
+	w.forcing++
+	w.forceFrom = max(w.forceFrom, from)
+	var once sync.Once
+	return from, func() {
+		once.Do(func() {
+			w.writeMu.Lock()
+			defer w.writeMu.Unlock()
+			w.forcing--
+		})
+	}
+}
+
+// Hold retiene los segmentos desde seg: Recycle no los renombra ni los borra hasta llamar a release (el respaldo los
+// copia al final). Se cuenta: varias retenciones a la vez. release se llama una vez.
+func (w *WAL) Hold(seg uint64) func() {
+	w.writeMu.Lock()
+	defer w.writeMu.Unlock()
+	if w.holds == nil {
+		w.holds = map[uint64]int{}
+	}
+	w.holds[seg]++
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			w.writeMu.Lock()
+			defer w.writeMu.Unlock()
+			if w.holds[seg]--; w.holds[seg] <= 0 {
+				delete(w.holds, seg)
+			}
+		})
+	}
+}
+
+// Holds es cuántas retenciones (Hold) y modos respaldo (ForceImages) siguen abiertos (pruebas: el respaldo los suelta
+// siempre).
+func (w *WAL) Holds() int {
+	w.writeMu.Lock()
+	defer w.writeMu.Unlock()
+	n := 0
+	for _, c := range w.holds {
+		n += c
+	}
+	return n + w.forcing
 }
 
 // recycleOne renombra el segmento num al número siguiente al mayor, si faltan repuestos, o lo borra. Con writeMu
@@ -451,7 +537,7 @@ func (w *WAL) SizeSince(from Position) int64 {
 	}
 	var total int64
 	for num := from.Segment; num < w.active.num; num++ {
-		total += w.sizes[num]
+		total += w.sizes[num].Offset
 	}
 	return max(total+w.active.size-from.Offset, 0)
 }

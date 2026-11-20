@@ -1,6 +1,7 @@
 package store
 
 import (
+	"strings"
 	"time"
 
 	"github.com/cgalvisleon/et/envar"
@@ -58,6 +59,9 @@ type config struct {
 	vacuumXids        uint64        // xids asignados desde la última limpieza de fondo para correr otra
 	freezeMinAge      uint64        // se congela lo confirmado con xid < horizonte − freezeMinAge (FREEZE_MIN_AGE)
 	freezeTableAge    uint64        // limpieza agresiva si el frozenXID del store está así de detrás (FREEZE_TABLE_AGE)
+	archive           bool          // WAL_ARCHIVE: archivo continuo del WAL (retiene los segmentos hasta SetArchived)
+	archiveMaxSize    int64         // WAL_ARCHIVE_MAX_SIZE, en bytes: tope del WAL retenido por el archivo (0 = sin tope: frena)
+	stopLSN           page.LSN      // objetivo de la recuperación de OpenAt (0 = rehacer todo el WAL)
 
 	// Solo pruebas: páginas por archivo de estados (0 = xact.PagesPerFile) y primer xid de un motor nuevo (0 = 1).
 	xactFilePages int
@@ -84,7 +88,22 @@ func envConfig() config {
 		vacuumXids:        vacuumXids,
 		freezeMinAge:      freezeMinAge,
 		freezeTableAge:    freezeTableAge,
+		archive:           archiveOn(envar.GetStr("WAL_ARCHIVE", "off")),
+		archiveMaxSize:    max(envar.GetInt64("WAL_ARCHIVE_MAX_SIZE", 0), 0) << 20,
 	}
+}
+
+/**
+* archiveOn interpreta WAL_ARCHIVE: on, true, 1 o yes lo activan; cualquier otro valor lo deja apagado.
+* @param value string
+* @return bool
+**/
+func archiveOn(value string) bool {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "on", "true", "1", "yes":
+		return true
+	}
+	return false
 }
 
 /**

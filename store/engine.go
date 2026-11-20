@@ -28,7 +28,8 @@ const lockName = "LOCK"
 // Orden de los locks del motor: closeMu (lectura) → ddlMu → txGate → Store.mu; closeMu (lectura) → Store.mu (lectura) →
 // commitMu (lectura) → páginas → writeMu del WAL → counts.mu; páginas → hintGate (lectura); ckptMu → hintGate
 // (escritura) → writeMu; ckptMu → commitMu (escritura); ckptMu → ddlMu; Store.vacuumMu → closeMu (lectura) →
-// Store.mu (lectura) → páginas; closeMu (lectura) → txGate (lectura); closeMu (lectura) → ckptMu → ddlMu y
+// Store.mu (lectura) → páginas; closeMu (lectura) → txGate (lectura); closeMu (lectura) → archive.mu → writeMu y
+// ckptMu → archive.mu (el archivo continuo); closeMu (lectura) → ckptMu → ddlMu y
 // Store.vacuumMu → closeMu (lectura) → Store.mu → commitMu (escritura) (Verify y Repair). failMu, counts.mu y el
 // catálogo en memoria son hojas.
 type Engine struct {
@@ -116,6 +117,13 @@ type Engine struct {
 
 	stop chan struct{} // se cierra en Close: detiene el checkpointer, el escritor del WAL, la limpieza de fondo y OnStats
 	bg   sync.WaitGroup
+
+	backups backups // los respaldos en curso: retención del archivo de estados y borrados que esperan (backup.go)
+
+	archive archiveState // el archivo continuo del WAL (archive.go)
+
+	// afterBackupStep, si no es nil, corre en cada paso del respaldo (backupStep). Solo para las pruebas.
+	afterBackupStep func(step string)
 
 	// afterStep, si no es nil, corre al terminar cada paso del checkpoint (1 a 7, el 7 es el truncado del archivo de
 	// estados). Solo para las pruebas: simula un corte entre dos pasos.
@@ -342,7 +350,16 @@ func (e *Engine) readError(err error) error {
 * @return page.LSN del registro, error
 **/
 func (e *Engine) logRecord(kind wal.Kind, main []byte) (page.LSN, error) {
-	res, err := e.log.Reserve(&wal.Record{Kind: kind, Main: main}, nil)
+	return e.logTxRecord(0, kind, main)
+}
+
+/**
+* logTxRecord es logRecord con el xid de una transacción en el encabezado (KindCreateStoreIn de un lote).
+* @param xid page.XID, kind wal.Kind, main []byte
+* @return page.LSN del registro, error
+**/
+func (e *Engine) logTxRecord(xid page.XID, kind wal.Kind, main []byte) (page.LSN, error) {
+	res, err := e.log.Reserve(&wal.Record{XID: xid, Kind: kind, Main: main}, nil)
 	if err != nil {
 		return 0, err
 	}

@@ -9,20 +9,36 @@ import (
 	"github.com/cgalvisleon/et/store/internal/btree"
 	"github.com/cgalvisleon/et/store/internal/buffer"
 	"github.com/cgalvisleon/et/store/internal/control"
+	"github.com/cgalvisleon/et/store/internal/page"
 	"github.com/cgalvisleon/et/store/internal/smgr"
 	"github.com/cgalvisleon/et/store/internal/wal"
 )
 
 /**
-* store abre el store name, o lo crea si no existe. Pedirlo dos veces devuelve el mismo *Store.
+* store abre el store name, o lo crea si no existe. Pedirlo dos veces devuelve el mismo *Store. Si lo está creando
+* un lote abierto, espera hasta LOCK_TIMEOUT a que termine: confirmado, lo devuelve; deshecho, lo crea.
 * @param name string: UTF-8 válido sin nulos, de 1 a 255 bytes
-* @return *Store, error: ErrBadName, ErrClosed, ErrFailed
+* @return *Store, error: ErrBadName, ErrStorePending, ErrClosed, ErrFailed
 **/
 func (e *Engine) store(name string) (*Store, error) {
 	if !validName(name) {
 		return nil, fmt.Errorf(MSG_STORE_NAME, ErrBadName, name)
 	}
-	return e.handle(name, true)
+	var waited page.XID
+	for {
+		s, err := e.handle(name, true)
+		if err != nil {
+			return nil, err
+		}
+		creator := s.pendingCreator()
+		if creator == 0 {
+			return s, nil
+		}
+		if creator == waited || e.txs.Wait(creator, e.cfg.lockTimeout) != nil {
+			return nil, fmt.Errorf(MSG_STORE_PENDING, ErrStorePending, name) // el lote no terminó, o terminó sin resolverlo
+		}
+		waited = creator
+	}
 }
 
 /**
@@ -47,28 +63,49 @@ func (e *Engine) handle(name string, create bool) (*Store, error) {
 	defer e.leave()
 	e.ddlMu.Lock()
 	defer e.ddlMu.Unlock()
+	s, err := e.openLocked(name)
+	if err != nil || s != nil || !create {
+		return s, err
+	}
+	if err := e.writable(); err != nil {
+		return nil, err
+	}
+	entry, err := e.createStore(name, 0)
+	if err != nil {
+		return nil, e.fail(err)
+	}
+	return e.openEntry(entry)
+}
+
+/**
+* openLocked devuelve el *Store abierto de name, o abre el árbol del que está en el catálogo. Con ddlMu tomado.
+* @param name string
+* @return *Store: nil si no está en el catálogo, error
+**/
+func (e *Engine) openLocked(name string) (*Store, error) {
 	if s := e.handles[name]; s != nil {
 		return s, nil
 	}
 	entry, ok := e.cat.Get(name)
-	if !ok && !create {
+	if !ok {
 		return nil, nil
 	}
-	if !ok {
-		if err := e.writable(); err != nil {
-			return nil, err
-		}
-		var err error
-		if entry, err = e.createStore(name); err != nil {
-			return nil, e.fail(err)
-		}
-	}
+	return e.openEntry(entry)
+}
+
+/**
+* openEntry abre (o crea, si no tiene página meta) el árbol de un store del catálogo y guarda su *Store. Con ddlMu
+* tomado.
+* @param entry control.Entry
+* @return *Store, error
+**/
+func (e *Engine) openEntry(entry control.Entry) (*Store, error) {
 	tree, err := e.openTree(entry.File)
 	if err != nil {
 		return nil, e.treeError(err)
 	}
-	s := &Store{e: e, name: name, file: entry.File, tree: tree}
-	e.handles[name] = s
+	s := &Store{e: e, name: entry.Name, file: entry.File, tree: tree}
+	e.handles[entry.Name] = s
 	return s, nil
 }
 
@@ -117,21 +154,27 @@ func validName(name string) bool {
 
 /**
 * createStore da de alta un store: KindCreateStore en el WAL (durable), después el catálogo. Las páginas las crea
-* openTree. Con ddlMu tomado.
-* @param name string
+* openTree. Dentro de un lote (xid ≠ 0) el registro es KindCreateStoreIn con el xid del lote y la entrada queda con
+* FlagPendingCreate hasta el commit. Con ddlMu tomado.
+* @param name string, xid page.XID: el lote que lo crea, 0 = suelto
 * @return control.Entry, error
 **/
-func (e *Engine) createStore(name string) (control.Entry, error) {
+func (e *Engine) createStore(name string, xid page.XID) (control.Entry, error) {
 	file, err := e.cat.AllocFileNo()
 	if err != nil {
 		return control.Entry{}, err
 	}
-	if _, err := e.logRecord(wal.KindCreateStore, encodeStoreMain(file, name)); err != nil {
+	kind, flags := wal.KindCreateStore, uint32(0)
+	if xid != 0 {
+		kind, flags = wal.KindCreateStoreIn, control.FlagPendingCreate
+	}
+	if _, err := e.logTxRecord(xid, kind, encodeStoreMain(file, name)); err != nil {
 		return control.Entry{}, err
 	}
 	if _, err := e.cat.Create(name, file); err != nil {
 		return control.Entry{}, err
 	}
+	e.cat.SetFlags(file, flags)
 	e.counts.set(file, 0)
 	if err := e.storeCatalog(); err != nil {
 		return control.Entry{}, err
@@ -242,6 +285,9 @@ func (e *Engine) dropStore(name string) error {
 		return fmt.Errorf(MSG_STORE_NAME, ErrStoreNotFound, name)
 	}
 	if s := e.handles[name]; s != nil {
+		if s.creator != 0 || s.dropper != 0 {
+			return fmt.Errorf(MSG_STORE_PENDING, ErrStorePending, name)
+		}
 		s.markDropped()
 		delete(e.handles, name)
 	}
@@ -260,6 +306,16 @@ func (e *Engine) dropFiles(entry control.Entry) error {
 	if _, err := e.logRecord(wal.KindDropStore, encodeStoreMain(entry.File, entry.Name)); err != nil {
 		return err
 	}
+	return e.removeFiles(entry)
+}
+
+/**
+* removeFiles saca el store del catálogo (y lo guarda) y borra sus páginas de la caché y sus archivos, con el
+* registro que lo justifica ya durable (KindDropStore, o el KindCommit de un lote que lo borra). Con ddlMu tomado.
+* @param entry control.Entry
+* @return error
+**/
+func (e *Engine) removeFiles(entry control.Entry) error {
 	e.cat.Drop(entry.Name, entry.File)
 	e.counts.remove(entry.File)
 	e.frozen.forget(entry.File)
@@ -267,13 +323,20 @@ func (e *Engine) dropFiles(entry control.Entry) error {
 		return err
 	}
 	e.pool.DropFile(entry.File)
-	return e.sm.Unlink(entry.File)
+	return e.unlinkData(entry.File)
 }
 
 /**
-* storeNames devuelve los nombres de los stores, en orden.
+* storeNames devuelve los nombres de los stores, en orden, sin los que está creando un lote abierto.
 * @return []string
 **/
 func (e *Engine) storeNames() []string {
-	return e.cat.Names()
+	entries := e.cat.Catalog().Entries
+	names := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if entry.Flags&control.FlagPendingCreate == 0 {
+			names = append(names, entry.Name)
+		}
+	}
+	return names
 }

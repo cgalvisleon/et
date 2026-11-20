@@ -5,10 +5,11 @@
 //
 // Qué hace: buscar la versión que ve una lectura, escribir una versión nueva con su condición comprobada con la hoja
 // bloqueada, partir páginas, crear la raíz, terminar particiones incompletas, la inserción rápida al final (una pista
-// por store: la hoja más a la derecha), recorrer (Cursor, fase 2), poner las marcas de visibilidad, quitar versiones muertas
-// (fase 1B), congelar y llevar el mapa de visibilidad y el frozenXID del store (fase 2), y rehacer sus Kind del WAL. Qué no hace: no espera a otras transacciones (devuelve WaitError y quien llama espera sin páginas
-// bloqueadas), no guarda valores grandes (recibe la overflow.Ref ya escrita), no confirma transacciones. Depende de
-// page, smgr, buffer, fsm (FreeList, VisibilityMap), overflow (Ref), xact (Status, Snapshot) y wal por sus interfaces.
+// por store: la hoja más a la derecha), recorrer (Cursor, fase 2), poner las marcas de visibilidad, quitar versiones
+// muertas (fase 1B), congelar y llevar el mapa de visibilidad y el frozenXID del store (fase 2), y rehacer sus Kind del
+// WAL. Qué no hace: no espera a otras transacciones (devuelve WaitError y quien llama espera sin páginas bloqueadas),
+// no guarda valores grandes (recibe la overflow.Ref ya escrita), no confirma transacciones. Depende de page, smgr,
+// buffer, fsm (FreeList, VisibilityMap), overflow (Ref), xact (Status, Snapshot) y wal por sus interfaces.
 //
 // # Clave
 //
@@ -121,12 +122,13 @@
 // BTree (Open, Create) implementa Tree; Redo rehace sus Kind (valida la forma y todos los deltas antes de tocar
 // páginas: un bloque con BlockWillInit se pone en ceros al fijarlo). Lo único en memoria es la pista de la inserción
 // rápida (la última hoja de más a la derecha escrita, un uint32 por store; se usa si la raíz está en el nivel 1 o más,
-// la hoja sigue siendo la de más a la derecha, sin partición incompleta, con lugar y la clave va después de su primera).
+// la hoja sigue siendo la de más a la derecha, sin partición incompleta, con lugar y la clave va después de su
+// primera).
 //
 //   - Bajada (descend): lee la raíz de la meta y baja con una página bloqueada a la vez, en compartido salvo la del
 //     nivel buscado; en cada página, si la clave es ≥ que su clave alta, sigue a la derecha (moveRight). Una bajada
-//     para escribir que encuentra una página con OpaqueIncompleteSplit la suelta, termina esa partición y repite
-//     (como _bt_moveright con forupdate): así el padre de una partición siempre existe.
+//     para escribir que encuentra una página con OpaqueIncompleteSplit la suelta, termina esa partición y repite (como
+//     _bt_moveright con forupdate): así el padre de una partición siempre existe.
 //   - Escritura (Write): busca la posición de (id, MaxLSN) —antes que todas las versiones del id, porque su lsn será el
 //     mayor—, mira las versiones del id (siguiendo a la derecha, con la hoja bloqueada y la hermana en compartido) para
 //     armar Latest, aplica la condición; si la entrada no cabe, parte la hoja, termina la partición y vuelve a bajar.
@@ -137,14 +139,14 @@
 //     el enlace a la hija; si el padre no tiene lugar, lo parte y repite.
 //   - Lectura (Lookup): la primera versión visible del id (sin snapshot: la más nueva confirmada; sin Config.Status,
 //     toda versión cuenta como confirmada; el motor siempre pasa el archivo de estados), siguiendo a la derecha.
-//   - Recorridos (Cursor, fase 2; Scan y ScanBackward lo usan): NewCursor(ScanOptions) baja una vez y cada Next lee
-//     una hoja entera con bloqueo compartido, la suelta y devuelve sus versiones visibles: entre dos Next no queda nada
-//     fijado ni bloqueado, así quien llama suelta sus propios locks antes de usar lo leído. Hacia atrás, el primer id de
-//     cada hoja queda pendiente hasta leer la anterior (sus versiones más nuevas pueden estar ahí), y para ir a la
+//   - Recorridos (Cursor, fase 2; Scan y ScanBackward lo usan): NewCursor(ScanOptions) baja una vez y cada Next lee una
+//     hoja entera con bloqueo compartido, la suelta y devuelve sus versiones visibles: entre dos Next no queda nada
+//     fijado ni bloqueado, así quien llama suelta sus propios locks antes de usar lo leído. Hacia atrás, el primer id
+//     de cada hoja queda pendiente hasta leer la anterior (sus versiones más nuevas pueden estar ahí), y para ir a la
 //     izquierda se sigue a la derecha desde la hermana anotada hasta la página cuyo enlace derecho es la recién leída
 //     (como _bt_walk_left, sin borrado de páginas). Opciones: Ring fija las hojas siguientes a la primera con
-//     buffer.Ring (un recorrido grande no vacía la caché); KeysOnly no copia los valores; Borrow copia los valores de la
-//     hoja a un búfer del cursor que se reutiliza (valen hasta el próximo Next; solo hacia adelante).
+//     buffer.Ring (un recorrido grande no vacía la caché); KeysOnly no copia los valores; Borrow copia los valores de
+//     la hoja a un búfer del cursor que se reutiliza (valen hasta el próximo Next; solo hacia adelante).
 //   - Exists: Lookup sin copiar el valor.
 //   - Verify comprueba la estructura entera (pruebas). VerifyWith (fase 3, Verify del motor) es lo mismo con
 //     VerifyOptions: la estrategia de la caché (buffer.Ring), Page (cada página del árbol, ya soltada) y Leaf (cada
@@ -176,19 +178,19 @@
 //
 // Vacuum(VacuumOptions{Horizon, FreezeLimit, Aggressive, XID, Free}) recorre las hojas de izquierda a derecha, una
 // bloqueada en exclusivo a la vez (por los enlaces del nivel 1 si hay mapa y dos niveles, saltando hojas: ver
-// «Congelado y mapa de visibilidad»; si no, por los enlaces de las hojas). Por id, de la versión más nueva a la más vieja: la de referencia es la primera confirmada
-// visible para todos (EntryFrozen, o xid < Horizon: toda transacción anterior terminó y todo snapshot la ve); están
-// muertas las de transacciones abortadas y todas las más viejas que la de referencia (las versiones de un id que
-// siguen en la hoja de la derecha heredan la de referencia de la izquierda); la de referencia, si es una lápida y no
-// le queda nada detrás, también se quita, salvo que la clave alta de la hoja sea del mismo id (sus versiones viejas
-// pueden seguir a la derecha: a confirmar, queda hasta la fase 2). Las muertas en línea se quitan; las de desborde se
-// marcan EntryFreeing en el mismo KindLeafVacuum (pregunta 58). Con la hoja ya soltada, Free libera cada cadena
-// marcada (overflow.Manager.FreeTail: desde el final y repetible) y un segundo KindLeafVacuum quita esas versiones,
-// buscándolas por su clave (siguiendo a la derecha si una partición las movió). Una versión «liberándose» es
-// invisible para toda lectura y no cuenta para Latest; si un corte (o un error de Free) la deja marcada, la próxima
-// pasada sigue liberando lo que falta de su cadena y la quita. Las hojas no se borran (fase 2); el espacio se
-// reutiliza porque page.DeleteItems cierra los huecos y page.Repair compacta. Quien llama no corre dos limpiezas del
-// mismo store a la vez (el motor las serializa con Store.vacuumMu).
+// «Congelado y mapa de visibilidad»; si no, por los enlaces de las hojas). Por id, de la versión más nueva a la más
+// vieja: la de referencia es la primera confirmada visible para todos (EntryFrozen, o xid < Horizon: toda transacción
+// anterior terminó y todo snapshot la ve); están muertas las de transacciones abortadas y todas las más viejas que la
+// de referencia (las versiones de un id que siguen en la hoja de la derecha heredan la de referencia de la izquierda);
+// la de referencia, si es una lápida y no le queda nada detrás, también se quita, salvo que la clave alta de la hoja
+// sea del mismo id (sus versiones viejas pueden seguir a la derecha: a confirmar, pendiente). Las muertas en línea se
+// quitan; las de desborde se marcan EntryFreeing en el mismo KindLeafVacuum (pregunta 58). Con la hoja ya soltada, Free
+// libera cada cadena marcada (overflow.Manager.FreeTail: desde el final y repetible) y un segundo KindLeafVacuum quita
+// esas versiones, buscándolas por su clave (siguiendo a la derecha si una partición las movió). Una versión
+// «liberándose» es invisible para toda lectura y no cuenta para Latest; si un corte (o un error de Free) la deja
+// marcada, la próxima pasada sigue liberando lo que falta de su cadena y la quita. Las hojas no se borran (el borrado
+// de páginas está pendiente); el espacio se reutiliza porque page.DeleteItems cierra los huecos y page.Repair compacta.
+// Quien llama no corre dos limpiezas del mismo store a la vez (el motor las serializa con Store.vacuumMu).
 //
 // # Congelado y mapa de visibilidad (fase 2)
 //
@@ -207,13 +209,13 @@
 //
 // Recorrido: con Config.VM y la raíz en el nivel 1 o más, Vacuum copia los enlaces de cada página del nivel 1 (de
 // izquierda a derecha por sus enlaces, con bloqueo compartido; también los de la siguiente para saber dónde termina la
-// última cadena) y, por cada enlace, salta la hoja sin leerla si su bit es VMAllFrozen (o VMAllVisible sin
-// Aggressive), o la limpia y sigue a la derecha hasta el enlace siguiente (así ve las hojas de particiones posteriores
-// a la copia o sin enlace en el padre). Saltar es seguro: el bit solo se pone en una hoja sin partición incompleta y
-// cualquier partición posterior lo borra, así que las hojas a su derecha hasta el enlace siguiente están en la copia.
+// última cadena) y, por cada enlace, salta la hoja sin leerla si su bit es VMAllFrozen (o VMAllVisible sin Aggressive),
+// o la limpia y sigue a la derecha hasta el enlace siguiente (así ve las hojas de particiones posteriores a la copia o
+// sin enlace en el padre). Saltar es seguro: el bit solo se pone en una hoja sin partición incompleta y cualquier
+// partición posterior lo borra, así que las hojas a su derecha hasta el enlace siguiente están en la copia.
 // VacuumStats: Frozen, Skipped, SkippedVisible, Complete (sin error y sin saltar hojas solo todo-visibles) y FrozenXID
-// (el menor xid que quedó sin congelar en lo recorrido, acotado por Horizon: el frozenXID que el store puede guardar con
-// SetFrozenXID si Complete). FrozenXID y SetFrozenXID leen y suben el de la meta.
+// (el menor xid que quedó sin congelar en lo recorrido, acotado por Horizon: el frozenXID que el store puede guardar
+// con SetFrozenXID si Complete). FrozenXID y SetFrozenXID leen y suben el de la meta.
 //
 // Toda página del árbol que se bloquea pasa por page.CheckItems (la caché solo verifica la suma; a confirmar: un
 // gancho de la caché al cargar del disco evitaría repetirlo en cada acceso).
@@ -221,5 +223,5 @@
 // Bloqueos: como nbtree, la partición, terminar una partición y la raíz nueva fijan páginas con otra bloqueada (la
 // página nueva de fsm, la antigua hermana derecha, la meta, el padre); siempre de izquierda a derecha, de hija a
 // padre, árbol → meta, y nunca se espera a nada entre Reserve y Write, así que expulsar una página sucia (que espera
-// al WAL) no puede cerrar un ciclo (a confirmar en store/doc.go, que hoy lo prohíbe en general).
+// al WAL) no puede cerrar un ciclo (es el orden de store/doc.go, «Orden de los bloqueos»).
 package btree

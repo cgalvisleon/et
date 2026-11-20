@@ -47,7 +47,7 @@
 //	  0   4 fileNo
 //	  4   4 metaBlock   bloque de la página meta del store (siempre 0 en la fase 1)
 //	  8   8 count       ids vivos confirmados (Count) a countLSN
-//	 16   4 flags       reservado (fase 2: store con mapa de visibilidad, etc.)
+//	 16   4 flags       bit 0 FlagPendingCreate: lo creó un lote que todavía no confirmó (tarea 67); el resto reservado
 //	 20   2 nameLen     1 a MaxNameLen
 //	 22   2 reservado
 //	 24   n name

@@ -97,7 +97,7 @@ Cada tabla lista la API pública principal de cada paquete. `go doc github.com/c
 | `queue` | `New[T](size, maxEvents, period, handler)`, `Push`, `Len`, `Close` | `q.Push(item)` |
 | `crontab` | `New(tag, store, opts...)` (instancia; `WithHandler`) o `Load` (global), `CronJob`, `ScheduleJob`, `StopJob`, `StartJob`, `RemoveJob`, `GetJob`, `Http*`; estados `pending`→`scheduled`⇄`running`→`finished`/`failed`, `paused`, `missed`, `canceled`; `LastRun`, `WithRetries`, `WithTimeout`; las réplicas con el mismo tag eligen una líder y la relevan | `crontab.CronJob(tag, owner, "0 * * * *", 0, nil, fn)` |
 | `resilience` | `New()`, `LoadInstance(Params)`, `Instance.Run`, `IsDone`, `IsFailed`, `Stop` | `inst, _ := r.LoadInstance(resilience.Params{Fn: send, TotalAttempts: 3})` |
-| `store` | `Open(dir)` → `Engine` (`Store`, `DropStore`, `Stores`, `Checkpoint`, `Vacuum`, `NewBatch`, `Snapshot`, `SnapshotFor`, `WaitDurable`, `Verify`, `Repair`, `Stats`, `OnStats`, `Pressure`, `DirUsage`, `Close`) → `Store` (`Put`, `Remove`, `Insert`, `Update`, `Delete`, `Read`, `GetVersion`, `Exists`, `Count`, `Empty`, `Deferred`, `Keys`, `KeysAfter`, `KeysPrefix`, `ForEach`, `ForEachPrefix`, `ForEachRange`, `ForEachBorrowed`, sus formas `…In(lote, …)`, `ReadAt`/`GetVersionAt`/`ExistsAt`/`ForEachAt`/`CountAt(snapshot, …)`); `Batch` (`Commit`, `CommitDeferred`, `Rollback`); motor al estilo PostgreSQL con MVCC (F-23) | `s, _ := e.Store("users"); s.Put("id", data)` |
+| `store` | `Open(dir)` → `Engine` (`Store`, `DropStore`, `Stores`, `Checkpoint`, `Vacuum`, `NewBatch`, `Snapshot`, `SnapshotFor`, `WaitDurable`, `Verify`, `Repair`, `Stats`, `OnStats`, `Pressure`, `DirUsage`, `StoreIn`, `DropStoreIn`, `Backup`, `PendingArchive`, `SetArchived`, `SwitchWAL`, `Close`; `OpenAt(dir, lsn)`) → `Store` (`Put`, `Remove`, `Insert`, `Update`, `Delete`, `Read`, `GetVersion`, `Exists`, `Count`, `Empty`, `Deferred`, `Keys`, `KeysAfter`, `KeysPrefix`, `ForEach`, `ForEachPrefix`, `ForEachRange`, `ForEachBorrowed`, sus formas `…In(lote, …)`, `ReadAt`/`GetVersionAt`/`ExistsAt`/`ForEachAt`/`CountAt(snapshot, …)`); `Batch` (`Commit`, `CommitDeferred`, `Rollback`); motor al estilo PostgreSQL con MVCC (F-23) | `s, _ := e.Store("users"); s.Put("id", data)` |
 
 ### Seguridad
 
@@ -344,11 +344,29 @@ defer q.Close()
 
 ### Store embebido clave/valor
 
-`store` es un motor de almacenamiento para construir bases de datos sobre él, tomando como referencia el almacenamiento de PostgreSQL (F-23): un árbol B+ en disco en páginas de 8 KB, una caché de páginas de tamaño fijo (nada del índice vive en RAM), un WAL por página con imágenes enteras tras cada checkpoint, checkpoints en segundo plano y una recuperación que solo reproduce el WAL desde el último checkpoint. Un motor es un directorio (un proceso a la vez) con varios stores de `(id string, data []byte)`; los valores que no caben en una hoja van a páginas de desborde (hasta 64 MiB). Cada operación suelta es su propia transacción y, con `SYNC_ON_WRITE` (por omisión), vuelve cuando el WAL está en disco (los escritores comparten cada fsync). Disponible hoy (fases 1A, 1B, los recorridos, la escritura diferida y las versiones de la fase 2, y `Verify`/`Repair` y `Stats`/`OnStats` de la fase 3): `Open`, `Close`, `Store`, `DropStore`, `Stores`, `Checkpoint`; `Put`, `Remove` (ciegos), `Insert`, `Update`, `Delete` (devuelven si escribieron), `Read`, `Exists` (sin leer el valor), `Count` (un contador, O(1)) y `Empty` (O(1), como `TRUNCATE`: devuelve `ErrBusy` mientras haya lotes o snapshots abiertos). Cada cambio escribe una versión nueva (MVCC): una operación suelta lee la más nueva confirmada (Read Committed) y espera hasta `LOCK_TIMEOUT` a otro escritor; un lote (`NewBatch`, los métodos `…In`, `Commit`/`Rollback`) es atómico entre stores, ve sus propios cambios y lee de su snapshot (Repeatable Read: un cambio en conflicto da `ErrSerialization`); un `Snapshot` da lecturas consistentes con `ReadAt`. Lotes y snapshots terminan al pasar `TRANSACTION_TIMEOUT` (`ErrTimeout`). Las versiones viejas se limpian en segundo plano (`VACUUM_INTERVAL`, `VACUUM_THRESHOLD`) o con `Vacuum()`. Los recorridos siguen las hojas enlazadas en orden de id (ascendente o descendente, con offset y limit, por prefijo o rango `[from, to)`) sobre un snapshot: `ForEach`, `Keys` y `KeysAfter` (paginar) toman uno propio, `ForEachAt` y `CountAt` (O(n)) usan el tuyo; el callback no tiene nada tomado mientras corre, `ForEachBorrowed` presta `data` solo dentro del callback, y los recorridos grandes usan un anillo de búferes en vez de vaciar la caché. La escritura diferida (como `synchronous_commit = off` de PostgreSQL) es para quien agrupa sus propias confirmaciones: `store.Deferred()` (`Put`, `Remove`, `Insert`, `Update`, `Delete`) y `batch.CommitDeferred()` confirman sin esperar el fsync — se ven enseguida y un corte puede perderlas enteras (nunca a medias) hasta que `engine.WaitDurable()` vuelva; un escritor de fondo del WAL las hace durables igual en `WAL_WRITER_DELAY` (~200 ms), y `SYNC_ON_WRITE=false` vuelve diferida toda confirmación. `GetVersion`, `GetVersionIn` y `GetVersionAt` devuelven el valor con su versión (el LSN que lo escribió, 0 si no existe) para concurrencia optimista; la escritura condicional es un lote, que da `ErrSerialization` si alguien cambió el id después de que empezó. `engine.Verify()` revisa el motor abierto sin cambiar nada (control, catálogo, archivos de datos huérfanos y, de a un store, su árbol, sus cadenas de desborde, la lista de libres, el mapa de visibilidad, el congelado y `Count`) y devuelve un `Report` con totales y hallazgos; `engine.Repair()` además arregla, con WAL (seguro ante un corte), lo que se puede sin perder nada sano — archivos huérfanos, páginas sin dueño y cadenas huérfanas (vuelven a la lista de libres), bits del mapa de visibilidad mal puestos, un `Count` equivocado — y deja lo demás (una hoja ilegible, una cadena viva rota) informado y sin tocar; `go run ./cmd/storecheck -dir <dir> [-repair]` imprime el informe. `engine.Stats()` es una foto barata hecha de contadores atómicos (nunca recorre el árbol): páginas en caché, páginas sucias, aciertos y fallos; bytes de WAL desde el último checkpoint, LSN actual y durable, checkpoints y la duración del último; escrituras desde la última limpieza, lotes y snapshots abiertos, el XID vivo más viejo y su edad respecto del congelado; lecturas, escrituras y confirmaciones; y latencias p50/p99 de confirmaciones, lecturas puntuales y fsync del WAL (histogramas log2 de tamaño fijo, precisos a ×2). `engine.OnStats(intervalo, fn)` llama a `fn` con un `Stats` en cada intervalo, sin ningún candado tomado, hasta su `stop` o `Close`. Diseño y formatos: [`store/doc.go`](../store/doc.go).
+`store` es un motor de almacenamiento para construir bases de datos sobre él, tomando como referencia el almacenamiento de PostgreSQL (F-23): un árbol B+ en disco en páginas de 8 KB, una caché de páginas de tamaño fijo (nada del índice vive en RAM), un WAL por página con imágenes enteras tras cada checkpoint, MVCC con ids de transacción de 64 bits, checkpoints en segundo plano y una recuperación que solo reproduce el WAL desde el último checkpoint. Un motor es un directorio (un proceso a la vez) con varios stores de `(id string, data []byte)`; los ids miden de 1 a 2.000 bytes y los valores hasta 64 MiB (los grandes van a páginas de desborde). Diseño, formatos y orden de los bloqueos: [`store/doc.go`](../store/doc.go).
 
-Disco lleno o lento: toda escritura comprueba antes que el WAL tenga lugar (sus segmentos se preasignan con ceros, como `wal_init_zero` de PostgreSQL), y los archivos de datos crecen escribiendo la página nueva antes de usarla, así el disco lleno (`ENOSPC`, `EDQUOT`) casi siempre sale antes de escribir nada: la operación devuelve `store.ErrDiskFull` (se compara con `errors.Is`), no cambia nada, el motor sigue y las escrituras vuelven solas cuando hay lugar. Donde ya no puede volver atrás (un fsync fallido, una página sucia que no se puede escribir) el motor queda de solo lectura: las lecturas, los recorridos y los snapshots siguen, las escrituras devuelven `ErrDiskFull` junto con `ErrFailed`, y `Close` más `Open` (con lugar) recupera todo lo confirmado. Un disco lento frena a los escritores en vez de crecer: con más de 2 × `MAX_WAL_SIZE` de WAL sin reciclar esperan a un checkpoint (hasta `LOCK_TIMEOUT`, después `ErrThrottled`), y las confirmaciones diferidas esperan un fsync cuando hay 8.192 registros del WAL sin fsync. `Stats` informa `ReadOnly`, `DiskFull` y `Throttled`.
+**Operaciones sueltas.** `Put` y `Remove` son ciegos; `Insert`, `Update` y `Delete` devuelven si escribieron; `Read`, `Exists` (sin leer el valor), `Count` (un contador, O(1)) y `Empty` (O(1), como `TRUNCATE`; `ErrBusy` mientras haya lotes o snapshots abiertos). Cada una es su propia transacción: lee la versión más nueva confirmada (Read Committed), espera hasta `LOCK_TIMEOUT` a otro escritor del mismo id (después `ErrConflict`) y, con `SYNC_ON_WRITE` (por omisión), vuelve cuando el WAL está en disco; los escritores comparten cada fsync.
 
-Presión y uso de disco (como `pebble.Pressure` y `pebble.DirUsage` de josefina): `engine.Pressure()` dice qué tan cerca está el motor de frenar a los escritores — un `float64`, 0 = nada, ≥ 1 = ya frena — como la mayor de tres razones (WAL sin reciclar / 2 × `MAX_WAL_SIZE`, registros del WAL sin fsync / 8.192, páginas sucias / búferes de la caché), o 1 con el motor de solo lectura o inutilizable; solo lee atómicos, así se puede preguntar antes de cada escritura masiva. `Stats.Pressure` y `Stats.PressureCause` (`wal`, `deferred`, `dirty`, `read_only`, `failed`) la traen también. `engine.DirUsage()` devuelve un `DiskUsage` con los bytes en disco del motor entero (`Total` = `Data` + `WAL`, con los segmentos preasignados, + `Xact` + `Control`) y de cada store (`Stores`); `store.DirUsage()` da la parte de un store. Los tamaños salen del largo de los archivos y del gestor de páginas, nunca de leer páginas; un store borrado o vaciado deja de contar enseguida.
+**Lotes y snapshots.** Un lote (`NewBatch`, los métodos `…In`, `Commit`/`Rollback`) es atómico entre stores, ve sus propios cambios y lee de su snapshot (Repeatable Read: escribir un id que otro confirmó después de que empezó el lote da `ErrSerialization`; se reintenta el lote). Un `Snapshot` da lecturas consistentes con `ReadAt`, `ExistsAt`, `GetVersionAt`, `ForEachAt` y `CountAt` (O(n)). Los dos terminan al pasar `TRANSACTION_TIMEOUT` (`ErrTimeout`). Las versiones viejas se limpian en segundo plano (`VACUUM_INTERVAL`, `VACUUM_THRESHOLD`) o con `Vacuum()`.
+
+**Recorridos.** Siguen las hojas en orden de id, ascendente o descendente, con offset y limit, por prefijo o rango `[from, to)`: `ForEach`, `ForEachPrefix`, `ForEachRange`, `Keys`, `KeysPrefix` y `KeysAfter` (paginar) toman un snapshot propio; las formas `…At` usan el tuyo. El callback no tiene nada tomado mientras corre (puede usar el motor), `ForEachBorrowed` presta `data` solo dentro del callback, y los recorridos grandes usan un anillo de búferes en vez de vaciar la caché.
+
+**Escritura diferida y versiones.** `store.Deferred()` (`Put`, `Remove`, `Insert`, `Update`, `Delete`) y `batch.CommitDeferred()` confirman sin esperar el fsync, como `synchronous_commit = off` de PostgreSQL: se ven enseguida y un corte puede perderlas enteras (nunca a medias) hasta que `engine.WaitDurable()` vuelva. Un escritor de fondo del WAL las hace durables igual en `WAL_WRITER_DELAY`, y `SYNC_ON_WRITE=false` difiere toda confirmación. `GetVersion`, `GetVersionIn` y `GetVersionAt` devuelven el valor con su versión (el LSN que lo escribió, 0 si no existe); la escritura condicional es un lote, que da `ErrSerialization` si el id cambió después de que empezó.
+
+**DDL transaccional.** `engine.StoreIn(tx, name)` abre un store para un lote o lo crea dentro del lote, y `engine.DropStoreIn(tx, name)` lo borra cuando el lote confirma, así un catálogo y sus stores nacen o mueren juntos. Hasta el `Commit` solo el lote ve el store que creó (`Store(name)` desde fuera espera hasta `LOCK_TIMEOUT` y después da `ErrStorePending`). `Rollback`, el tiempo máximo o un corte no dejan rastro. Un lote con DDL siempre espera el fsync, también con `CommitDeferred`.
+
+**Revisión y reparación.** `engine.Verify()` revisa el motor abierto sin cambiar nada (control, catálogo, archivos huérfanos y, de a un store, su árbol, sus cadenas de desborde, la lista de libres, el mapa de visibilidad, el congelado y `Count`) y devuelve un `Report`. `engine.Repair()` además arregla, con WAL, lo que se puede sin perder nada sano (archivos huérfanos, páginas sin dueño, cadenas huérfanas, bits del mapa mal puestos, un `Count` equivocado) e informa lo demás. `go run ./cmd/storecheck -dir <dir> [-repair]` imprime el informe.
+
+**Estadísticas, presión y uso de disco.** `engine.Stats()` es una foto barata de contadores atómicos: caché, WAL, checkpoints, limpieza, lotes y snapshots abiertos, XID, lecturas, escrituras, confirmaciones, estado del disco, del archivo continuo, la presión y latencias p50/p99 de confirmaciones, lecturas puntuales y fsync del WAL. `engine.OnStats(intervalo, fn)` manda una en cada intervalo hasta su `stop` o `Close`. `engine.Pressure()` dice qué tan cerca está el motor de frenar a los escritores (0 = nada, ≥ 1 = ya frena): la mayor de cuatro razones (WAL sin reciclar, WAL que espera al archivador, registros del WAL sin fsync, páginas sucias), o 1 con el motor de solo lectura o inutilizable; `Stats.PressureCause` la nombra. `engine.DirUsage()` y `store.DirUsage()` dan los bytes en disco, del largo de los archivos.
+
+**Disco lleno o lento.** Los segmentos del WAL se preasignan con ceros y los archivos de datos crecen escribiendo antes la página nueva, así el disco lleno casi siempre sale antes de escribir nada: `ErrDiskFull` (se compara con `errors.Is`), nada cambió y las escrituras vuelven solas cuando hay lugar. Donde ya no puede volver atrás (un fsync fallido) el motor queda de solo lectura: las lecturas siguen, las escrituras devuelven `ErrDiskFull` con `ErrFailed`, y `Close` más `Open` recupera todo lo confirmado. Un disco lento frena a los escritores en vez de crecer: con más de 2 × `MAX_WAL_SIZE` de WAL sin reciclar esperan a un checkpoint (después `ErrThrottled`), y las confirmaciones diferidas esperan un fsync cuando hay 8.192 registros sin fsync.
+
+**Respaldo en caliente y restauración.** `engine.Backup(dir)` copia el motor abierto a un directorio vacío mientras siguen las escrituras, los lotes y el DDL, como `pg_basebackup`, y `store.Open(dir)` restaura la copia: comprueba primero que el WAL copiado llegue al fin del respaldo (si no, `ErrBackupIncomplete`) y después lo rehace, así la copia tiene exactamente lo confirmado al terminar el respaldo. `BackupInfo` informa los LSN, los archivos, los bytes y la duración.
+
+**Archivo continuo del WAL y recuperación a un punto en el tiempo.** Con `WAL_ARCHIVE=on` ningún segmento sellado del WAL se recicla hasta que tu archivador llame a `engine.SetArchived(seg)`; `engine.PendingArchive()` lista los sellados sin archivar (con `Size`, los bytes que vale la pena copiar) y `engine.SwitchWAL()` sella antes el activo. Un archivador atrasado frena a los escritores, salvo que `WAL_ARCHIVE_MAX_SIZE` ponga tope al WAL retenido (el corte se ve en `Stats.ArchiveGap`). Una copia de `Backup` más los segmentos archivados copiados a su `wal/` se restaura hasta el final de lo archivado con `Open`, o hasta un LSN con `store.OpenAt(dir, lsn)` (`ErrRecoveryTarget` si no se puede alcanzar).
+
+**Configuración.** Las variables de entorno (tamaños en MB y tiempos en segundos, salvo que se diga otra cosa) están en la fila `store` de [Variables de entorno](#variables-de-entorno); se leen al abrir el motor.
 
 ```go
 engine, err := store.Open("./data")
@@ -366,12 +384,12 @@ deleted, err := customers.Delete("c-002")                             // false s
 err = customers.Remove("c-003")                                       // borrado ciego
 n := customers.Count()
 
-// Un lote: atómico entre stores, un solo fsync en Commit
+// Un lote: atómico entre stores, un fsync en Commit
 orders, _ := engine.Store("orders")
 tx := engine.NewBatch()
 _ = customers.PutIn(tx, "c-001", []byte(`{"name":"Ana","orders":1}`))
 _, _ = orders.InsertIn(tx, "o-001", []byte(`{"customer":"c-001"}`))
-if err := tx.Commit(); err != nil { // ErrSerialization: reintenta el lote
+if err := tx.Commit(); err != nil { // ErrSerialization: reintentar el lote
     return err
 }
 
@@ -380,43 +398,71 @@ view := engine.Snapshot()
 defer view.Close()
 data, found, err = customers.ReadAt(view, "c-001")
 
-// Recorridos: ids en orden sobre un snapshot; devolver false para parar
+// Recorridos: ids en orden sobre un snapshot; devolver false corta
 err = customers.ForEach(func(id string, data []byte) (bool, error) {
     fmt.Println(id, string(data))
     return true, nil
-}, true, 0, 100) // ascendente, offset 0, como mucho 100
+}, true, 0, 100) // ascendente, offset 0, hasta 100
 page, err := customers.KeysAfter("", 50) // página siguiente: KeysAfter(page[len(page)-1], 50)
 exists, err := customers.Exists("c-001")
 
 // Escritura diferida: sin fsync por escritura; un WaitDurable para todo el grupo
-log := customers.Deferred()
-for _, e := range events {
-    _ = log.Put(e.ID, e.Data) // se ve ya, durable tras WaitDurable
+deferred := customers.Deferred()
+for _, ev := range events {
+    _ = deferred.Put(ev.ID, ev.Data) // visible ya, durable tras WaitDurable
 }
 err = engine.WaitDurable()
 
 // Versiones: el LSN de la versión visible (0 si no existe)
 data, version, found, err := customers.GetVersion("c-001")
 
-// Verify (solo lee) o Repair (arregla lo que puede, seguro ante un corte); el daño va en el informe
+// DDL transaccional: un store creado y llenado en un lote, y uno viejo borrado con él
+tx = engine.NewBatch()
+v2, err := engine.StoreIn(tx, "customers_v2") // solo tx lo ve hasta el Commit
+_ = v2.PutIn(tx, "c-001", []byte(`{"name":"Ana"}`))
+_ = engine.DropStoreIn(tx, "orders") // se borra cuando tx confirma
+if err := tx.Commit(); err != nil { // con error o Rollback: sin customers_v2, orders intacto
+    return err
+}
+
+// Verify (solo lectura) o Repair (arregla lo que puede, seguro ante un corte); el daño va en el informe
 report, err := engine.Verify()
 fmt.Print(report.String()) // totales y una línea por hallazgo
 if !report.Clean() {
-    report, err = engine.Repair() // report.Pending(): lo que queda sin arreglar
+    report, err = engine.Repair() // report.Pending(): lo que queda
 }
 
 // Stats: una foto barata; OnStats manda una en cada intervalo hasta stop() o Close
 st := engine.Stats()
 fmt.Println(st.CacheDirty, st.WALSinceCheckpoint, st.CommitLatency.P99, st.FsyncLatency.P50)
-stop := engine.OnStats(10*time.Second, func(st store.Stats) { log.Printf("lecturas %d, confirmaciones %d", st.Reads, st.Commits) })
+stop := engine.OnStats(10*time.Second, func(st store.Stats) { log.Printf("reads %d, commits %d", st.Reads, st.Commits) })
 defer stop()
 
-// Presión y uso de disco: esperar antes de una carga masiva si el motor está cerca de frenar
+// Presión y uso de disco: frenar antes de una carga masiva si el motor está cerca de frenar
 if engine.Pressure() >= 0.8 {
     time.Sleep(100 * time.Millisecond)
 }
 usage, _ := engine.DirUsage()
-fmt.Println(usage.Total, usage.WAL, usage.Stores["users"])
+fmt.Println(usage.Total, usage.WAL, usage.Stores["customers"])
+
+// Respaldo en caliente: las escrituras siguen mientras copia; Open sobre la copia la restaura
+info, err := engine.Backup("/backups/2026-11-20")
+if err != nil {
+    return err
+}
+fmt.Println(info.EndLSN, info.Bytes, info.Took)
+restored, err := store.Open("/backups/2026-11-20") // rehace su WAL hasta el fin del respaldo
+
+// Archivador (WAL_ARCHIVE=on): copiar cada segmento sellado y después marcarlo archivado
+segments, err := engine.PendingArchive()
+for _, seg := range segments {
+    if err := copyFile(seg.Path, filepath.Join("/archive", seg.Name), seg.Size); err != nil {
+        break // se reintenta en la próxima vuelta: SetArchived solo con la copia a salvo
+    }
+    _ = engine.SetArchived(seg.Segment)
+}
+// A un punto en el tiempo: la copia del respaldo más los segmentos archivados en su wal/, hasta un LSN
+pitr, err := store.OpenAt("/backups/2026-11-20", targetLSN)
 ```
 
 ### Workflows con `jwf`
@@ -495,7 +541,7 @@ hits, _ := index.Search(ctx, tenantId, projectId, "reset the router", 5, 0.3, em
 | `dt` | `PRODUCTION` (`true` guarda en Redis) |
 | `jwf`, `jsql` | `MAX_AUDIT_LOG` (1000) |
 | `jwsp` | `WHATSAPP_API_URL` |
-| `store` | `STORE_CACHE_SIZE` (MB, 128), `WAL_SEGMENT_SIZE` (MB, 128), `SYNC_ON_WRITE` (true), `CHECKPOINT_TIMEOUT` (s, 300), `MAX_WAL_SIZE` (MB, 1024), `LOCK_TIMEOUT` (s, 5), `TRANSACTION_TIMEOUT` (s, 600), `VACUUM_INTERVAL` (s, 60; 0 = apagada), `VACUUM_THRESHOLD` (escrituras, 1000), `WAL_WRITER_DELAY` (ms, 200; 0 = apagado) |
+| `store` | `STORE_CACHE_SIZE` (MB, 128), `WAL_SEGMENT_SIZE` (MB, 128), `SYNC_ON_WRITE` (true), `CHECKPOINT_TIMEOUT` (s, 300), `MAX_WAL_SIZE` (MB, 1024), `LOCK_TIMEOUT` (s, 5), `TRANSACTION_TIMEOUT` (s, 600), `VACUUM_INTERVAL` (s, 60; 0 = apagada), `VACUUM_THRESHOLD` (escrituras, 1000), `WAL_WRITER_DELAY` (ms, 200; 0 = apagado), `WAL_ARCHIVE` (off), `WAL_ARCHIVE_MAX_SIZE` (MB, 0 = sin tope: frena) |
 | `validator` | `LANG` |
 | `middleware` | `TELEMETRY_FORMAT` (`text` en una terminal, `json` en otro caso, `off`), `TELEMETRY_LOG` (`all`, `errors`), `LATENCY_LIMIT` (1000 ms, `WARN` por encima), `REQUESTS_LIMIT` (400 por segundo por método y ruta) |
 

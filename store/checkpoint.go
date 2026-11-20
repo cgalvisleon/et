@@ -21,49 +21,62 @@ import (
 func (e *Engine) checkpoint(state control.State, spread bool) error {
 	e.ckptMu.Lock()
 	defer e.ckptMu.Unlock()
+	_, _, err := e.checkpointLocked(state, spread)
+	return err
+}
+
+/**
+* checkpointLocked es checkpoint con ckptMu ya tomado; devuelve además lo que el respaldo copia como su control.
+* @param state control.State, spread bool
+* @return checkpointInfo, page.LSN: el del registro KindCheckpoint, error
+**/
+func (e *Engine) checkpointLocked(state control.State, spread bool) (checkpointInfo, page.LSN, error) {
 	if err := e.failed(); err != nil {
-		return err
+		return checkpointInfo{}, 0, err
 	}
 	start := time.Now()
 	info, counts, err := e.beginCheckpoint(start)
 	if err != nil {
-		return e.fail(err)
+		return info, 0, e.fail(err)
 	}
 	if err := e.waitChanges(info.redo.LSN); err != nil {
-		return e.fail(err)
+		return info, 0, e.fail(err)
 	}
 	e.stepDone(1)
 	e.waitCommits()
 	if err := e.flushData(spread, info.redo, start); err != nil {
-		return e.writeError(err)
+		return info, 0, e.writeError(err)
 	}
 	e.stepDone(2)
 	if err := e.saveCatalog(counts, info.redo.LSN); err != nil {
-		return e.writeError(err)
+		return info, 0, e.writeError(err)
 	}
 	e.stepDone(3)
 	lsn, err := e.logRecord(wal.KindCheckpoint, encodeCheckpoint(info))
 	if err != nil {
-		return e.fail(err)
+		return info, 0, e.fail(err)
 	}
 	e.stepDone(4)
 	if err := e.writeControl(state, info, lsn); err != nil {
-		return e.fail(err)
+		return info, 0, e.fail(err)
 	}
 	e.stepDone(5)
-	if err := e.log.Recycle(info.redo); err != nil {
-		return e.fail(err)
+	if err := e.enforceArchiveCap(info.redo.Segment); err != nil && !isCleanDiskFull(err) {
+		return info, 0, err // ya dejó el motor inutilizable
+	}
+	if err := e.log.Recycle(info.redo); err != nil { // respeta lo que retienen un respaldo y el archivo (wal.Hold)
+		return info, 0, e.fail(err)
 	}
 	e.stepDone(6)
-	if err := e.status.Truncate(info.frozen); err != nil {
-		return e.fail(err)
+	if err := e.status.Truncate(e.backups.truncateLimit(info.frozen)); err != nil {
+		return info, 0, e.fail(err)
 	}
 	e.stepDone(7)
 	e.lastCheckpoint.Store(start.UnixNano())
 	e.metrics.checkpointTook.Store(int64(time.Since(start)))
 	e.metrics.checkpoints.Add(1)
 	e.checkpointFinished(info.wal)
-	return nil
+	return info, lsn, nil
 }
 
 /**

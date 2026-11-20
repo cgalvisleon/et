@@ -3,6 +3,7 @@ package store
 import (
 	"encoding/binary"
 	"fmt"
+	"slices"
 
 	"github.com/cgalvisleon/et/store/internal/page"
 	"github.com/cgalvisleon/et/store/internal/smgr"
@@ -16,7 +17,7 @@ const (
 	// checkpointMainSize: redoSegment(8) redoOffset(8) redoLSN(8) nextXID(8) oldestActiveXID(8) time(8).
 	checkpointMainSize = 48
 
-	// storeMainHeader: fileNo(4) nameLen(2), seguido del nombre (KindCreateStore y KindDropStore).
+	// storeMainHeader: fileNo(4) nameLen(2), seguido del nombre (KindCreateStore, KindCreateStoreIn y KindDropStore).
 	storeMainHeader = 6
 
 	// emptyMainHeader: oldFileNo(4) newFileNo(4) nameLen(2), seguido del nombre (KindEmptyStore).
@@ -25,6 +26,10 @@ const (
 	// commitMainHeader: time(8) storeCount(4), seguido de storeCount × [fileNo(4) delta(8)] (KindCommit).
 	commitMainHeader = 12
 	commitStoreSize  = 12
+
+	// commitDDLHeader: createCount(4) dropCount(4), seguido de createCount × fileNo(4) y dropCount × fileNo(4): la
+	// cola optativa de un KindCommit de un lote que creó o borró stores (tarea 67). Sin DDL no se escribe.
+	commitDDLHeader = 8
 )
 
 // checkpointInfo son los datos principales de un KindCheckpoint.
@@ -135,43 +140,89 @@ func decodeEmptyMain(b []byte) (smgr.FileNo, smgr.FileNo, string, bool) {
 	return old, file, string(b[emptyMainHeader:]), true
 }
 
+// commitInfo son los datos principales de un KindCommit: lo que suma a Count de cada store y el DDL del lote.
+type commitInfo struct {
+	deltas  map[smgr.FileNo]int64
+	creates []smgr.FileNo // stores que el lote creó: dejan de estar pendientes
+	drops   []smgr.FileNo // stores que el lote borra: salen del catálogo y se borran sus archivos
+}
+
 /**
-* encodeCommit arma los datos de un KindCommit: la hora y lo que la transacción suma a Count de cada store (fase 1B:
-* los lotes; las operaciones sueltas no lo usan).
-* @param time int64, deltas map[smgr.FileNo]int64
+* encodeCommit arma los datos de un KindCommit: la hora, lo que la transacción suma a Count de cada store (fase 1B:
+* los lotes; las operaciones sueltas no lo usan) y, si el lote hizo DDL, la cola con los stores creados y borrados.
+* @param time int64, c commitInfo
 * @return []byte
 **/
-func encodeCommit(time int64, deltas map[smgr.FileNo]int64) []byte {
-	b := make([]byte, commitMainHeader+commitStoreSize*len(deltas))
+func encodeCommit(time int64, c commitInfo) []byte {
+	size := commitMainHeader + commitStoreSize*len(c.deltas)
+	ddl := len(c.creates) + len(c.drops)
+	if ddl > 0 {
+		size += commitDDLHeader + 4*ddl
+	}
+	b := make([]byte, size)
 	le.PutUint64(b[0:], uint64(time))
-	le.PutUint32(b[8:], uint32(len(deltas)))
+	le.PutUint32(b[8:], uint32(len(c.deltas)))
 	off := commitMainHeader
-	for file, delta := range deltas {
+	for file, delta := range c.deltas {
 		le.PutUint32(b[off:], uint32(file))
 		le.PutUint64(b[off+4:], uint64(delta))
 		off += commitStoreSize
+	}
+	if ddl == 0 {
+		return b
+	}
+	le.PutUint32(b[off:], uint32(len(c.creates)))
+	le.PutUint32(b[off+4:], uint32(len(c.drops)))
+	off += commitDDLHeader
+	for _, file := range append(slices.Clone(c.creates), c.drops...) {
+		le.PutUint32(b[off:], uint32(file))
+		off += 4
 	}
 	return b
 }
 
 /**
-* decodeCommit lee lo que un KindCommit suma a Count de cada store.
+* decodeCommit lee lo que un KindCommit suma a Count de cada store y su cola de DDL (si la tiene).
 * @param b []byte
-* @return map[smgr.FileNo]int64, error: con detalle si no tiene la forma del formato
+* @return commitInfo, error: con detalle si no tiene la forma del formato
 **/
-func decodeCommit(b []byte) (map[smgr.FileNo]int64, error) {
+func decodeCommit(b []byte) (commitInfo, error) {
 	if len(b) < commitMainHeader {
-		return nil, fmt.Errorf("commit data has %d bytes", len(b))
+		return commitInfo{}, fmt.Errorf("commit data has %d bytes", len(b))
 	}
 	n := int(le.Uint32(b[8:]))
-	if n > (len(b)-commitMainHeader)/commitStoreSize || len(b) != commitMainHeader+n*commitStoreSize {
-		return nil, fmt.Errorf("commit data has %d bytes for %d stores", len(b), n)
+	if n > (len(b)-commitMainHeader)/commitStoreSize {
+		return commitInfo{}, fmt.Errorf("commit data has %d bytes for %d stores", len(b), n)
 	}
-	deltas := make(map[smgr.FileNo]int64, n)
-	for off := commitMainHeader; off < len(b); off += commitStoreSize {
-		deltas[smgr.FileNo(le.Uint32(b[off:]))] += int64(le.Uint64(b[off+4:]))
+	end := commitMainHeader + n*commitStoreSize
+	c := commitInfo{deltas: make(map[smgr.FileNo]int64, n)}
+	for off := commitMainHeader; off < end; off += commitStoreSize {
+		c.deltas[smgr.FileNo(le.Uint32(b[off:]))] += int64(le.Uint64(b[off+4:]))
 	}
-	return deltas, nil
+	if len(b) == end {
+		return c, nil
+	}
+	if len(b)-end < commitDDLHeader {
+		return commitInfo{}, fmt.Errorf("commit data has %d bytes after %d stores", len(b)-end, n)
+	}
+	creates, drops := int(le.Uint32(b[end:])), int(le.Uint32(b[end+4:]))
+	tail := len(b) - end - commitDDLHeader
+	if creates+drops == 0 || creates > tail/4 || drops > tail/4 || tail != 4*(creates+drops) {
+		return commitInfo{}, fmt.Errorf("commit ddl has %d bytes for %d creates and %d drops", tail, creates, drops)
+	}
+	off := end + commitDDLHeader
+	for i := range creates + drops {
+		file := smgr.FileNo(le.Uint32(b[off+4*i:]))
+		if file == 0 {
+			return commitInfo{}, fmt.Errorf("commit ddl names file number 0")
+		}
+		if i < creates {
+			c.creates = append(c.creates, file)
+		} else {
+			c.drops = append(c.drops, file)
+		}
+	}
+	return c, nil
 }
 
 /**

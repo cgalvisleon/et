@@ -3,7 +3,9 @@ package store
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/cgalvisleon/et/store/internal/btree"
@@ -26,6 +28,15 @@ type Store struct {
 
 	// vacuumMu: una limpieza del store a la vez (btree.Vacuum no admite dos sobre el mismo árbol).
 	vacuumMu sync.Mutex
+
+	// DDL en lote (ddlbatch.go). Se escriben con Engine.ddlMu y mu en escritura; se leen con cualquiera de los dos.
+	// creator: el xid del lote que lo creó y todavía no confirmó (0 = ninguno); dropper: el del lote que lo borra al
+	// confirmar; createdBy: el del lote que lo creó y confirmó (un lote cuyo snapshot no lo ve recibe
+	// ErrSerialization).
+	creator, dropper, createdBy page.XID
+
+	// batchWriters: lotes abiertos que escribieron en el store (DropStoreIn no lo borra si escribió otro).
+	batchWriters atomic.Int64
 }
 
 // change es una escritura suelta: la versión nueva y su condición.
@@ -77,6 +88,46 @@ func (s *Store) enterWith(enter func() error) error {
 func (s *Store) end() {
 	s.mu.RUnlock()
 	s.e.leave()
+}
+
+/**
+* pendingFor dice si la transacción own puede escribir en el store: no si lo está creando otro lote (ni una
+* operación suelta: own = 0), ni si otro lote lo borra (una suelta sí: confirma antes que ese borrado). Con mu o
+* Engine.ddlMu tomado.
+* @param own page.XID: el xid del lote, 0 para una escritura suelta
+* @return error: ErrStorePending
+**/
+func (s *Store) pendingFor(own page.XID) error {
+	if s.creator != 0 && s.creator != own || own != 0 && s.dropper != 0 && s.dropper != own {
+		return fmt.Errorf(MSG_STORE_PENDING, ErrStorePending, s.name)
+	}
+	return nil
+}
+
+/**
+* ddlOwner es el xid del otro lote que crea o borra el store, al que hay que esperar (0 si no hay). Con
+* Engine.ddlMu tomado.
+* @param own page.XID: el lote que pregunta
+* @return page.XID, bool: si ese lote lo borra
+**/
+func (s *Store) ddlOwner(own page.XID) (page.XID, bool) {
+	switch {
+	case s.creator != 0 && s.creator != own:
+		return s.creator, false
+	case s.dropper != 0 && s.dropper != own:
+		return s.dropper, true
+	}
+	return 0, false
+}
+
+/**
+* pendingCreator es el xid del lote que está creando el store (0 si ninguno).
+* @return page.XID
+**/
+func (s *Store) pendingCreator() page.XID {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.creator
 }
 
 /**
@@ -144,6 +195,9 @@ func (s *Store) write(id string, c change) (bool, error) {
 		return false, err
 	}
 	defer s.end()
+	if err := s.pendingFor(0); err != nil {
+		return false, err
+	}
 	if err := s.e.admit(); err != nil {
 		return false, err
 	}

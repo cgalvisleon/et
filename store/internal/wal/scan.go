@@ -33,12 +33,13 @@ func NewReader(fsys vfs.FS, dir string) Reader {
 
 // Scan implementa Reader (ver su documentación en wal.go).
 func (r *reader) Scan(from Position, fn func(rec *Record) error) (Position, error) {
-	return scan(r.fs, r.dir, from, fn, nil)
+	return scan(r.fs, r.dir, from, 0, fn, nil)
 }
 
-// scan recorre el WAL de dir desde from (ver Reader.Scan). onEnd, si no es nil, recibe dónde termina la parte válida
-// de cada segmento recorrido (Open lo usa para SizeSince).
-func scan(fsys vfs.FS, dir string, from Position, fn func(rec *Record) error, onEnd func(num uint64, end int64)) (Position, error) {
+// scan recorre el WAL de dir desde from (ver Reader.Scan). Con stop > 0 termina antes del primer registro de lsn
+// mayor que stop (el objetivo de una recuperación, Options.StopLSN), como si el WAL terminara ahí. onEnd, si no es
+// nil, recibe dónde termina la parte válida de cada segmento recorrido (Open lo usa para SizeSince y SegmentInfo).
+func scan(fsys vfs.FS, dir string, from Position, stop page.LSN, fn func(rec *Record) error, onEnd func(end Position)) (Position, error) {
 	if from.LSN == 0 || from.Segment == 0 || from.Offset < 0 {
 		return from, fmt.Errorf(MSG_BAD_POSITION, from)
 	}
@@ -51,6 +52,7 @@ func scan(fsys vfs.FS, dir string, from Position, fn func(rec *Record) error, on
 	}
 
 	s := newSegmentScanner()
+	s.stop = stop
 	pos := from
 	for {
 		pos, err = s.records(fsys, dir, pos, fn)
@@ -58,7 +60,10 @@ func scan(fsys vfs.FS, dir string, from Position, fn func(rec *Record) error, on
 			return pos, err
 		}
 		if onEnd != nil {
-			onEnd(pos.Segment, pos.Offset)
+			onEnd(pos)
+		}
+		if s.stopped(pos) {
+			return pos, nil
 		}
 
 		// El registro siguiente no está en este segmento: o no cabía y empieza el siguiente, o el WAL terminó.
@@ -82,9 +87,15 @@ func scan(fsys vfs.FS, dir string, from Position, fn func(rec *Record) error, on
 
 // segmentScanner guarda los búferes de un recorrido: no se asigna uno por registro ni por segmento.
 type segmentScanner struct {
-	buf []byte // un registro: MaxRecordSize, así ningún largo leído del disco hace pedir más memoria
-	rd  *bufio.Reader
-	rec Record
+	buf  []byte // un registro: MaxRecordSize, así ningún largo leído del disco hace pedir más memoria
+	rd   *bufio.Reader
+	rec  Record
+	stop page.LSN // 0 = sin objetivo; si no, no se pasa de este lsn
+}
+
+// stopped dice si el recorrido llegó al objetivo: el registro de pos ya pasa de stop.
+func (s *segmentScanner) stopped(pos Position) bool {
+	return s.stop > 0 && pos.LSN > s.stop
 }
 
 // newSegmentScanner arma los búferes de un recorrido.
@@ -109,7 +120,7 @@ func (s *segmentScanner) records(fsys vfs.FS, dir string, pos Position, fn func(
 	}
 
 	s.rd.Reset(io.NewSectionReader(file, pos.Offset, size-pos.Offset))
-	for {
+	for !s.stopped(pos) {
 		n, ok, err := s.next(size - pos.Offset)
 		if err != nil || !ok || s.rec.LSN != pos.LSN {
 			return pos, err
@@ -120,6 +131,7 @@ func (s *segmentScanner) records(fsys vfs.FS, dir string, pos Position, fn func(
 		pos.Offset += int64(n)
 		pos.LSN++
 	}
+	return pos, nil
 }
 
 // next lee del lector el registro siguiente, si cabe en los left bytes que quedan del segmento. Devuelve su largo y

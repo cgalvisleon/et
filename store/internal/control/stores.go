@@ -249,13 +249,30 @@ func (s *Stores) SetMeta(file smgr.FileNo, block page.BlockNumber) bool {
 	return ok
 }
 
-// SetFlags fija las marcas del store con el archivo file (reservadas, fase 2). Devuelve si el store existe.
+// FlagPendingCreate marca un store creado dentro de un lote que todavía no confirmó (DDL en lote, tarea 67): la
+// confirmación del lote la borra; la recuperación borra el store si al final del WAL sigue marcado.
+const FlagPendingCreate uint32 = 1 << 0
+
+// SetFlags fija las marcas del store con el archivo file (FlagPendingCreate; el resto reservado). Devuelve si el
+// store existe.
 func (s *Stores) SetFlags(file smgr.FileNo, flags uint32) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	e, ok := s.byFile[file]
 	if ok {
 		e.Flags = flags
+	}
+	return ok
+}
+
+// ClearFlags borra las marcas flags del store con el archivo file (la confirmación de un lote que lo creó borra
+// FlagPendingCreate). Devuelve si el store existe.
+func (s *Stores) ClearFlags(file smgr.FileNo, flags uint32) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	e, ok := s.byFile[file]
+	if ok {
+		e.Flags &^= flags
 	}
 	return ok
 }

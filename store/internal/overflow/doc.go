@@ -3,13 +3,13 @@
 //
 // # Página de desborde
 //
-// Encabezado de página normal; el trozo del valor va desde page.HeaderSize hasta pd_lower (pd_lower = 32 + largo
-// del trozo; pd_upper = pd_special = page.Size - page.OpaqueSize); sin punteros a ítems. Espacio especial común con
-// flags = page.OpaqueOverflow (solo esa marca), next = la siguiente página de la cadena (0 en la última), level = la
-// posición de la página en la cadena (desde 0) y prev en 0; pd_prune_xid lleva el xid de la versión dueña (el del
-// registro): con él FreeTail sabe qué páginas siguen siendo de la versión. Cada página guarda ChunkSize = 8.144 bytes salvo la
-// última, que guarda el resto. La entrada de hoja guarda el largo total y el primer bloque (Ref): leer es seguir la
-// cadena hasta juntar el largo.
+// Encabezado de página normal; el trozo del valor va desde page.HeaderSize hasta pd_lower (pd_lower = 32 + largo del
+// trozo; pd_upper = pd_special = page.Size - page.OpaqueSize); sin punteros a ítems. Espacio especial común con flags =
+// page.OpaqueOverflow (solo esa marca), next = la siguiente página de la cadena (0 en la última), level = la posición
+// de la página en la cadena (desde 0) y prev en 0; pd_prune_xid lleva el xid de la versión dueña (el del registro): con
+// él FreeTail sabe qué páginas siguen siendo de la versión. Cada página guarda ChunkSize = 8.144 bytes salvo la última,
+// que guarda el resto. La entrada de hoja guarda el largo total y el primer bloque (Ref): leer es seguir la cadena
+// hasta juntar el largo.
 //
 // Como el largo total fija cuántas páginas tiene la cadena y cuánto guarda cada una, Read valida cada página antes
 // de copiarla: que sea de desborde, que su level sea su posición, que su trozo mida lo que corresponde y que solo la

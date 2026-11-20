@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -169,9 +170,20 @@ func TestRecordsRoundTrip(t *testing.T) {
 		t.Fatalf("store main = %d %q %v", file, name, ok)
 	}
 	deltas := map[smgr.FileNo]int64{1: 3, 7: -2}
-	got, err := decodeCommit(encodeCommit(5, deltas))
-	if err != nil || len(got) != 2 || got[1] != 3 || got[7] != -2 {
+	got, err := decodeCommit(encodeCommit(5, commitInfo{deltas: deltas}))
+	if err != nil || len(got.deltas) != 2 || got.deltas[1] != 3 || got.deltas[7] != -2 || got.creates != nil || got.drops != nil {
 		t.Fatalf("commit = %v %v", got, err)
+	}
+	ddl := encodeCommit(5, commitInfo{deltas: deltas, creates: []smgr.FileNo{4}, drops: []smgr.FileNo{2, 3}})
+	got, err = decodeCommit(ddl)
+	if err != nil || len(got.deltas) != 2 || !slices.Equal(got.creates, []smgr.FileNo{4}) ||
+		!slices.Equal(got.drops, []smgr.FileNo{2, 3}) {
+		t.Fatalf("commit with ddl = %+v %v", got, err)
+	}
+	for _, cut := range []int{len(ddl) - 1, len(ddl) - 4, 12 + 24 + 4} {
+		if _, err := decodeCommit(ddl[:cut]); err == nil {
+			t.Fatalf("decodeCommit accepted a ddl tail cut at %d", cut)
+		}
 	}
 	for _, bad := range [][]byte{nil, {1, 0, 0, 0, 0, 0}, encodeStoreMain(0, "x")} {
 		if _, _, ok := decodeStoreMain(bad); ok {
@@ -181,7 +193,7 @@ func TestRecordsRoundTrip(t *testing.T) {
 	if _, ok := decodeCheckpoint([]byte{1}); ok {
 		t.Fatal("decodeCheckpoint accepted a short record")
 	}
-	if _, err := decodeCommit(encodeCommit(5, deltas)[:20]); err == nil {
+	if _, err := decodeCommit(encodeCommit(5, commitInfo{deltas: deltas})[:20]); err == nil {
 		t.Fatal("decodeCommit accepted a short record")
 	}
 }

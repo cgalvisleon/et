@@ -63,7 +63,7 @@ func unionNames(a, b state) []string {
 
 // op es una operación al azar de la prueba de modelo.
 type op struct {
-	kind     string // put, remove, insert, update, delete, read, drop, empty, checkpoint, vacuum, batch, snapshot, scan, waitdurable
+	kind     string // put, remove, insert, update, delete, read, drop, empty, checkpoint, vacuum, batch, snapshot, scan, waitdurable, dropin (DropStoreIn, solo en un lote)
 	store    string
 	id       string
 	value    string
@@ -102,6 +102,26 @@ func (o op) durable(before, after state) bool {
 }
 
 /**
+* drops son los stores que op borra: el de un DropStore, o los de los DropStoreIn de un lote que confirma.
+* @return []string
+**/
+func (o op) drops() []string {
+	switch {
+	case o.kind == "drop":
+		return []string{o.store}
+	case o.kind != "batch" || o.rollback:
+		return nil
+	}
+	var names []string
+	for _, sub := range o.sub {
+		if sub.kind == "dropin" {
+			names = append(names, sub.store)
+		}
+	}
+	return names
+}
+
+/**
 * apply aplica op al estado del modelo y dice qué deberían devolver Insert, Update y Delete.
 * @param s state: se cambia
 * @return bool
@@ -125,7 +145,7 @@ func (o op) apply(s state) bool {
 		return exists || o.kind == "remove"
 	case "read":
 		return exists
-	case "drop", "empty":
+	case "drop", "empty", "dropin":
 		delete(s, o.store)
 	case "batch":
 		local := s.clone()
@@ -133,6 +153,7 @@ func (o op) apply(s state) bool {
 			o.wants[i] = sub.apply(local)
 		}
 		if !o.rollback {
+			clear(s) // también los stores que borró (DropStoreIn)
 			for name, ids := range local {
 				s[name] = ids
 			}
@@ -220,19 +241,28 @@ func (g *generator) makeDeferred(o *op) {
 }
 
 /**
-* batch arma un lote de 2 a 12 operaciones (también lecturas) sobre los tres stores; uno de cada cuatro termina con
-* Rollback.
+* batch arma un lote de 2 a 12 operaciones (también lecturas y, de vez en cuando, DropStoreIn) sobre los tres
+* stores; uno de cada cuatro termina con Rollback. Los stores se abren con StoreIn: uno que no existe se crea dentro
+* del lote. Tras borrar un store, el lote no vuelve a usarlo.
 * @return op
 **/
 func (g *generator) batch() op {
 	o := op{kind: "batch", rollback: g.rng.IntN(4) == 0}
+	dropped := map[string]bool{}
 	for len(o.sub) < 2+g.rng.IntN(11) {
 		sub := g.next()
 		switch sub.kind {
 		case "drop", "empty", "checkpoint", "vacuum", "batch", "snapshot", "scan", "waitdurable":
 			continue
 		}
-		if g.rng.IntN(5) == 0 {
+		if dropped[sub.store] {
+			continue
+		}
+		switch r := g.rng.IntN(100); {
+		case r < 4:
+			sub.kind = "dropin"
+			dropped[sub.store] = true
+		case r < 24:
 			sub.kind = "read"
 		}
 		o.sub = append(o.sub, sub)
@@ -317,7 +347,7 @@ type writer interface {
 }
 
 /**
-* runBatch hace el lote o: cada operación dentro de un Batch, comparando lo que devuelve con o.wants (una lectura
+* runBatch hace el lote o: cada operación dentro de un Batch (sus stores con StoreIn, los borrados con DropStoreIn), comparando lo que devuelve con o.wants (una lectura
 * compara si encontró el id), y Commit o Rollback. Si una operación falla, deshace el lote antes de volver.
 * @param e *Engine
 * @return error: el del motor, o la primera diferencia con el modelo
@@ -329,11 +359,21 @@ func (o op) runBatch(e *Engine) (err error) {
 			tx.Rollback()
 		}
 	}()
+	opened := map[string]bool{} // los que abrió (o creó) con StoreIn
 	for i, sub := range o.sub {
-		s, err := e.Store(sub.store)
+		if sub.kind == "dropin" {
+			if opened[sub.store] || slices.Contains(e.Stores(), sub.store) {
+				if err := e.DropStoreIn(tx, sub.store); err != nil {
+					return err
+				}
+			}
+			continue
+		}
+		s, err := e.StoreIn(tx, sub.store)
 		if err != nil {
 			return err
 		}
+		opened[sub.store] = true
 		got := true
 		switch sub.kind {
 		case "put":
@@ -649,9 +689,9 @@ func crashDuring(t *testing.T, e *Engine, proc *procFS, gen *generator, start st
 				}
 				snaps = nil
 			}
-			if o.kind == "drop" {
+			for _, name := range o.drops() {
 				for _, open := range snaps {
-					open.dropped[o.store] = true
+					open.dropped[name] = true
 				}
 			}
 			mu.Lock()

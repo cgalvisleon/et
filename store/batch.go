@@ -40,8 +40,14 @@ type Batch struct {
 	mu     sync.Mutex
 	state  batchState
 	err    error                 // por qué abortó solo (con batchAborted)
-	wrote  bool                  // escribió al menos una versión: Commit y Rollback dejan registro en el WAL
+	wrote  bool                  // escribió al menos una versión o hizo DDL: Commit y Rollback dejan registro en el WAL
 	deltas map[smgr.FileNo]int64 // lo que suma a Count de cada store (por número de archivo)
+
+	// DDL en lote (ddlbatch.go): los stores que creó (pendientes hasta Commit) y los que borra al confirmar, y los
+	// stores en los que intentó escribir (cuentan en Store.batchWriters hasta que el lote termina).
+	creates []*Store
+	drops   []*Store
+	written map[*Store]struct{}
 }
 
 /**
@@ -50,7 +56,7 @@ type Batch struct {
 * @return *Batch
 **/
 func (e *Engine) newBatch() *Batch {
-	b := &Batch{e: e, deltas: map[smgr.FileNo]int64{}}
+	b := &Batch{e: e, deltas: map[smgr.FileNo]int64{}, written: map[*Store]struct{}{}}
 	if err := e.enter(); err != nil {
 		b.state, b.err = batchAborted, err
 		return b
@@ -200,14 +206,18 @@ func (b *Batch) finishLocked(commit, deferred bool) error {
 	b.state = batchDone
 	b.e.timers.stop(b.timer)
 	defer b.e.closeTxn(&b.e.metrics.openBatches)
-	defer b.e.txs.End(b.xid)
+	defer b.e.txs.End(b.xid) // después de resolver el DDL: quien espera al lote ya ve el catálogo final
+	defer b.forgetWrites()
 	if !b.wrote {
 		return nil
 	}
 	if err := b.e.enter(); err != nil {
-		return err
+		return err // DDL sin resolver: el motor está cerrado o inutilizable y la recuperación lo deshace
 	}
 	defer b.e.leave()
+	if b.hasDDL() {
+		return b.finishDDL(commit)
+	}
 	if err := b.logEnd(commit, deferred); err != nil {
 		return b.e.fail(err)
 	}
@@ -230,7 +240,7 @@ func (b *Batch) logEnd(commit, deferred bool) error {
 	var underLock func(page.LSN)
 	status := xact.StatusAborted
 	if commit {
-		rec.Kind, rec.Main, status = wal.KindCommit, encodeCommit(time.Now().UnixNano(), b.deltas), xact.StatusCommitted
+		rec.Kind, rec.Main, status = wal.KindCommit, encodeCommit(time.Now().UnixNano(), b.commitInfo()), xact.StatusCommitted
 		underLock = func(page.LSN) {
 			for file, delta := range b.deltas {
 				e.counts.add(file, delta)
@@ -305,6 +315,10 @@ func (s *Store) writeInLocked(b *Batch, id string, c change) (bool, error) {
 		return false, err
 	}
 	defer s.end()
+	if err := s.pendingFor(b.xid); err != nil {
+		return false, err
+	}
+	b.noteWrite(s)
 	if err := s.e.admit(); err != nil {
 		return false, err
 	}

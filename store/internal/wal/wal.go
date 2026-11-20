@@ -73,6 +73,9 @@ type Reservation interface {
 	// Write completa el lsn y el crc, escribe el registro en su lugar (fuera de writeMu, en paralelo con otros) y lo
 	// publica. Un error deja al WAL fallado (Failed).
 	Write() error
+
+	// End es la posición siguiente al registro: hasta ahí hay que copiar el WAL para incluirlo (el respaldo).
+	End() Position
 }
 
 // Flusher es lo que la caché y el archivo de estados necesitan del WAL para cumplir «WAL antes que la página».

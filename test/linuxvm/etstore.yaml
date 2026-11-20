@@ -1,0 +1,86 @@
+# VM Linux para validar et/store (tarea 32 de F-23). Vive en el equipo IA.
+# Topes fijos: 3 CPU, 4 GiB de RAM, disco virtual de 100 GiB (sparse).
+# Sin montajes del host: el código entra con `limactl copy` (run.sh).
+minimumLimaVersion: 2.0.0
+
+base:
+- template:_images/ubuntu-24.04
+
+vmType: vz
+arch: aarch64
+cpus: 3
+memory: 4GiB
+disk: 100GiB
+
+# Ningún montaje del host (ni de lectura).
+mounts: []
+
+# Sin reenvío de puertos ni contenedores: solo pruebas.
+containerd:
+  system: false
+  user: false
+
+provision:
+# Paquetes del sistema y Go oficial (idempotente).
+- mode: system
+  script: |
+    #!/bin/bash
+    set -eux -o pipefail
+    export DEBIAN_FRONTEND=noninteractive
+    GO_VERSION=1.25.14
+    if ! dpkg -s build-essential dmsetup fuse3 libfuse3-dev >/dev/null 2>&1; then
+      apt-get update
+      apt-get install -y build-essential dmsetup fuse3 libfuse3-dev git cmake pkg-config time
+    fi
+    if [ "$(/usr/local/go/bin/go version 2>/dev/null | awk '{print $3}')" != "go${GO_VERSION}" ]; then
+      curl -fsSL "https://go.dev/dl/go${GO_VERSION}.linux-arm64.tar.gz" -o /tmp/go.tgz
+      rm -rf /usr/local/go
+      tar -C /usr/local -xzf /tmp/go.tgz
+      rm -f /tmp/go.tgz
+    fi
+    echo 'export PATH=/usr/local/go/bin:$PATH' > /etc/profile.d/go.sh
+    # LazyFS monta con allow_other.
+    sed -i 's/^#user_allow_other/user_allow_other/' /etc/fuse.conf
+# Vigilante: mata cualquier *.test que pase de 2 GB de RSS.
+- mode: system
+  script: |
+    #!/bin/bash
+    set -eux -o pipefail
+    cat > /usr/local/bin/vigilante.sh <<'VIG'
+    #!/bin/bash
+    # Mata binarios de prueba Go (*.test) con RSS > LIMITE_PROC_MB, o el mayor
+    # si la suma pasa de LIMITE_TOTAL_MB. Registra en /var/log/vigilante.log.
+    LIMITE_PROC_MB=${LIMITE_PROC_MB:-2048}
+    LIMITE_TOTAL_MB=${LIMITE_TOTAL_MB:-3072}
+    LOG=/var/log/vigilante.log
+    echo "$(date '+%F %T') vigilante inicia: proc ${LIMITE_PROC_MB} MB, total ${LIMITE_TOTAL_MB} MB" >>"$LOG"
+    while true; do
+      total=0; mayor_pid=; mayor_kb=0
+      while read -r pid rss cmd; do
+        case "$cmd" in *.test*) ;; *) continue ;; esac
+        total=$((total + rss))
+        if [ "$rss" -gt "$mayor_kb" ]; then mayor_kb=$rss; mayor_pid=$pid; fi
+        if [ "$rss" -gt $((LIMITE_PROC_MB * 1024)) ]; then
+          kill -9 "$pid" 2>/dev/null
+          echo "$(date '+%F %T') MATADO $pid ($((rss / 1024)) MB > proceso): $cmd" >>"$LOG"
+        fi
+      done < <(ps -eo pid=,rss=,comm=)
+      if [ "$total" -gt $((LIMITE_TOTAL_MB * 1024)) ] && [ -n "$mayor_pid" ]; then
+        kill -9 "$mayor_pid" 2>/dev/null
+        echo "$(date '+%F %T') MATADO $mayor_pid (total $((total / 1024)) MB > total)" >>"$LOG"
+      fi
+      sleep 1
+    done
+    VIG
+    chmod +x /usr/local/bin/vigilante.sh
+    cat > /etc/systemd/system/vigilante.service <<'UNIT'
+    [Unit]
+    Description=Mata *.test que pasen de 2 GB
+    [Service]
+    ExecStart=/usr/local/bin/vigilante.sh
+    Restart=always
+    [Install]
+    WantedBy=multi-user.target
+    UNIT
+    systemctl daemon-reload
+    systemctl enable --now vigilante.service

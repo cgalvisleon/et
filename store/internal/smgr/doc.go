@@ -21,6 +21,7 @@
 // fsync le hace fsync antes de cerrarlo, y sigue marcado para el próximo Sync. Sync quita las marcas y después hace
 // fsync; un fsync fallido deja el gestor inutilizable (todo devuelve ese error). Unlink borra del último archivo al
 // primero. Un Extend que hace nacer un archivo hace fsync de los anteriores (ya llenos) antes de crearlo y de data/
-// después: así un corte nunca deja un archivo corto en el medio del fork (lo encontró TestExtendNewFileCrash). Bloqueos: el fork (RWMutex: exclusivo para Create, Extend y Unlink) → el mutex del gestor y el de la caché,
-// que son hojas.
+// después: así un corte nunca deja un archivo corto en el medio del fork (lo encontró TestExtendNewFileCrash).
+// Bloqueos: el fork (RWMutex: exclusivo para Create, Extend y Unlink) → el mutex del gestor y el de la caché, que son
+// hojas.
 package smgr

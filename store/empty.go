@@ -66,7 +66,7 @@ func (e *Engine) emptyFiles(name string, old smgr.FileNo) (smgr.FileNo, *btree.B
 		return 0, nil, e.fail(err)
 	}
 	e.pool.DropFile(old)
-	if err := e.sm.Unlink(old); err != nil {
+	if err := e.unlinkData(old); err != nil {
 		return 0, nil, e.fail(err)
 	}
 	tree, err := e.openTree(file)

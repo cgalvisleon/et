@@ -489,11 +489,11 @@ func TestCheckpointAcrossSegments(t *testing.T) {
 	if w.active.num != 2 {
 		t.Fatalf("no rotó: activo %d", w.active.num)
 	}
-	want := w.sizes[1] - redo.Offset + w.active.size
+	want := w.sizes[1].Offset - redo.Offset + w.active.size
 	if got := w.SizeSince(redo); got != want || got <= 0 {
 		t.Fatalf("SizeSince %d, se esperaba %d", got, want)
 	}
-	if w.SizeSince(Start) != w.sizes[1]+w.active.size {
+	if w.SizeSince(Start) != w.sizes[1].Offset+w.active.size {
 		t.Fatalf("SizeSince(Start) %d", w.SizeSince(Start))
 	}
 	w.Close()

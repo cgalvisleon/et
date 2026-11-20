@@ -48,14 +48,16 @@
 // # Tipos de registro
 //
 // Los Kind se reparten por dueño, que define el formato de su delta y de sus datos principales y su función de
-// rehacer: 1–15 el motor (este paquete fija sus formatos), 16–31 btree, 32–39 overflow, 40–47 fsm.
+// rehacer: 1–15 el motor (este paquete fija los formatos de 1–4; los de 5–9 están en store/doc.go, «Formatos en
+// disco»), 16–31 btree, 32–39 overflow, 40–47 fsm.
 //
 //	KindCheckpoint  sin bloques; principal: redoSegment(8) redoOffset(8) redoLSN(8) nextXID(8) oldestActiveXID(8) time(8)
 //	KindCommit      sin bloques; principal: time(8) storeCount(4) y storeCount × [fileNo(4) delta(8, con signo)]: lo
-//	                que la transacción suma a Count de cada store
+//	                que la transacción suma a Count de cada store; si el lote hizo DDL, una cola con los fileNo
+//	                creados y borrados (store/doc.go)
 //	KindAbort       sin bloques ni principal
-//	KindPageImage   solo imágenes (la primera marca de visibilidad de una página tras un checkpoint, como
-//	                wal_log_hints)
+//	KindPageImage   reservado: no se escribe (la primera marca de visibilidad de una hoja tras un checkpoint va
+//	                como KindSetHints de btree, con la imagen de la hoja)
 //	KindLeafWrite   (btree) una versión nueva en una hoja; es también el cambio lógico (id, xid y valor en línea o
 //	                referencia a desborde) que leen Sync y WalSince. Con FlagCommit es una operación suelta que nace
 //	                confirmada: no hay KindCommit aparte y su delta de Count va en FlagCountAdd/FlagCountSub
@@ -88,6 +90,29 @@
 // WAL inutilizable sigue igual: un fsync fallido (también el de la preasignación), una escritura de un registro
 // reservado que falla, o un fallo de escritura que no es de disco lleno. Written da los bytes reservados desde Open,
 // sin candados (el motor mide con él el WAL sin reciclar).
+//
+// # Modo respaldo y retención
+//
+// ForceImages (el modo respaldo del motor, tarea 44, como forcePageWrites) cuenta los respaldos en curso: mientras
+// haya alguno, Reserve decide la imagen de página entera contra el mayor entre el punto de rehacer y el inicio del
+// respaldo más nuevo. Hold(seg) retiene los segmentos desde seg: Recycle no los renombra ni los borra hasta soltarla.
+// Reservation.End da la posición siguiente al registro (hasta dónde copiar el WAL). KindBackupEnd (9) es el fin de un
+// respaldo: sin bloques, principal redoLSN(8) checkpointLSN(8) time(8).
+//
+// # Archivo continuo
+//
+// Para el archivo continuo del motor (tarea 66; la retención es Hold): ActiveSegment (atómico) es el segmento activo,
+// y todo segmento menor que existe está sellado y no cambia. Switch sella el activo aunque no esté lleno (como
+// pg_switch_wal; con el activo vacío no hace nada): es una rotación, así que con preasignación puede dar ErrNoRoom
+// sin tocar nada. Scan sigue de un segmento sellado así al siguiente igual que de uno lleno (el primer registro del
+// siguiente tiene el lsn contiguo). SegmentInfo(num) da de un segmento sellado el lsn de su primer registro y la
+// posición siguiente al último (End.Offset = bytes válidos): el final sale de lo anotado al sellarlo o al recorrerlo en
+// Open (el mapa sizes, que ahora guarda una Position por segmento) y, para un segmento anterior al punto de rehacer de
+// Open, de recorrerlo una vez sin writeMu. Recycle borra las anotaciones de los segmentos reciclados. Segments lista
+// los números del directorio y SegmentName da el nombre de un archivo.
+//
+// Options.StopLSN (el objetivo de una recuperación a un punto en el tiempo, recovery_target_lsn): Open recorre hasta el
+// registro de ese lsn inclusive y lo que sigue se corta como una cola inválida (cutTail).
 //
 // # Escribir un registro
 //

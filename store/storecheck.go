@@ -559,7 +559,7 @@ func (e *Engine) fixCount(file smgr.FileNo, delta int64) error {
 	xid := e.txs.Begin()
 	defer e.txs.End(xid)
 	rec := &wal.Record{XID: xid, Kind: wal.KindCommit,
-		Main: encodeCommit(time.Now().UnixNano(), map[smgr.FileNo]int64{file: delta})}
+		Main: encodeCommit(time.Now().UnixNano(), commitInfo{deltas: map[smgr.FileNo]int64{file: delta}})}
 	res, err := e.log.Reserve(rec, func(page.LSN) { e.counts.add(file, delta) })
 	if err != nil {
 		return err

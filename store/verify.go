@@ -163,8 +163,8 @@ func (e *Engine) checkFileRun(r *Report, file smgr.FileNo, names []string, repai
 	if len(names) == 0 {
 		return nil
 	}
-	if _, ok := e.cat.ByFile(file); ok {
-		return nil
+	if _, ok := e.cat.ByFile(file); ok || e.backups.deferredFile(file) {
+		return nil // de un store, o borrado durante un respaldo: se borra al terminar la copia
 	}
 	r.OrphanFiles++
 	i := r.add(Finding{Kind: FindOrphanFile, File: dataFileName(file), Block: -1, Repairable: true,

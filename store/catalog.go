@@ -1,9 +1,11 @@
 package store
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/cgalvisleon/et/store/internal/control"
+	"github.com/cgalvisleon/et/store/internal/page"
 	"github.com/cgalvisleon/et/store/internal/vfs"
 )
 
@@ -30,6 +32,23 @@ func Open(dir string) (*Engine, error) {
 }
 
 /**
+* OpenAt restaura una copia de Backup hasta el lsn dado (recovery_target_lsn de PostgreSQL): rehace el WAL del
+* respaldo más los segmentos archivados que se agregaron a wal/ hasta el registro de ese lsn inclusive, corta lo que
+* sigue y abre el motor. Lo confirmado después de lsn no está; lo que estaba a medias en lsn queda deshecho.
+* @param dir string, lsn uint64: ≥ el fin del respaldo (BackupInfo.EndLSN)
+* @return *Engine, error: ErrRecoveryTarget (sin backup_label, antes del fin del respaldo o después del final del
+* WAL: no cambia nada), los de Open
+**/
+func OpenAt(dir string, lsn uint64) (*Engine, error) {
+	if lsn == 0 {
+		return nil, fmt.Errorf(MSG_TARGET_ZERO, ErrRecoveryTarget)
+	}
+	cfg := envConfig()
+	cfg.stopLSN = page.LSN(lsn)
+	return open(vfs.OS(), dir, cfg)
+}
+
+/**
 * Close espera a las operaciones en curso, hace el checkpoint final y cierra. Cerrar dos veces no hace nada.
 * @return error: el fallo que dejó el motor inutilizable, si lo hubo
 **/
@@ -38,9 +57,10 @@ func (e *Engine) Close() error {
 }
 
 /**
-* Store abre el store name, o lo crea si no existe.
+* Store abre el store name, o lo crea si no existe. Si lo está creando un lote abierto (StoreIn), espera hasta
+* LOCK_TIMEOUT a que confirme o deshaga.
 * @param name string: UTF-8 válido sin nulos, de 1 a 255 bytes
-* @return *Store, error: ErrBadName, ErrClosed, ErrFailed
+* @return *Store, error: ErrBadName, ErrStorePending, ErrClosed, ErrFailed
 **/
 func (e *Engine) Store(name string) (*Store, error) {
 	return e.store(name)
@@ -49,10 +69,35 @@ func (e *Engine) Store(name string) (*Store, error) {
 /**
 * DropStore borra el store name con todos sus datos.
 * @param name string
-* @return error: ErrStoreNotFound, ErrClosed, ErrFailed
+* @return error: ErrStoreNotFound, ErrStorePending (un lote abierto lo crea o lo borra), ErrClosed, ErrFailed
 **/
 func (e *Engine) DropStore(name string) error {
 	return e.dropStore(name)
+}
+
+/**
+* StoreIn abre el store name para el lote tx, o lo crea dentro del lote: hasta el Commit solo tx lo ve (Store desde
+* fuera espera, las escrituras de otros dan ErrStorePending y Stores no lo lista); Rollback, el tiempo máximo o un
+* corte antes del Commit lo borran con sus archivos. Dos lotes que crean el mismo nombre: el segundo espera al
+* primero y, si confirmó, recibe ErrSerialization.
+* @param tx *Batch, name string
+* @return *Store, error: ErrBadName, ErrSerialization, ErrConflict, ErrTimeout, ErrStoreDropped, ErrStorePending,
+* ErrTxDone, ErrOtherEngine, ErrClosed, ErrFailed, ErrDiskFull
+**/
+func (e *Engine) StoreIn(tx *Batch, name string) (*Store, error) {
+	return e.storeIn(tx, name)
+}
+
+/**
+* DropStoreIn borra el store name al confirmar el lote tx (el Commit espera el fsync, también con CommitDeferred, y
+* recién después borra los archivos). Hasta entonces sigue entero; Rollback lo deja como estaba. Uno creado por el
+* mismo lote se borra enseguida.
+* @param tx *Batch, name string
+* @return error: ErrStoreNotFound, ErrBusy (otro lote abierto escribió en él), ErrSerialization, ErrConflict,
+* ErrTimeout, ErrStoreDropped (tx ya lo borra), ErrStorePending, ErrTxDone, ErrOtherEngine, ErrClosed, ErrFailed
+**/
+func (e *Engine) DropStoreIn(tx *Batch, name string) error {
+	return e.dropStoreIn(tx, name)
 }
 
 /**
@@ -100,6 +145,48 @@ func (e *Engine) Checkpoint() error {
 	}
 	defer e.leave()
 	return e.checkpoint(control.StateInProduction, false)
+}
+
+/**
+* Backup copia el motor en caliente al directorio dir (vacío o inexistente), como pg_basebackup: las escrituras, los
+* lotes y el DDL siguen mientras copia. Hace un checkpoint (el inicio), copia el catálogo, los archivos de datos y
+* los de estados, escribe un registro de fin de respaldo en el WAL y copia el WAL desde el inicio hasta ese registro.
+* Open sobre dir restaura la copia: rehace ese WAL y la deja como estaba el motor en el fin del respaldo.
+* @param dir string
+* @return BackupInfo, error: ErrBackupDir, ErrDiskFull (en el destino o en el WAL; el motor sigue), ErrClosed,
+* ErrFailed
+**/
+func (e *Engine) Backup(dir string) (BackupInfo, error) {
+	return e.backup(vfs.OS(), dir)
+}
+
+/**
+* PendingArchive lista los segmentos sellados del WAL que el archivo continuo (WAL_ARCHIVE=on) retiene hasta que el
+* archivador los copie, del más viejo al más nuevo y hasta 256 (se vuelve a pedir). Copiar cada uno (sus Size bytes
+* alcanzan) y después llamar a SetArchived con su número, en orden.
+* @return []WALSegment, error: ErrArchiveOff, ErrClosed, ErrFailed
+**/
+func (e *Engine) PendingArchive() ([]WALSegment, error) {
+	return e.pendingArchive()
+}
+
+/**
+* SetArchived anota que los segmentos hasta seg (inclusive) ya están archivados: desde el próximo checkpoint se
+* pueden reciclar. Es durable al volver (sobrevive a Close/Open y a un corte); repetirlo no hace nada.
+* @param seg uint64: WALSegment.Segment
+* @return error: ErrArchiveOff, ErrNotSealed, ErrDiskFull, ErrClosed, ErrFailed
+**/
+func (e *Engine) SetArchived(seg uint64) error {
+	return e.setArchived(seg)
+}
+
+/**
+* SwitchWAL sella el segmento activo del WAL aunque no esté lleno (pg_switch_wal): pasa a PendingArchive enseguida.
+* Funciona también con el archivo apagado.
+* @return uint64: el segmento sellado (0 si el activo no tenía registros), error: ErrDiskFull, ErrClosed, ErrFailed
+**/
+func (e *Engine) SwitchWAL() (uint64, error) {
+	return e.switchWAL()
 }
 
 /**

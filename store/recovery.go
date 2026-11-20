@@ -18,14 +18,31 @@ import (
 
 /**
 * recover hace la recuperación de Open (pasos 1–5 de «Recuperación» en doc.go): lee el control y el catálogo (o
-* empieza un motor nuevo), abre las piezas, reproduce el WAL desde el punto de rehacer, fija el horizonte de xid y
-* termina con un checkpoint.
+* empieza un motor nuevo), abre las piezas, reproduce el WAL desde el punto de rehacer (hasta el objetivo de OpenAt,
+* si lo hay), activa el archivo continuo (WAL_ARCHIVE), fija el horizonte de xid y termina con un checkpoint.
 * @return error
 **/
 func (e *Engine) recover() error {
+	label, restoring, err := e.readBackupLabel()
+	if err != nil {
+		return err
+	}
 	ctl, fresh, err := e.readControl()
 	if err != nil {
 		return err
+	}
+	if restoring {
+		if fresh {
+			return fmt.Errorf(MSG_BACKUP_UNFINISHED, ErrBackupIncomplete)
+		}
+		if err := e.checkBackupWAL(ctl.Redo, label); err != nil {
+			return err
+		}
+	}
+	if e.cfg.stopLSN > 0 { // antes de cambiar nada: un objetivo inalcanzable deja la copia como estaba
+		if err := e.checkTarget(ctl, label, restoring); err != nil {
+			return err
+		}
 	}
 	redo := wal.Start
 	e.frozen.base = ctl.FrozenXID
@@ -47,7 +64,9 @@ func (e *Engine) recover() error {
 	}
 
 	r := &redoState{e: e, countLSN: e.cat.CountLSN(), checkpointLSN: ctl.CheckpointLSN, nextXID: ctl.NextXID}
-	log, _, err := wal.Open(e.fs, e.dir, e.cfg.wal, redo, r.apply)
+	opts := e.cfg.wal
+	opts.StopLSN = e.cfg.stopLSN
+	log, _, err := wal.Open(e.fs, e.dir, opts, redo, r.apply)
 	if err != nil {
 		return err
 	}
@@ -56,7 +75,16 @@ func (e *Engine) recover() error {
 	if !fresh && !r.sawCheckpoint {
 		return fmt.Errorf(MSG_NO_CHECKPOINT, ErrCorrupt, ctl.CheckpointLSN)
 	}
-	return e.finishRecovery(r)
+	if err := e.startArchive(); err != nil {
+		return err
+	}
+	if err := e.finishRecovery(r); err != nil {
+		return err
+	}
+	if restoring {
+		return e.removeBackupLabel() // la copia ya es un motor más: su checkpoint pasó el fin del respaldo
+	}
+	return nil
 }
 
 /**
@@ -122,12 +150,15 @@ func (e *Engine) openPieces() error {
 }
 
 /**
-* finishRecovery fija el siguiente xid (el mayor entre el del control y el mayor visto + 1), el horizonte del
+* finishRecovery borra los stores de lotes que no confirmaron, fija el siguiente xid (el mayor entre el del control y el mayor visto + 1), el horizonte del
 * archivo de estados, arma las piezas que escriben y hace el checkpoint de fin de recuperación.
 * @param r *redoState: lo que dejó el recorrido del WAL
 * @return error
 **/
 func (e *Engine) finishRecovery(r *redoState) error {
+	if err := r.dropPending(); err != nil {
+		return err
+	}
 	next := max(r.nextXID, r.maxXID+1, 1, e.cfg.firstXID)
 	if err := e.status.Recover(next); err != nil {
 		return err
@@ -183,12 +214,14 @@ func (r *redoState) dispatch(rec *wal.Record) error {
 		return r.commit(rec)
 	case k == wal.KindAbort:
 		return r.e.status.SetStatus(rec.XID, xact.StatusAborted, rec.LSN) // truncado: ErrTruncated, corrupción
-	case k == wal.KindCreateStore:
+	case k == wal.KindCreateStore, k == wal.KindCreateStoreIn:
 		return r.createStore(rec)
 	case k == wal.KindDropStore:
 		return r.dropStore(rec)
 	case k == wal.KindEmptyStore:
 		return r.emptyStore(rec)
+	case k == wal.KindBackupEnd:
+		return r.backupEnd(rec)
 	case k >= wal.KindLeafWrite && k < wal.KindOverflowWrite:
 		return r.blocks(rec, btree.Redo)
 	case k >= wal.KindOverflowWrite && k < wal.KindFreePush:
@@ -217,21 +250,74 @@ func (r *redoState) checkpoint(rec *wal.Record) error {
 }
 
 /**
+* backupEnd rehace un KindBackupEnd: no cambia nada (lo que comprueba la restauración lo mira checkBackupWAL antes de
+* rehacer); solo se valida su forma.
+* @param rec *wal.Record
+* @return error
+**/
+func (r *redoState) backupEnd(rec *wal.Record) error {
+	if _, ok := decodeBackupEnd(rec.Main); !ok {
+		return fmt.Errorf(MSG_BAD_RECORD, ErrCorrupt, rec.LSN, rec.Kind, "bad backup end data")
+	}
+	return nil
+}
+
+/**
 * commit rehace un KindCommit (fase 1B): estado confirmada y, si su lsn ≥ countLSN, sus sumas a los contadores.
 * @param rec *wal.Record
 * @return error
 **/
 func (r *redoState) commit(rec *wal.Record) error {
-	deltas, err := decodeCommit(rec.Main)
+	info, err := decodeCommit(rec.Main)
 	if err != nil {
 		return fmt.Errorf(MSG_BAD_RECORD, ErrCorrupt, rec.LSN, rec.Kind, err.Error())
 	}
 	if rec.LSN >= r.countLSN {
-		for file, delta := range deltas {
+		for file, delta := range info.deltas {
 			r.e.counts.add(file, delta)
 		}
 	}
-	return r.setCommitted(rec)
+	for _, file := range info.creates {
+		r.e.cat.ClearFlags(file, control.FlagPendingCreate)
+	}
+	if err := r.setCommitted(rec); err != nil {
+		return err
+	}
+	for _, file := range info.drops {
+		if err := r.dropFile(file); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+/**
+* dropFile rehace el borrado de un store por su número de archivo (el KindCommit de un lote que lo borró): lo saca
+* del catálogo si todavía lo tiene y borra sus archivos.
+* @param file smgr.FileNo
+* @return error
+**/
+func (r *redoState) dropFile(file smgr.FileNo) error {
+	if entry, ok := r.e.cat.ByFile(file); ok {
+		r.e.cat.Drop(entry.Name, file)
+	}
+	return r.unlinkUnused(file)
+}
+
+/**
+* dropPending borra, al terminar de rehacer el WAL, los stores que siguen con FlagPendingCreate: los creó un lote
+* cuyo KindCommit no llegó a ser durable (ninguna transacción sobrevive a reabrir). No escribe en el WAL: el
+* checkpoint de fin de recuperación guarda el catálogo sin ellos y, si se corta antes, la próxima recuperación los
+* vuelve a borrar.
+* @return error
+**/
+func (r *redoState) dropPending() error {
+	for _, file := range pendingFiles(r.e.cat.Catalog().Entries) {
+		if err := r.dropFile(file); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 /**
@@ -249,7 +335,8 @@ func (r *redoState) setCommitted(rec *wal.Record) error {
 }
 
 /**
-* createStore rehace el alta de un store en el catálogo (idempotente: no hace nada si el nombre ya existe).
+* createStore rehace el alta de un store en el catálogo (idempotente: no hace nada si el nombre ya existe). La de
+* un lote (KindCreateStoreIn) queda con FlagPendingCreate hasta rehacer su KindCommit.
 * @param rec *wal.Record
 * @return error
 **/
@@ -261,6 +348,9 @@ func (r *redoState) createStore(rec *wal.Record) error {
 	created, err := r.e.cat.Create(name, file)
 	if created {
 		r.e.counts.set(file, 0)
+		if rec.Kind == wal.KindCreateStoreIn {
+			r.e.cat.SetFlags(file, control.FlagPendingCreate)
+		}
 	}
 	return err
 }

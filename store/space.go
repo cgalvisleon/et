@@ -151,14 +151,23 @@ func (e *Engine) walBacklog() int64 {
 }
 
 /**
-* throttle frena a un escritor mientras el WAL sin reciclar pase de walBacklogFactor × MAX_WAL_SIZE: espera a que
-* termine un checkpoint, hasta LOCK_TIMEOUT (≤ 0 = sin límite). Se llama sin nada tomado (ni closeMu): Close lo
-* despierta.
+* retainedBacklog es lo que mira el freno: el mayor entre el WAL desde el último checkpoint terminado y el que espera
+* al archivador (sin tope de archivo).
+* @return int64: bytes
+**/
+func (e *Engine) retainedBacklog() int64 {
+	return max(e.walBacklog(), e.archiveBacklog())
+}
+
+/**
+* throttle frena a un escritor mientras el WAL sin reciclar (retainedBacklog) pase de walBacklogFactor ×
+* MAX_WAL_SIZE: espera a que termine un checkpoint o avance el archivador, hasta LOCK_TIMEOUT (≤ 0 = sin límite).
+* Se llama sin nada tomado (ni closeMu): Close lo despierta.
 * @return error: ErrThrottled al pasar el plazo, ErrClosed si el motor se cierra
 **/
 func (e *Engine) throttle() error {
 	limit := e.cfg.maxWALSize * walBacklogFactor
-	if e.walBacklog() <= limit {
+	if e.retainedBacklog() <= limit {
 		return nil
 	}
 	e.metrics.throttled.Add(1)
@@ -170,7 +179,7 @@ func (e *Engine) throttle() error {
 	}
 	for {
 		done := e.checkpointSignal()
-		backlog := e.walBacklog()
+		backlog := e.retainedBacklog()
 		if backlog <= limit {
 			return nil
 		}
@@ -185,7 +194,7 @@ func (e *Engine) throttle() error {
 }
 
 /**
-* checkpointSignal devuelve el canal que se cierra al terminar el próximo checkpoint.
+* checkpointSignal devuelve el canal que se cierra al terminar el próximo checkpoint (o al avanzar el archivador).
 * @return <-chan struct{}
 **/
 func (e *Engine) checkpointSignal() <-chan struct{} {
@@ -204,6 +213,13 @@ func (e *Engine) checkpointSignal() <-chan struct{} {
 **/
 func (e *Engine) checkpointFinished(walBytes int64) {
 	e.doneWAL.Store(walBytes)
+	e.wakeWriters()
+}
+
+/**
+* wakeWriters despierta a los escritores frenados (throttle) para que vuelvan a mirar el WAL retenido.
+**/
+func (e *Engine) wakeWriters() {
 	e.sigMu.Lock()
 	defer e.sigMu.Unlock()
 	if e.ckptDone != nil {

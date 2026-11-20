@@ -4,8 +4,9 @@
 //
 //   - Lista de páginas libres del fork principal, encadenada desde la página meta (campo freeHead de la meta, ver
 //     btree) por el campo next del espacio especial de cada página libre (marca page.OpaqueFree). Allocate saca la
-//     primera (KindFreePop) o, si la lista está vacía, extiende el archivo; Free la devuelve (KindFreePush). En la
-//     fase 1 solo se liberan páginas de desborde (las hojas vacías esperan al borrado de páginas del árbol, fase 2).
+//     primera (KindFreePop) o, si la lista está vacía, extiende el archivo; Free la devuelve (KindFreePush). Hoy
+//     solo se liberan páginas de desborde (y las que devuelve Reclaim): las hojas vacías esperan al borrado de
+//     páginas del árbol, pendiente.
 //     Como cada store tiene sus archivos, no hay una lista global ni un punto caliente entre stores.
 //   - Mapa de visibilidad (fork smgr.ForkVM, fase 1B/2, pregunta 44): VMBitsPerBlock = 2 bits por bloque del fork
 //     principal —VMAllVisible (todas sus versiones visibles para todos) y VMAllFrozen (todas congeladas)—. Una
@@ -72,7 +73,7 @@
 // escribe el registro con la página sacada todavía bloqueada (se la entrega así a quien la pidió) y la meta ya
 // suelta.
 //
-// Orden entre páginas (a confirmar en store/doc.go, que todavía no habla de la meta): páginas del árbol → meta →
+// Orden entre páginas (el de store/doc.go, «Orden de los bloqueos»): páginas del árbol → meta →
 // página libre; página de datos → página del mapa. Por eso quien llama a Allocate puede tener hojas o internas
 // bloqueadas pero nunca la meta, y quien llama a Free no puede tener bloqueadas ni la meta ni la página que libera.
 // Allocate bloquea la meta durante todo el cambio: las altas y bajas de un store se serializan en su meta.
@@ -82,7 +83,7 @@
 // Redo(pool, sm, rec) rehace un registro de fsm: valida su forma, extiende el fork si el archivo quedó más corto que
 // el WAL y, por bloque, restaura la imagen sin condiciones y aplica el delta; con BlockWillInit inicia la página
 // entera; sin ninguno de los dos, aplica solo si pd_lsn < lsn del registro. Es idempotente: rehacer dos veces deja
-// las mismas páginas. Usa buffer.Pool.Pin, que lee y verifica la página: con una página rota por sectores (que el
-// registro iba a pisar con su imagen o su BlockWillInit) Pin falla por la suma; hace falta en buffer un pin que no
-// lea, como RBM_ZERO_AND_LOCK de PostgreSQL (a confirmar en buffer).
+// las mismas páginas. Un bloque con imagen o BlockWillInit se fija con buffer.Pool.PinZero, sin leer la página (que
+// puede estar rota por sectores tras un corte), como RBM_ZERO_AND_LOCK de PostgreSQL; los demás, con Pin, que la lee
+// y verifica su suma.
 package fsm

@@ -46,8 +46,14 @@ var (
 	ErrOtherEngine = errors.New("store: the batch or snapshot belongs to another engine")
 
 	// ErrBusy: Empty con lotes o snapshots abiertos en el motor (cualquiera de ellos podría ver el store vaciado, y un
-	// lote podría tener versiones sin confirmar en él). Se reintenta cuando terminen.
-	ErrBusy = errors.New("store: cannot empty the store while batches or snapshots are open")
+	// lote podría tener versiones sin confirmar en él), o DropStoreIn de un store en el que escribió otro lote que
+	// sigue abierto. Se reintenta cuando terminen.
+	ErrBusy = errors.New("store: busy: open batches or snapshots use the store")
+
+	// ErrStorePending: el store lo está creando o borrando un lote abierto (DDL en lote). Store espera hasta
+	// LOCK_TIMEOUT a que ese lote termine y después da este error; las escrituras de otros en él y DropStore lo dan
+	// enseguida. Se reintenta cuando el lote termine.
+	ErrStorePending = errors.New("store: the store is being created or dropped by an open batch")
 
 	// ErrDiskFull: el disco se llenó. Si viene solo, la operación no hizo nada y el motor sigue: se puede reintentar
 	// cuando haya lugar. Si viene con ErrFailed, el disco se llenó donde ya no se podía volver atrás (una escritura
@@ -57,7 +63,25 @@ var (
 
 	// ErrThrottled: el disco no da abasto: el WAL desde el último checkpoint pasa de 2 × MAX_WAL_SIZE y no bajó en
 	// LOCK_TIMEOUT. La operación no hizo nada; se reintenta.
+	// Con el archivo continuo sin tope (WAL_ARCHIVE_MAX_SIZE = 0) cuenta también el WAL que espera al archivador.
 	ErrThrottled = errors.New("store: the disk is not keeping up: too much WAL since the last checkpoint")
+
+	// ErrArchiveOff: PendingArchive o SetArchived con el archivo continuo apagado (WAL_ARCHIVE=off al abrir).
+	ErrArchiveOff = errors.New("store: the WAL archive is off (WAL_ARCHIVE)")
+
+	// ErrNotSealed: SetArchived de un segmento que todavía no está sellado (el activo o uno futuro).
+	ErrNotSealed = errors.New("store: the WAL segment is not sealed yet")
+
+	// ErrRecoveryTarget: OpenAt con un objetivo que no se puede alcanzar: sin copia de Backup (backup_label), antes
+	// del fin del respaldo o del checkpoint del control, o después del final del WAL que hay. No cambia nada.
+	ErrRecoveryTarget = errors.New("store: the recovery target lsn cannot be reached")
+
+	// ErrBackupDir: el directorio de destino de Backup no está vacío.
+	ErrBackupDir = errors.New("store: the backup directory is not empty")
+
+	// ErrBackupIncomplete: Open de una copia de Backup que no terminó o cuyo WAL no llega hasta el registro de fin
+	// del respaldo: la copia no es consistente y Open no la abre (ni la cambia).
+	ErrBackupIncomplete = errors.New("store: incomplete backup: its WAL does not reach the backup end")
 
 	// ErrCorrupt: el WAL, el control o el catálogo no son coherentes (falta el registro del checkpoint, un registro
 	// del motor está mal formado…).
@@ -70,7 +94,7 @@ const (
 	MSG_FAILED          = "%w: %w"
 	MSG_FAILED_FULL     = "%w: %w: %w"
 	MSG_DISK_FULL       = "%w: %w"
-	MSG_THROTTLED       = "%w: %d bytes of WAL since the last checkpoint, limit %d"
+	MSG_THROTTLED       = "%w: %d bytes of WAL not recyclable (since the last checkpoint or not archived), limit %d"
 	MSG_OPEN            = "store: open %s: %w"
 	MSG_NO_CHECKPOINT   = "%w: the checkpoint record at lsn %d is missing from the WAL"
 	MSG_BAD_RECORD      = "%w: wal record lsn %d kind %d: %s"
@@ -79,6 +103,24 @@ const (
 	MSG_REDO            = "store: redo lsn %d kind %d: %w"
 	MSG_BAD_CONTROL_NEW = "%w: the control file has no valid copy but the catalog has stores: %w"
 	MSG_BUSY            = "%w: %d open"
+	MSG_BUSY_WRITERS    = "%w: %d open batches wrote in store %q"
+	MSG_STORE_PENDING   = "%w: %q"
+
+	MSG_BACKUP            = "store: backup to %s: %w"
+	MSG_BACKUP_DIR        = "%w: %s"
+	MSG_BACKUP_LABEL      = "%w: the backup_label file is damaged"
+	MSG_BACKUP_UNFINISHED = "%w: the backup did not finish (backup_label without an end)"
+	MSG_BACKUP_END_RECORD = "%w: wal record lsn %d kind %d is not this backup's end"
+	MSG_BACKUP_WAL        = "%w: cannot read the WAL up to the backup end lsn %d: %w"
+	MSG_BACKUP_SHORT      = "%w: the WAL ends at lsn %d, before the backup end lsn %d"
+
+	MSG_NOT_SEALED       = "%w: segment %d (the active segment is %d)"
+	MSG_ARCHIVE_STATUS   = "%w: the archive_status file is damaged"
+	MSG_TARGET_ZERO      = "%w: lsn 0"
+	MSG_TARGET_NO_BACKUP = "%w: OpenAt needs a Backup copy (backup_label)"
+	MSG_TARGET_EARLY     = "%w: lsn %d is before lsn %d (the backup end or the control checkpoint)"
+	MSG_TARGET_LATE      = "%w: the WAL ends at lsn %d, before lsn %d"
+	MSG_TARGET_WAL       = "%w: cannot read the WAL up to lsn %d: %w"
 )
 
 // Mensajes del informe de Verify y Repair (report.go, verify.go, repair.go).

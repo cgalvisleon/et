@@ -98,6 +98,8 @@ func (e *Engine) checkpointNow() error {
 		return err
 	}
 	defer e.leave()
+	e.ckptHurry.Add(1) // si el de fondo está repartiendo, que termine ya
+	defer e.ckptHurry.Add(-1)
 	return e.checkpoint(control.StateInProduction, false)
 }
 
@@ -251,7 +253,7 @@ func (e *Engine) writeControl(state control.State, info checkpointInfo, lsn page
 /**
 * pacer reparte la escritura de páginas del checkpoint de fondo: tras cada página, si va adelantado respecto del
 * tiempo (90 % de CHECKPOINT_TIMEOUT) y del WAL escrito desde el punto de rehacer (90 % del volumen que dispara el
-* siguiente), duerme hasta emparejar, de a 100 ms. Close lo apura (stop).
+* siguiente), duerme hasta emparejar, de a 100 ms. Close y un Checkpoint() que espera lo apuran (ckptHurry).
 * @param redo wal.Position, start time.Time
 * @return func(written, total int)
 **/
@@ -262,7 +264,7 @@ func (e *Engine) pacer(redo wal.Position, start time.Time) func(written, total i
 		for {
 			done := float64(written) / float64(total)
 			wait := time.Duration(done*budget) - time.Since(start)
-			if wait <= 0 || float64(e.log.SizeSince(redo))/trigger >= done {
+			if wait <= 0 || e.ckptHurry.Load() > 0 || float64(e.log.SizeSince(redo))/trigger >= done {
 				return
 			}
 			select {

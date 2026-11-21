@@ -80,8 +80,8 @@ var (
 // escribiendo. Si la cola inválida empieza dentro de un segmento sellado (checkSealed), falla con ErrCorrupted sin
 // cortar nada. Devuelve el WAL y el final de lo válido: la posición del próximo registro.
 func Open(fsys vfs.FS, dir string, opts Options, redo Position, fn func(rec *Record) error) (*WAL, Position, error) {
-	if opts.SegmentSize < MaxRecordSize+TrailerSize {
-		return nil, Position{}, fmt.Errorf(MSG_SEGMENT_SIZE, opts.SegmentSize, MaxRecordSize+TrailerSize)
+	if opts.SegmentSize < minSegmentSize {
+		return nil, Position{}, fmt.Errorf(MSG_SEGMENT_SIZE, opts.SegmentSize, minSegmentSize)
 	}
 	if fn == nil {
 		fn = func(*Record) error { return nil }
@@ -102,7 +102,7 @@ func Open(fsys vfs.FS, dir string, opts Options, redo Position, fn func(rec *Rec
 		if err != nil {
 			return nil, Position{}, err
 		}
-		file.Close()
+		file.Close() // el encabezado lo escribe ensureHeader, igual que tras un corte antes de escribirlo
 		nums = []uint64{1}
 	}
 
@@ -121,6 +121,10 @@ func Open(fsys vfs.FS, dir string, opts Options, redo Position, fn func(rec *Rec
 	}
 	file, err := fsys.OpenFile(segmentPath(walDir, end.Segment), os.O_RDWR)
 	if err != nil {
+		return nil, end, err
+	}
+	if err := ensureHeader(file, end); err != nil {
+		file.Close()
 		return nil, end, err
 	}
 	delete(sizes, end.Segment)
@@ -146,6 +150,27 @@ func Open(fsys vfs.FS, dir string, opts Options, redo Position, fn func(rec *Rec
 	w.durable.Store(last)
 	w.redo.Store(&redo)
 	return w, end, nil
+}
+
+/**
+* ensureHeader escribe (con fsync) el encabezado del segmento activo de Open si todavía no tiene registros y el
+* encabezado falta: un segmento recién creado (el primero de un motor nuevo) o uno cortado antes de que su
+* encabezado fuera durable. Uno con registros ya pasó por checkStartHeader o por el paso de un segmento al siguiente.
+* @param file vfs.File, end Position: el final válido, en este segmento
+* @return error
+**/
+func ensureHeader(file vfs.File, end Position) error {
+	if end.Offset != SegmentHeaderSize {
+		return nil
+	}
+	h, state, err := readHeader(file)
+	if err != nil || state == headerValid && h.Num == end.Segment && h.First == end.LSN {
+		return err
+	}
+	if _, err := file.WriteAt(encodeHeader(end.Segment, end.LSN), 0); err != nil {
+		return err
+	}
+	return file.Sync()
 }
 
 // cutTail corta lo que sigue al final válido: el segmento de end en su desplazamiento y los siguientes enteros.
@@ -361,30 +386,32 @@ func (w *WAL) rotate() error {
 		}
 	}
 	old := w.active
-	if err := w.seal(old); err != nil {
-		w.fail(err)
-		return failedError(err)
-	}
-	if err := w.markSealed(old); err != nil {
+	num := old.num + 1
+	file, err := w.openNext(num)
+	if err != nil {
 		return err
 	}
-	num := old.num + 1
-	var file vfs.File
-	var err error
-	if num <= w.maxNum {
-		file, err = w.fs.OpenFile(segmentPath(w.dir, num), os.O_RDWR)
-	} else {
-		file, err = createSegment(w.fs, w.dir, num)
-	}
-	if err != nil {
+	// Orden: los registros del activo durables, después el encabezado del siguiente (con fsync) y recién entonces la
+	// marca de sellado. Así un encabezado durable nunca promete un lsn que el activo no tiene en disco (si no, un corte
+	// entre los dos fsync dejaba un hueco falso) y un segmento sellado siempre tiene el siguiente con su encabezado
+	// (checkSealed lo exige). El primer registro del siguiente es el próximo lsn (writeMu tomado).
+	if err := w.seal(old); err != nil {
+		file.Close()
 		w.fail(err)
 		return failedError(err)
 	}
-	w.maxNum = max(w.maxNum, num)
+	if err := w.writeHeader(file, num, page.LSN(w.lastLSN.Load())+1); err != nil {
+		file.Close()
+		return err
+	}
+	if err := w.markSealed(old); err != nil {
+		file.Close()
+		return err
+	}
 
 	// El cambio de activo va con syncMu: un WaitDurable que leyó el viejo termina su fsync antes de que se cierre.
 	w.syncMu.Lock()
-	w.active = &segment{num: num, file: file, allocated: w.opts.SegmentSize}
+	w.active = &segment{num: num, file: file, size: SegmentHeaderSize, allocated: w.opts.SegmentSize}
 	w.nextReady = false
 	w.activeNum.Store(num)
 	w.syncMu.Unlock()

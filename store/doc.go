@@ -250,17 +250,23 @@
 //	página (todas las clases)     pd_pagesize_version = 8.192 | 1             daño de la página (ErrCorrupt al leerla,
 //	                                                                          hallazgo de Verify)
 //	página meta de un store       version(4) = 1, tras su magic               daño de la página
-//	segmentos del WAL y su sello  sin versión propia: la del control          —
+//	segmento del WAL              encabezado (32 B): version(4), byte 8       ErrFormatVersion (checkFormat); roto:
+//	                              (pregunta 76; wal/doc.go)                   ErrCorrupt al recorrerlo
+//	marca de sellado del segmento sin versión: la del encabezado del segmento —
 //	archivo de estados (xact/)    sin versión propia: la del control          —
 //	derrame replslot/             sin versión: no es durable, se borra        —
 //
 // Open (checkFormat, antes de leer backup_label, el control para recuperar, el catálogo o el WAL, y de cambiar nada)
-// compara la versión del control, del catálogo, de backup_label, de archive_status y de slots con la que lee el
-// binario: una mayor es de un binario más nuevo (MSG_FORMAT_NEWER: actualizar et) y una menor, de un formato anterior
+// compara la versión del control, del catálogo, del encabezado de cada segmento del WAL (wal.OtherVersion), de
+// backup_label, de archive_status y de slots con la que lee el binario: una mayor es de un binario más nuevo (MSG_FORMAT_NEWER: actualizar et) y una menor, de un formato anterior
 // sin migración (MSG_FORMAT_OLDER); las dos dan ErrFormatVersion y el directorio queda como estaba (TestOpenFormatVersion).
 // Un archivo sin la magia de su formato no es «otra versión» sino daño, y lo informa quien lo lee. La versión de las
 // páginas y de la meta no se mira al abrir: el control las cubre, y una página de otra versión con un control de esta
-// es daño. La réplica física copia el WAL byte a byte: primario y réplica tienen que leer la misma versión.
+// es daño. La réplica física copia el WAL byte a byte: primario y réplica tienen que leer la misma versión, y un
+// segmento que llega por el flujo, del archivo continuo o en una copia dice la suya en su encabezado. Un encabezado
+// de segmento roto (crc, número, lsn inicial) es daño: ErrCorrupt (wal.ErrCorrupted traducido), en Open, OpenAt,
+// OpenReplica, WalSince y el archivo continuo (SegmentInfo). Una sola versión para todo: control.FormatVersion =
+// wal.FormatVersion.
 //
 // Prueba de ida y vuelta (format_test.go): TestFormatRoundTrip arma un directorio de referencia (hojas, páginas
 // internas, meta, desborde y una cadena liberada, páginas borradas y libres, versiones congeladas y el mapa de
@@ -270,19 +276,24 @@
 // decodeSlots/encodeSlots, decodeArchiveStatus, decodeLabel), la suma de cada página de data/, y que el motor y la
 // copia abren con el contenido esperado, Verify limpio, también tras reabrir. TestFormatV1Reference hace lo mismo
 // con el directorio guardado en store/testdata/format-v1 (primary/, backup/ y want.json), que se genera una sola vez
-// con go test ./store -run TestFormatV1Reference -update-format-v1.
+// con go test ./store -run TestFormatV1Reference -update-format-v1 y que la prueba exige (sin él falla).
 //
-// Regla: a partir de la 1.0, todo cambio de formato lleva versión nueva, migración y prueba de ida y vuelta (un
-// directorio de referencia nuevo junto al anterior, que se sigue abriendo o migrando).
+// Estado (2026-11-21): **el formato 1 está congelado** (tarea 54). Antes de congelar entró el encabezado de los
+// segmentos del WAL (pregunta 76; el formato en store/internal/wal/doc.go, «Encabezado del segmento»), y se midió el
+// encabezado de 28 B de cada versión con la forma en que josefina guarda sus índices (pregunta 75,
+// TestIndexHeaderShare con STORE_BENCH=1): es el 17,8 % del disco de los índices y un encabezado de 16 B ahorraría
+// ~14 %, menos que el lugar libre de sus hojas (al 57 % tras actualizar), que no es formato (tarea 108). Se congeló
+// con 28 B (pregunta 77, decidida el 2026-11-21). Un directorio escrito antes del encabezado de los segmentos no
+// abre: sus segmentos se leen como versión 0 (wal.OtherVersion: un registro válido en el byte 0) y Open da
+// ErrFormatVersion sin tocar nada.
 //
-// Estado (2026-11-20): el formato 1 todavía no está congelado; la tarea 54 sigue en curso. Hecho: ErrFormatVersion
-// y checkFormat, la tabla de arriba, la prueba de ida y vuelta y el generador del directorio de referencia. No se
-// guardó store/testdata/format-v1 (TestFormatV1Reference se salta sin él) porque queda abierto lo que cambiaría el
-// formato: la tarea 96 (compactar el encabezado de 28 B de la entrada de hoja antes del 1.0, o aceptar el
-// sobrecosto) y si los segmentos del WAL llevan un encabezado con versión propia (hoy dependen del control; un
-// segmento archivado o recibido por una réplica no dice su versión). El directorio generado hoy pesa ~2 MB (1 MB es
-// el segmento sellado, casi todo ceros, y 100 KB el want.json): al congelar, achicarlo (ranuras creadas después del
-// sellado, valores más chicos) para quedar en unos cientos de KB.
+// Regla, desde el 2026-11-21: **todo cambio en disco sube FormatVersion** (wal.FormatVersion, que el control toma) y
+// lleva migración (o lectura de la versión anterior), un directorio de referencia nuevo (testdata/format-v<n>) junto
+// a los anteriores, que se siguen abriendo o migrando, y su prueba de ida y vuelta. Nunca se regenera format-v1: si
+// TestFormatV1Reference falla, el cambio rompió el formato 1. Lo que cuenta como formato: todo lo de «Formatos en
+// disco», los registros del WAL (también los Kind y deltas de las piezas), el encabezado y la marca de los
+// segmentos, y los archivos de la raíz. Un cambio de comportamiento que no cambia bytes (dónde se parte una página,
+// cuándo se limpia) no es de formato.
 //
 // # Límites
 //
@@ -591,7 +602,9 @@
 //
 // Tarea 67 de F-23 (fase 3), decisión 66: crear y borrar stores dentro de un lote, para que un catálogo de josefina y
 // sus stores nazcan o mueran juntos. Engine.StoreIn(tx, name) abre el store para el lote o lo crea dentro de él;
-// Engine.DropStoreIn(tx, name) lo borra al confirmar. Store y DropStore sueltos siguen igual.
+// Engine.DropStoreIn(tx, name) lo borra al confirmar. Store y DropStore sueltos siguen igual, salvo que un
+// DropStore suelto también espera (con el motor suelto, hasta LOCK_TIMEOUT; 0 = sin límite; luego ErrBusy) a los lotes
+// abiertos que escribieron en el store: sus escrituras se perderían en silencio (N4, tarea 111).
 //
 // Crear (createIn, con ddlMu): número de archivo nuevo, KindCreateStoreIn con el xid del lote (durable, como
 // KindCreateStore: ningún archivo del store existe en disco antes que su registro), la entrada del catálogo con
@@ -810,7 +823,8 @@
 //     → syncMu (y pubMu al esperar la publicación), sin páginas. Verify y Repair: closeMu (lectura) → ckptMu → ddlMu
 //     (control, catálogo y data/); Store.vacuumMu → closeMu (lectura) → Store.mu (escritura) → commitMu (escritura,
 //     solo para repetir el conteo) → páginas. Backup: ckptMu → writeMu (wal.ForceImages, wal.Hold) y el checkpoint →
-//     ddlMu (catálogo y lista de data/); sin closeMu (cuenta en Engine.bg); backups.mu es una hoja. Archivo continuo:
+//     ddlMu (catálogo y lista de data/); sin closeMu (cuenta en Engine.bg); backups.mu es una hoja. También cuentan en
+//     Engine.bg sin closeMu ChangeReader.Next y la espera de CreateLogicalSlot (tarea 112). Archivo continuo:
 //     closeMu (lectura) → archive.mu → writeMu (SetArchived, wal.Hold); ckptMu → archive.mu → writeMu (el tope, en el
 //     paso 6); recover → archive.mu → writeMu (wal.Switch). Ranuras: closeMu (lectura) → slots.mu → writeMu (Hold);
 //     ckptMu → slots.mu (paso 6). Réplica: applyMu → txGate (escritura, para un registro que choca con los
@@ -823,7 +837,9 @@
 //     bloqueo compartido de la lectura; la lectura toma HintGate en compartido para decidir y marcar, y el checkpoint
 //     la toma en exclusivo alrededor de BeginCheckpoint (como DELAY_CHKPT_START): página → HintGate; HintGate →
 //     writeMu.
-//   - Limpieza: Store.vacuumMu → closeMu (lectura) → Store.mu (lectura) → páginas (una hoja a la vez; con ella, en
+//   - Limpieza: Store.vacuumMu → closeMu (lectura) → Store.mu (lectura) → páginas (una hoja a la vez; antes de cada
+//     una mira si un DDL espera Store.mu con ddlMu tomado —Store.lockDDL sube Store.ddlWaiting— o si Close cerró
+//     stop, y se corta: btree.VacuumOptions.Stop, V2 y V3, tarea 113; con ella, en
 //     compartido, su hermana derecha para ver si comparte un id, y la página del mapa para poner su bit) → writeMu; la
 //     cadena de desborde se libera con la hoja ya soltada; la meta (KindSetFrozen) al final, sin hojas. Una escritura o
 //     una partición que encuentra la hoja con page.FlagAllVisible borra su bit (página del mapa) con la hoja bloqueada,
@@ -875,7 +891,9 @@
 // confirmación quedaría antes del punto de rehacer y fuera del archivo de estados guardado, y tras un corte se leería
 // como abortada. El catálogo que guardan crear y borrar un store (fuera del checkpoint) lleva los contadores del
 // último checkpoint con su countLSN, nunca los vivos: así sigue siendo coherente. El checkpointer de fondo mira cada
-// segundo si toca uno; el de Checkpoint(), el de Close y el de fin de recuperación no se reparten.
+// segundo si toca uno; el de Checkpoint(), el de Close y el de fin de recuperación no se reparten. Close (antes de
+// pedir closeMu) y un Checkpoint() que espera ckptMu apuran al repartido en curso (Engine.ckptHurry: pacer deja de
+// dormir), así Close no queda detrás de todo el reparto con el motor detenido (N3, tarea 110).
 //
 // Cambios ya reservados: en el paso 1, tras fijar el punto de rehacer, el checkpoint espera el WAL durable hasta el lsn
 // anterior (Engine.waitChanges). Cada cambio de página reserva su registro, aplica, marca sucia y recién después
@@ -903,7 +921,7 @@
 //     termina. xact Truncate(frozenXID del control): fija el límite aunque falten archivos y termina un truncado que
 //     un corte dejó a medias.
 //  4. wal.Open(fs, dir, opciones, redo, rehacer) recorre desde el punto de rehacer (wal.Start = segmento 1,
-//     desplazamiento 0, lsn 1 en un motor nuevo); en uno que no es nuevo debe aparecer el registro del checkpoint (si
+//     desplazamiento 32 —tras el encabezado del segmento—, lsn 1 en un motor nuevo); en uno que no es nuevo debe aparecer el registro del checkpoint (si
 //     no, ErrCorrupt). Por cada registro: crear, vaciar y borrar un store se rehacen sobre el catálogo (idempotentes:
 //     borrar y vaciar llevan el número de archivo esperado, y solo actúan si el store todavía lo tiene; el borrado
 //     borra los archivos del número si ya no es de ningún store, también los que dejó un corte); los bloques de un
@@ -1010,12 +1028,16 @@
 // rápida en la hoja, como nbtree (la raíz nunca se borra ni baja de nivel).
 //
 // Medido (TestDiskSteadyState): ventana deslizante de 20.000 ids (13 B) con valores de 256 B, uno de cada cuatro
-// reemplazado, limpieza de fondo cada 5 ms: el disco del store (sus dos forks) queda en 1,48 × los datos vivos (ids +
+// reemplazado, limpieza de fondo cada 5 ms: el disco del store (sus dos forks) queda en 1,38 × los datos vivos (ids +
 // valores) desde la segunda vuelta de la ventana (meta ≤ 1,5): hojas al 87 % (la partición al final deja la izquierda
 // al 90 %) con 32 B fijos por versión (28 de encabezado y 4 del puntero), más internas, libres y borradas en espera.
 // Con valores de 100 B da 1,65 × (pesan los 32 B por versión) y con 1 KB, 1,40 ×. Para lograrlo hizo falta además que
 // la limpieza quite la lápida de referencia de un id que nombra la clave alta de su hoja cuando a la derecha ya no
 // quedan versiones de ese id (antes quedaba para siempre y la hoja nunca se vaciaba: 13 × tras diez vueltas).
+// Desde la tarea 108 (2026-11-21; 1,43 antes) una escritura que no cabe poda primero las versiones muertas de la hoja
+// y una hoja con inserción ascendente local se parte en el punto de inserción («Llenado de las hojas» en
+// btree/doc.go): los índices de josefina pasan del 57–66 % al 79–82 % de llenado y el store de documentos ya no baja
+// del 85 % al 48 % tras actualizar (TestIndexHeaderShare).
 //
 // A confirmar (tarea 70): la pila de borradas es LIFO y se recicla mientras la de arriba sea segura (con un snapshot
 // largo abierto, las borradas antes de él esperan a las más nuevas); el reciclado solo al empezar cada pasada (la
@@ -1622,10 +1644,13 @@
 // DDL que lee (un store borrado antes de abrirlo da Store "").
 //
 //   - CreateLogicalSlot espera (hasta TRANSACTION_TIMEOUT, si no ErrBusy) a que terminen las transacciones en curso
-//     al crearla: sus primeros cambios pueden estar antes de lo que la ranura retiene. Su ConfirmedLSN queda en el
+//     al crearla: sus primeros cambios pueden estar antes de lo que la ranura retiene. Espera sin closeMu, contada en
+//     Engine.bg: Close la corta (ErrClosed, la ranura se borra; R4, tarea 112). Su ConfirmedLSN queda en el
 //     último registro reservado después (no en Published: con WAL_BUFFERS un commit diferido puede seguir en el
 //     búfer, tarea 102), así nunca entrega una transacción a medias.
-//   - Changes(slot) lee desde RestartLSN; ChangeReader.Next pasa cada registro por un búfer de reordenamiento por xid
+//   - Changes(slot) lee desde RestartLSN; ChangeReader.Next corre sin closeMu, contado en Engine.bg (Close lo espera
+//     y lo corta entre registros con ErrClosed), así fn puede leer del motor aunque Close esté en curso (R3, tarea
+//     112); pasa cada registro por un búfer de reordenamiento por xid
 //     y, en cada confirmación (KindCommit, o una escritura suelta con FlagCommit), entrega a fn sus cambios en el orden
 //     del WAL (ChangePut con el valor nuevo, ChangeDelete, ChangeCreate de Store o StoreIn, ChangeDrop de DropStore o
 //     de la cola de DDL, ChangeEmpty de Empty), con TxInfo{XID, CommitLSN}.

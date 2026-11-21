@@ -161,8 +161,10 @@ func (e *Engine) newReader(slot string, restart, confirmed page.LSN, f ChangeFil
 
 /**
 * next procesa el WAL durable desde donde iba y llama a fn con cada cambio de cada transacción que confirma, en orden
-* de confirmación, hasta entregar maxTx transacciones (≤ 0 = hasta alcanzar el WAL). fn corre sin candados del motor
-* salvo closeMu en lectura: puede leer, no debe cerrar el motor.
+* de confirmación, hasta entregar maxTx transacciones (≤ 0 = hasta alcanzar el WAL). Corre sin closeMu, contado en
+* Engine.bg como un respaldo: Close lo espera y lo corta (ErrClosed) entre registros. Así fn corre sin candados del
+* motor: puede leer (con Close en curso, la lectura da ErrClosed en vez de quedar detrás de su Lock; R3 de la
+* revisión del 2026-11-20); no debe cerrar el motor.
 * @param maxTx int, fn func(tx TxInfo, c Change) error
 * @return int: transacciones entregadas, error: el de fn (el lector queda inservible), ErrWalRemoved, ErrClosed
 **/
@@ -171,7 +173,9 @@ func (r *ChangeReader) next(maxTx int, fn func(tx TxInfo, c Change) error) (int,
 	if err := e.enterRead(); err != nil {
 		return 0, err
 	}
-	defer e.leave()
+	e.bg.Add(1) // con closeMu en lectura: Close todavía no llegó a bg.Wait
+	e.leave()
+	defer e.bg.Done()
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.err != nil {
@@ -195,6 +199,9 @@ func (r *ChangeReader) next(maxTx int, fn func(tx TxInfo, c Change) error) (int,
 			if maxTx > 0 && sent >= maxTx {
 				return errStopRead
 			}
+			if e.stopping() {
+				return ErrClosed
+			}
 			n, err := r.process(rec, fn)
 			if err != nil {
 				return err
@@ -207,6 +214,9 @@ func (r *ChangeReader) next(maxTx int, fn func(tx TxInfo, c Change) error) (int,
 		switch {
 		case errors.Is(err, errStopRead):
 			return sent, nil
+		case errors.Is(err, ErrClosed):
+			r.err = ErrClosed
+			return sent, r.err
 		case err != nil:
 			r.err = removedError(r.pos.LSN, err)
 			return sent, r.err

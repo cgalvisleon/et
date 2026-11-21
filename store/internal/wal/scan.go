@@ -15,7 +15,7 @@ import (
 
 // Start es la posición del primer registro de un WAL nuevo: el punto de rehacer de un motor que nunca hizo un
 // checkpoint.
-var Start = Position{Segment: 1, Offset: 0, LSN: 1}
+var Start = Position{Segment: 1, Offset: SegmentHeaderSize, LSN: 1}
 
 // scanBufferSize es el búfer de lectura de un recorrido: la recuperación lee los segmentos en secuencia.
 const scanBufferSize = 1 << 20
@@ -41,7 +41,7 @@ func (r *reader) Scan(from Position, fn func(rec *Record) error) (Position, erro
 // mayor que stop (el objetivo de una recuperación, Options.StopLSN), como si el WAL terminara ahí. onEnd, si no es
 // nil, recibe dónde termina la parte válida de cada segmento recorrido (Open lo usa para SizeSince y SegmentInfo).
 func scan(fsys vfs.FS, dir string, from Position, stop page.LSN, fn visitFunc, onEnd func(end Position)) (Position, error) {
-	if from.LSN == 0 || from.Segment == 0 || from.Offset < 0 {
+	if from.LSN == 0 || from.Segment == 0 || from.Offset < SegmentHeaderSize {
 		return from, fmt.Errorf(MSG_BAD_POSITION, from)
 	}
 	nums, err := listSegments(fsys, dir)
@@ -50,6 +50,9 @@ func scan(fsys vfs.FS, dir string, from Position, stop page.LSN, fn visitFunc, o
 	}
 	if !slices.Contains(nums, from.Segment) {
 		return from, fmt.Errorf(MSG_SEGMENT_GONE, ErrRemoved, from.Segment)
+	}
+	if err := checkStartHeader(fsys, dir, from); err != nil {
+		return from, err
 	}
 
 	s := getScanner()
@@ -73,17 +76,19 @@ func scan(fsys vfs.FS, dir string, from Position, stop page.LSN, fn visitFunc, o
 		if !slices.Contains(nums, next) {
 			return pos, nil
 		}
-		first, ok, err := s.firstLSN(fsys, dir, next)
+		h, state, err := readHeaderOf(fsys, dir, next)
 		if err != nil {
 			return pos, err
 		}
 		switch {
-		case !ok || first < pos.LSN:
-			return pos, nil // inválido o reciclado: el final del WAL
-		case first > pos.LSN:
-			return pos, fmt.Errorf(MSG_GAP, ErrCorrupted, next, first, pos.LSN)
+		case state == headerVersion:
+			return pos, versionError(next, h.Version)
+		case state != headerValid || h.Num != next || h.First < pos.LSN:
+			return pos, nil // sin encabezado, roto o de un repuesto reciclado: el final del WAL (checkSealed lo revisa)
+		case h.First > pos.LSN:
+			return pos, fmt.Errorf(MSG_GAP, ErrCorrupted, next, h.First, pos.LSN)
 		}
-		pos = Position{Segment: next, Offset: 0, LSN: pos.LSN}
+		pos = Position{Segment: next, Offset: SegmentHeaderSize, LSN: pos.LSN}
 	}
 }
 
@@ -182,20 +187,17 @@ func (s *segmentScanner) next(left int64) (int, bool, error) {
 	return n, ok, nil
 }
 
-// firstLSN lee el primer registro del segmento num. Devuelve su lsn y si es válido.
-func (s *segmentScanner) firstLSN(fsys vfs.FS, dir string, num uint64) (page.LSN, bool, error) {
-	file, err := fsys.OpenFile(segmentPath(dir, num), os.O_RDONLY)
+// firstLSN lee del encabezado del segmento num el lsn de su primer registro (el que tiene o el que va a tener, si
+// todavía no tiene ninguno). Devuelve si el encabezado es válido y de este segmento; otra versión es ErrFormatVersion.
+func firstLSN(fsys vfs.FS, dir string, num uint64) (page.LSN, bool, error) {
+	h, state, err := readHeaderOf(fsys, dir, num)
 	if err != nil {
 		return 0, false, err
 	}
-	defer file.Close()
-	size, err := file.Size()
-	if err != nil {
-		return 0, false, err
+	if state == headerVersion {
+		return 0, false, versionError(num, h.Version)
 	}
-	s.rd.Reset(io.NewSectionReader(file, 0, size))
-	_, ok, err := s.next(size)
-	return s.rec.LSN, ok, err
+	return h.First, state == headerValid && h.Num == num, nil
 }
 
 // readError: un final de archivo (completo o a medias) no es un error de lectura.

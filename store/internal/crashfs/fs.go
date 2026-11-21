@@ -120,7 +120,8 @@ func (m *memFS) checkSpace(grow int64) error {
 	return nil
 }
 
-// used suma los largos de los archivos con nombre (un nodo con dos nombres cuenta una vez).
+// used suma el lugar asignado de los archivos con nombre (un nodo con dos nombres cuenta una vez): lo escrito, sin
+// los huecos.
 func (m *memFS) used() int64 {
 	seen := map[*inode]bool{}
 	var total int64
@@ -128,7 +129,7 @@ func (m *memFS) used() int64 {
 		for _, node := range d.live {
 			if !seen[node] {
 				seen[node] = true
-				total += int64(len(node.data))
+				total += node.alloc.size()
 			}
 		}
 	}

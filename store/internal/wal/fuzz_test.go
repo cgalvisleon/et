@@ -252,7 +252,7 @@ func forgesRecord(junk []byte) bool {
 
 // FuzzRecoverSegment: con un segmento dañado (pisado, cortado, en ceros o con basura al final), Open devuelve un
 // prefijo exacto de la historia con todo lo anterior al daño, o falla con ErrCorrupted si el daño está en un
-// segmento sellado; y tras recuperar se sigue escribiendo y reabriendo bien. Corre sobre crashfs: en memoria, sin
+// segmento sellado o en el encabezado de cualquier segmento (es durable antes de sellar el anterior); y tras recuperar se sigue escribiendo y reabriendo bien. Corre sobre crashfs: en memoria, sin
 // fsync real.
 func FuzzRecoverSegment(f *testing.F) {
 	const template, dir = "/template", "/db"
@@ -265,6 +265,8 @@ func FuzzRecoverSegment(f *testing.F) {
 	f.Add(uint8(2), uint8(0), uint16(0), make([]byte, 64))
 	f.Add(uint8(3), uint8(last-1), uint16(0), encoded(f, testRecord(fuzzRecords+1), fuzzRecords+1))
 	f.Add(uint8(3), uint8(0), uint16(0), encoded(f, testRecord(5), 5))
+	f.Add(uint8(0), uint8(1), uint16(offHeaderFirst), []byte{0xff})          // el encabezado de un segmento siguiente
+	f.Add(uint8(1), uint8(last-1), uint16(SegmentHeaderSize/2), []byte(nil)) // el último, cortado en su encabezado
 	f.Fuzz(func(t *testing.T, mode, which uint8, pos uint16, junk []byte) {
 		fsys := crashfs.New()
 		copyDir(t, templateFS, template, fsys, dir)
@@ -277,7 +279,13 @@ func FuzzRecoverSegment(f *testing.F) {
 			return nil
 		})
 		if err != nil {
-			if !errors.Is(err, ErrCorrupted) || (!forged && (d.segment == last || d.append)) {
+			// Un encabezado dañado es corrupción en cualquier segmento, u «otra versión» si el daño cae en el campo
+			// de versión (se mira antes del crc: magia y versión son lo único fijo entre versiones).
+			header := !d.append && d.from < SegmentHeaderSize
+			if header && errors.Is(err, ErrFormatVersion) {
+				return
+			}
+			if !errors.Is(err, ErrCorrupted) || (!forged && !header && (d.segment == last || d.append)) {
 				t.Fatalf("Open falló con el daño %+v: %v", d, err)
 			}
 			return

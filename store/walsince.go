@@ -94,14 +94,18 @@ func removedError(lsn page.LSN, err error) error {
 }
 
 /**
-* corruptError traduce el daño que encuentra el paquete wal (wal.ErrCorrupted: un segmento sellado cortado, un hueco)
-* a ErrCorrupt, así errors.Is(err, ErrCorrupt) vale para todo daño del WAL (tarea 101).
+* corruptError traduce el daño que encuentra el paquete wal (wal.ErrCorrupted: un segmento sellado cortado, un hueco,
+* un encabezado de segmento roto) a ErrCorrupt, así errors.Is(err, ErrCorrupt) vale para todo daño del WAL (tarea
+* 101), y un segmento de otra versión (wal.ErrFormatVersion) a ErrFormatVersion.
 * @param err error
 * @return error
 **/
 func corruptError(err error) error {
-	if errors.Is(err, wal.ErrCorrupted) && !errors.Is(err, ErrCorrupt) {
+	switch {
+	case errors.Is(err, wal.ErrCorrupted) && !errors.Is(err, ErrCorrupt):
 		return fmt.Errorf("%w: %w", ErrCorrupt, err)
+	case errors.Is(err, wal.ErrFormatVersion) && !errors.Is(err, ErrFormatVersion):
+		return fmt.Errorf("%w: %w", ErrFormatVersion, err)
 	}
 	return err
 }

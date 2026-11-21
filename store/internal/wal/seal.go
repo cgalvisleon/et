@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"hash/crc32"
 	"os"
+	"slices"
 
 	"github.com/cgalvisleon/et/store/internal/vfs"
 )
@@ -63,7 +64,7 @@ func decodeTrailer(buf []byte, num uint64, size int64) (int64, bool) {
 		return 0, false
 	}
 	end := int64(binary.LittleEndian.Uint64(buf[offTrailerEnd:]))
-	if end < 0 || end > size-TrailerSize {
+	if end < SegmentHeaderSize || end > size-TrailerSize {
 		return 0, false
 	}
 	return end, true
@@ -118,8 +119,10 @@ func readTrailer(fsys vfs.FS, dir string, num uint64) (int64, bool, error) {
 
 /**
 * checkSealed comprueba que el final válido del WAL (end) no corte un segmento sellado: un registro inválido antes
-* del fin que promete su marca, o un segmento sellado después de end, es corrupción (los registros de un segmento
-* sellado tuvieron fsync). Solo el final del último segmento sin sellar puede ser una cola rota.
+* del fin que promete su marca, un segmento sellado después de end, o un final justo en el fin de un segmento sellado
+* cuyo siguiente existe (su encabezado fue durable antes del sellado, así que el recorrido tenía que seguir en él) es
+* corrupción (los registros de un segmento sellado tuvieron fsync). Solo el final del último segmento sin sellar
+* puede ser una cola rota.
 * @param fsys vfs.FS, dir string, end Position, nums []uint64: los segmentos del directorio
 * @return error: ErrCorrupted
 **/
@@ -138,6 +141,8 @@ func checkSealed(fsys vfs.FS, dir string, end Position, nums []uint64) error {
 			return fmt.Errorf(MSG_SEALED_AFTER, ErrCorrupted, num, end)
 		case end.Offset < sealedEnd:
 			return fmt.Errorf(MSG_SEALED_CUT, ErrCorrupted, end.Segment, end.Offset, end.LSN, sealedEnd)
+		case slices.Contains(nums, num+1):
+			return fmt.Errorf(MSG_SEALED_NEXT, ErrCorrupted, num, num+1, end.LSN)
 		}
 	}
 	return nil

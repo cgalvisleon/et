@@ -272,6 +272,9 @@ func (r *vacuumRun) downlink(d, stop page.BlockNumber) error {
 **/
 func (r *vacuumRun) chain(blk, stop page.BlockNumber) error {
 	for blk != 0 && blk != stop {
+		if r.opts.Stop != nil && r.opts.Stop() {
+			return ErrVacuumStopped
+		}
 		next, err := r.leaf(blk)
 		if err != nil {
 			return err
@@ -305,7 +308,7 @@ func (r *vacuumRun) leaf(blk page.BlockNumber) (page.BlockNumber, error) {
 		}
 		return next, nil
 	}
-	plan, err := r.t.planLeaf(n, r.opts, &r.carry)
+	plan, err := r.t.planLeaf(n, r.opts, &r.carry, true)
 	if err == nil {
 		err = r.t.vacuumLeaf(h, n, plan, r.opts.XID)
 	}
@@ -349,11 +352,13 @@ func (t *BTree) vacuumLeaf(h buffer.Handle, n node, plan leafPlan, xid page.XID)
 /**
 * planLeaf decide, con la hoja bloqueada en exclusivo, qué versiones quitar, cuáles marcar y cuáles congelar, y qué
 * bits del mapa le tocan. carry es el último id de la hoja anterior (sus versiones pueden seguir en esta) y al volver
-* es el último de esta.
-* @param n node, opts VacuumOptions, carry *vacuumGroup
+* es el último de esta. Con lookRight, si el último id puede seguir en la hermana derecha se mira ahí
+* (rightStartsWith); sin él (la poda de una escritura, que no recorre hermanas) se da por compartido y su lápida se
+* queda.
+* @param n node, opts VacuumOptions, carry *vacuumGroup, lookRight bool
 * @return leafPlan, error
 **/
-func (t *BTree) planLeaf(n node, opts VacuumOptions, carry *vacuumGroup) (leafPlan, error) {
+func (t *BTree) planLeaf(n node, opts VacuumOptions, carry *vacuumGroup, lookRight bool) (leafPlan, error) {
 	plan := leafPlan{oldest: opts.Horizon}
 	var g *vacuumGroup
 	for off := n.firstData(); off <= n.maxOff(); off++ {
@@ -374,8 +379,8 @@ func (t *BTree) planLeaf(n node, opts VacuumOptions, carry *vacuumGroup) (leafPl
 		}
 	}
 	if g != nil { // una hoja vacía deja pasar el grupo de la anterior
-		shared := false
-		if continuesRight(n, g.id) {
+		shared := continuesRight(n, g.id)
+		if shared && lookRight {
 			var err error
 			if shared, err = t.rightStartsWith(n, g.id); err != nil {
 				return leafPlan{}, err

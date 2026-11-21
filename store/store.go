@@ -37,6 +37,10 @@ type Store struct {
 
 	// batchWriters: lotes abiertos que escribieron en el store (DropStoreIn no lo borra si escribió otro).
 	batchWriters atomic.Int64
+
+	// ddlWaiting: DDL que esperan mu en escritura (con Engine.ddlMu tomado): la limpieza del store se corta en la
+	// próxima hoja para no tenerlos esperando toda la pasada, y con ellos al checkpoint (V2).
+	ddlWaiting atomic.Int32
 }
 
 // change es una escritura suelta: la versión nueva y su condición.
@@ -138,12 +142,36 @@ func (s *Store) pendingCreator() page.XID {
 }
 
 /**
+* lockDDL toma mu en escritura para un DDL: avisa antes a la limpieza en curso (ddlWaiting) para que suelte el store
+* en la próxima hoja.
+**/
+func (s *Store) lockDDL() {
+	s.ddlWaiting.Add(1)
+	s.mu.Lock()
+	s.ddlWaiting.Add(-1)
+}
+
+/**
 * markDropped espera a las operaciones en curso y deja el store inservible.
 **/
 func (s *Store) markDropped() {
-	s.mu.Lock()
+	s.lockDDL()
 	s.dropped = true
 	s.mu.Unlock()
+}
+
+/**
+* markDroppedIfIdle es markDropped si ningún lote abierto escribió en el store (un DropStore suelto, N4).
+* @return bool: si lo dejó inservible
+**/
+func (s *Store) markDroppedIfIdle() bool {
+	s.lockDDL()
+	defer s.mu.Unlock()
+	if s.batchWriters.Load() > 0 {
+		return false
+	}
+	s.dropped = true
+	return true
 }
 
 /**

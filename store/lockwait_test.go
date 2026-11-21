@@ -94,7 +94,9 @@ func TestLockWaitClose(t *testing.T) {
 	}
 }
 
-// (c) Una escritura suelta espera al lote B (con DDL); un DropStore suelto espera el store; B confirma.
+// (c) Una escritura suelta espera al lote B (con DDL); un DropStore suelto espera el store; B confirma. Desde N4
+// (2026-11-21) el DropStore también espera a B, que escribió en el store: tras la confirmación la escritura suelta y
+// el borrado compiten, y la escritura puede entrar antes del borrado.
 func TestLockWaitDropStore(t *testing.T) {
 	e, s := lockWaitEngine(t)
 	defer e.Close()
@@ -109,8 +111,11 @@ func TestLockWaitDropStore(t *testing.T) {
 	settle()
 	mustOK(t, waitErr(t, "Commit", goErr(tx.Commit), 5*time.Second))
 	mustOK(t, waitErr(t, "DropStore", drop, 5*time.Second))
-	if err := waitErr(t, "Put", w, 5*time.Second); !errors.Is(err, ErrStoreDropped) {
-		t.Fatalf("Put after DropStore: %v, want ErrStoreDropped", err)
+	if err := waitErr(t, "Put", w, 5*time.Second); err != nil && !errors.Is(err, ErrStoreDropped) {
+		t.Fatalf("Put around DropStore: %v, want nil or ErrStoreDropped", err)
+	}
+	if names := e.Stores(); len(names) != 1 || names[0] != "t" {
+		t.Fatalf("stores after the drop: %v, want [t]", names)
 	}
 }
 

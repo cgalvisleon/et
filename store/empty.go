@@ -28,7 +28,7 @@ func (s *Store) empty() error {
 	if n := e.openTx.Load(); n > 0 {
 		return fmt.Errorf(MSG_BUSY, ErrBusy, n)
 	}
-	s.mu.Lock()
+	s.lockDDL()
 	defer s.mu.Unlock()
 	if s.dropped {
 		return ErrStoreDropped

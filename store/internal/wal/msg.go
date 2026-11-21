@@ -26,6 +26,10 @@ const (
 	MSG_SEGMENT_EMPTY   = "wal: %w: sealed segment %d has no valid first record"
 	MSG_SEALED_CUT      = "wal: %w: invalid record in sealed segment %d at offset %d (lsn %d), its records end at offset %d"
 	MSG_SEALED_AFTER    = "wal: %w: sealed segment %d is past the end of the valid WAL at %+v"
+	MSG_SEALED_NEXT     = "wal: %w: segment %d is sealed but segment %d has no valid header for lsn %d"
+	MSG_HEADER_VERSION  = "wal: %w: segment %s is format version %d, this binary reads version %d"
+	MSG_HEADER_BAD      = "wal: %w: segment %d has an invalid header for position %+v"
+	MSG_HEADER_RAW      = "wal: %w: not a valid segment header"
 )
 
 var (

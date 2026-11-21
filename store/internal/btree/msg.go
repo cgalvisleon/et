@@ -30,6 +30,9 @@ var (
 
 	// ErrConfig: a Config le falta una pieza.
 	ErrConfig = errors.New("btree: invalid configuration")
+
+	// ErrVacuumStopped: VacuumOptions.Stop cortó la limpieza antes de terminar.
+	ErrVacuumStopped = errors.New("btree: vacuum stopped")
 )
 
 // Mensajes con detalle.

@@ -33,9 +33,13 @@
 //
 // # Disco lleno y disco lento
 //
-// SetCapacity acota la suma de los largos de los archivos con nombre. Lo que la pasaría falla con ErrNoSpace (que es
-// vfs.ErrNoSpace) sin escribir nada: una escritura o un Truncate que agrandan un archivo y la creación de un archivo
-// con el disco ya lleno; sobrescribir lo que ya existe no pide lugar. Si la capacidad se baja por debajo de lo usado
+// SetCapacity acota el lugar asignado de los archivos con nombre: cada archivo lleva sus tramos escritos (extents.go),
+// y lo que queda dentro de su largo sin escribir es un hueco, que se lee como ceros y no ocupa disco, como en ext4 y
+// XFS. Lo que pasaría la capacidad falla con ErrNoSpace (que es vfs.ErrNoSpace) sin escribir nada: una escritura con
+// bytes sin lugar (nuevos al final o dentro de un hueco) y la creación de un archivo con el disco ya lleno;
+// sobrescribir lo ya escrito no pide lugar. Un Truncate que agranda y una escritura más allá del final no reservan el
+// hueco que dejan (tarea 107: así un disco lleno sale al escribir en el hueco, no al agrandar); achicar libera lo
+// cortado. Tras un corte, el lugar asignado es el del último Sync más el de lo que sobrevivió. Si la capacidad se baja por debajo de lo usado
 // (un volumen fino o la asignación diferida, que prometieron lugar y no lo tenían), también falla con ErrNoSpace el
 // Sync de un archivo con escrituras pendientes (las olvida, como todo Sync fallido) y el SyncDir de un directorio con
 // cambios pendientes. Subir la capacidad (o quitarla con 0) vuelve a dejar escribir. Used da lo usado, para fijar un
@@ -48,6 +52,7 @@
 //
 // Escrituras a medias dentro de un sector; bits cambiados o sectores con basura (eso lo cubre el fuzzing de páginas y
 // del WAL); una escritura que falla habiendo escrito una parte; que el largo de un archivo crezca sin sus datos
-// (bloques en ceros tras el final viejo, salvo los huecos que dejen sectores perdidos entre otros que sí quedan);
+// (bloques en ceros tras el final viejo, salvo los huecos que dejen sectores perdidos entre otros que sí quedan); el
+// lugar se cuenta por byte, no por bloque del sistema de archivos;
 // orden entre directorios distintos ni entre los datos y los nombres; permisos, enlaces, fechas.
 package crashfs

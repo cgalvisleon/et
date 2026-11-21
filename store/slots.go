@@ -167,7 +167,8 @@ func validSlotName(name string) bool {
 * createSlot crea una ranura que retiene el WAL desde el próximo registro. Una lógica espera antes a que terminen
 * las transacciones que estaban en curso (hasta TRANSACTION_TIMEOUT), como PostgreSQL al buscar su punto
 * consistente: su ConfirmedLSN queda en el último registro reservado después de eso (también lo que sigue en el
-* búfer del WAL, como un commit diferido), y el decodificado no entrega nada anterior.
+* búfer del WAL, como un commit diferido), y el decodificado no entrega nada anterior. Esa espera corre sin closeMu,
+* contada en Engine.bg como un respaldo (R4 de la revisión del 2026-11-20): Close la corta y la ranura se borra.
 * @param name string, logical bool
 * @return SlotInfo, error: ErrSlotExists, ErrSlotLimit, ErrBusy (lógica: no terminaron), ErrReadOnly (lógica en una
 * réplica), ErrDiskFull, ErrClosed, ErrFailed
@@ -182,10 +183,15 @@ func (e *Engine) createSlot(name string, logical bool) (SlotInfo, error) {
 	if err := e.enterSlots(); err != nil {
 		return SlotInfo{}, err
 	}
-	defer e.leave()
-	s, err := e.addSlot(name, logical)
-	if err != nil || !logical {
-		return s, err
+	if !logical {
+		defer e.leave()
+		return e.addSlot(name, logical)
+	}
+	e.bg.Add(1) // con closeMu en lectura: Close todavía no llegó a bg.Wait
+	e.leave()
+	defer e.bg.Done()
+	if _, err := e.addSlot(name, logical); err != nil {
+		return SlotInfo{}, err
 	}
 	if err := e.waitConsistent(name); err != nil {
 		return SlotInfo{}, errors.Join(err, e.dropSlotLocked(name))
@@ -232,11 +238,15 @@ func (e *Engine) addSlot(name string, logical bool) (SlotInfo, error) {
 	return s.info(e), nil
 }
 
+// consistentPoll es cada cuánto waitConsistent mira si Close la corta.
+const consistentPoll = 50 * time.Millisecond
+
 /**
-* waitConsistent espera, sin candados, a que terminen las transacciones en curso al crear una ranura lógica (sus
-* cambios pueden haber empezado antes de lo que la ranura retiene), hasta TRANSACTION_TIMEOUT.
+* waitConsistent espera, sin candados (ni closeMu), a que terminen las transacciones en curso al crear una ranura
+* lógica (sus cambios pueden haber empezado antes de lo que la ranura retiene), hasta TRANSACTION_TIMEOUT; mira
+* stop cada consistentPoll.
 * @param name string
-* @return error: ErrBusy si no terminan
+* @return error: ErrBusy si no terminan, ErrClosed si el motor se cierra
 **/
 func (e *Engine) waitConsistent(name string) error {
 	limit := e.cfg.txTimeout
@@ -245,8 +255,13 @@ func (e *Engine) waitConsistent(name string) error {
 	}
 	deadline := time.Now().Add(limit)
 	for _, xid := range e.txs.Snapshot(0).InProgress {
-		if e.txs.Wait(xid, max(time.Until(deadline), time.Millisecond)) != nil {
-			return fmt.Errorf(MSG_SLOT_BUSY, ErrBusy, name)
+		for e.txs.Wait(xid, max(min(time.Until(deadline), consistentPoll), time.Millisecond)) != nil {
+			if e.stopping() {
+				return ErrClosed
+			}
+			if time.Now().After(deadline) {
+				return fmt.Errorf(MSG_SLOT_BUSY, ErrBusy, name)
+			}
 		}
 	}
 	return nil

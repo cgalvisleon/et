@@ -12,15 +12,51 @@
 //
 // # Segmentos
 //
-// wal/<n:%010d>.seg, n desde 1, de hasta WAL_SEGMENT_SIZE bytes (128 MB por omisión). Un registro nunca cruza
-// segmentos: si no cabe en lo que queda del activo, se sella el activo (sus escrituras terminadas y fsync) y se
-// sigue en el siguiente. Un segmento reciclado (renombrado a un número futuro tras un checkpoint) conserva registros
-// viejos con CRC válido: el chequeo de lsn contiguo los descarta.
+// wal/<n:%010d>.seg, n desde 1, de hasta WAL_SEGMENT_SIZE bytes (128 MB por omisión): encabezado (32 B), registros
+// desde el byte 32 y, si está sellado, la marca de sellado en sus últimos 32 B. Un registro nunca cruza segmentos:
+// si no cabe en lo que queda del activo, se sella el activo (sus escrituras terminadas y fsync) y se sigue en el
+// siguiente. Un segmento reciclado (renombrado a un número futuro tras un checkpoint) conserva su encabezado viejo
+// (otro número) y registros viejos con CRC válido: el encabezado y el chequeo de lsn contiguo los descartan.
+//
+// # Encabezado del segmento (pregunta 76, tarea 54)
+//
+// Los primeros SegmentHeaderSize = 32 bytes de cada segmento, como el long page header de PostgreSQL: un segmento
+// suelto (archivado, en un respaldo, recibido por una réplica) dice su versión sin el control.
+//
+//	0   4 crc      CRC-32C de [4, 32)
+//	4   4 magic    0x47455357 («WSEG»)
+//	8   4 version  FormatVersion (= control.FormatVersion, que la toma de aquí: un solo número)
+//	12  4 cero     reservado
+//	16  8 num      número del segmento (uno reciclado conserva el de su número viejo, que no vale para el nuevo)
+//	24  8 first    lsn de su primer registro (el que tiene o el que va a tener)
+//
+// Lo mínimo útil: magia y versión (fijas para siempre en los bytes 4 y 8: un binario de otra versión las reconoce
+// antes del crc), el número (descarta un repuesto reciclado y un archivo renombrado) y el lsn inicial (Locate,
+// SegmentOf y SegmentInfo lo leen sin recorrer registros; el paso al siguiente segmento exige first = el lsn que
+// sigue, o es un hueco). No lleva el tamaño de segmento (un segmento sellado mide eso, y la réplica ya exige las
+// mismas posiciones) ni un identificador del sistema (el control no tiene uno; agregarlo sería una versión nueva).
+//
+// Quién lo escribe: rotate, en el siguiente, con fsync, entre el fsync de los registros del activo y su marca de
+// sellado (+1 fsync por rotación). Ese orden da las dos reglas: un encabezado durable nunca promete un lsn que el
+// activo no tiene en disco (al revés, un corte entre los dos fsync deja un hueco falso: TestReplicaCrash en la VM lo
+// encontró; TestRotateSyncOrder lo fija), y un segmento sellado siempre tiene el siguiente con su encabezado durable.
+// Y Open, en el activo sin registros cuyo
+// encabezado falta (el primero de un motor nuevo, o uno cortado antes de que fuera durable: ensureHeader). La
+// réplica rota igual al recibir el primer registro de un segmento, con el mismo número y el mismo lsn: su encabezado
+// es idéntico al del primario y las posiciones (el primer registro en el byte 32) coinciden byte a byte.
+//
+// Quién lo valida: el recorrido (scan: Open, la recuperación, OpenAt, Read de WalSince y de la réplica) en el
+// segmento donde empieza (checkStartHeader: de este número, de esta versión, first ≤ from; ausente solo si from es
+// el byte 32) y en cada paso al siguiente (sin encabezado, roto o reciclado = el final del WAL; first mayor = hueco,
+// ErrCorrupted; otra versión = ErrFormatVersion); checkSealed (un final justo en el fin de un segmento sellado cuyo
+// siguiente existe es ErrCorrupted: su encabezado era durable); Locate, SegmentOf y SegmentInfo (el archivo
+// continuo); y OtherVersion, que checkFormat del motor llama antes de tocar nada (ErrFormatVersion del motor).
+// ParseSegmentHeader lo lee desde fuera del paquete.
 //
 // # Marca de sellado (tarea 90)
 //
 // Los registros de un segmento terminan antes de WAL_SEGMENT_SIZE − TrailerSize (TrailerSize = 32; Open exige
-// WAL_SEGMENT_SIZE ≥ MaxRecordSize + TrailerSize). Al sellarlo (rotate: Switch, o un registro que no cabe), después
+// WAL_SEGMENT_SIZE ≥ SegmentHeaderSize + MaxRecordSize + TrailerSize). Al sellarlo (rotate: Switch, o un registro que no cabe), después
 // del fsync de sus registros se escribe en sus últimos 32 bytes la marca de sellado y se hace otro fsync, así la marca
 // nunca es durable antes que los registros que promete (un fsync fallido no deja un WAL que no abre):
 //
@@ -33,9 +69,10 @@
 // Al abrir, solo el último segmento sin sellar puede terminar en un registro roto (una cola de escrituras sin fsync).
 // Si el final válido cae antes del end de la marca de su segmento, o queda un segmento sellado después del final, es
 // corrupción (bit rot, una escritura perdida por el disco): Open devuelve ErrCorrupted sin cortar nada (checkSealed),
-// salvo que el corte sea el objetivo de Options.StopLSN. Un segmento sin marca (escrito por una versión anterior, o con
-// registros en esa zona) se trata como antes. Un segmento sellado que Open reabre como activo (el siguiente quedó
-// vacío) sigue recibiendo registros después de su end: la marca vieja solo protege lo que ya promete.
+// salvo que el corte sea el objetivo de Options.StopLSN. También lo es un final justo en el end de un segmento
+// sellado cuyo siguiente existe: el encabezado del siguiente se hizo durable antes de sellar (ver «Encabezado del
+// segmento»), así que el recorrido tenía que seguir en él. Un segmento sin marca (con registros en esa zona) se trata
+// como uno sin sellar.
 //
 // # Registro (little-endian)
 //
@@ -91,7 +128,7 @@
 // # Abrir y recuperar
 //
 // Open(fs, dir, opts, redo, fn) recorre el WAL desde redo (el punto de rehacer del control, o Start = segmento 1,
-// desplazamiento 0, lsn 1 en un motor nuevo) llamando a fn con cada registro, comprueba que el final no corte un
+// desplazamiento 32 —tras el encabezado—, lsn 1 en un motor nuevo) llamando a fn con cada registro, comprueba que el final no corte un
 // segmento sellado (ver «Marca de sellado»), corta la cola (el resto del último segmento válido y los segmentos
 // siguientes enteros: un registro viejo nunca confirmado podría quedar justo donde termina uno nuevo) y deja el WAL
 // listo para escribir a continuación. NewReader da un Reader para recorrer sin
@@ -126,7 +163,7 @@
 //
 // Para el archivo continuo del motor (tarea 66; la retención es Hold): ActiveSegment (atómico) es el segmento activo,
 // y todo segmento menor que existe está sellado y no cambia. Switch sella el activo aunque no esté lleno (como
-// pg_switch_wal; con el activo vacío no hace nada): es una rotación, así que con preasignación puede dar ErrNoRoom
+// pg_switch_wal; con el activo sin registros, solo su encabezado, no hace nada): es una rotación, así que con preasignación puede dar ErrNoRoom
 // sin tocar nada. Scan sigue de un segmento sellado así al siguiente igual que de uno lleno (el primer registro del
 // siguiente tiene el lsn contiguo). SegmentInfo(num) da de un segmento sellado el lsn de su primer registro y la
 // posición siguiente al último (End.Offset = bytes válidos): el final sale de lo anotado al sellarlo o al recorrerlo en
@@ -166,8 +203,8 @@
 // de bytes y entrega cada registro con su posición y sus bytes tal cual; Locate ubica un lsn (el segmento cuyo primer
 // registro es ≤ lsn, recorrido hasta él) y SegmentOf solo su segmento (lee el primer registro de cada uno); los dos dan
 // ErrRemoved si ya se recicló, igual que Scan desde un segmento que no está. En la réplica, Append escribe un registro
-// ya armado en la misma posición que en el primario (el final del activo, o el principio del siguiente: rota), así el
-// WAL es una copia byte a byte; un lsn o una posición que no siguen dan ErrOutOfOrder sin escribir nada. SetRedo fija
+// ya armado en la misma posición que en el primario (el final del activo, o el byte 32 del siguiente: rota y escribe
+// el mismo encabezado), así el WAL es una copia byte a byte; un lsn o una posición que no siguen dan ErrOutOfOrder sin escribir nada. SetRedo fija
 // el punto de rehacer sin escribir (los restartpoints) y Decode lee un registro entero. Los recorridos reusan sus
 // búferes (sync.Pool).
 package wal

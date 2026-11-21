@@ -56,10 +56,12 @@ type Api struct {
 	errorStatusNotFound []string                                                         `json:"-"`
 	endpoints           []Endpoint                                                       `json:"-"`
 	rpcStarted          bool                                                             `json:"-"`
+	mcp                 *MCPConfig                                                       `json:"-"`
 }
 
 /**
-* Endpoint: A route mounted by the Api (Public, Session or Protected), with the path already prefixed.
+* Endpoint: A route mounted by the Api (Public, Session or Protected), with the path already prefixed; Access is public,
+* session or protected and Doc its contract, if it has one.
 **/
 type Endpoint struct {
 	PackageName string `json:"packageName"`
@@ -67,20 +69,34 @@ type Endpoint struct {
 	Method      string `json:"method"`
 	Path        string `json:"path"`
 	Name        string `json:"name"`
+	Access      string `json:"access"`
+	Doc         *Doc   `json:"doc,omitempty"`
 }
 
+// Access of an Endpoint
+const (
+	AccessPublic    = "public"
+	AccessSession   = "session"
+	AccessProtected = "protected"
+)
+
 /**
-* ToJson: Convert the Endpoint to a JSON object.
+* ToJson: Convert the Endpoint to a JSON object; doc only if the route has one.
 * @return et.Json
 **/
 func (s *Endpoint) ToJson() et.Json {
-	return et.Json{
+	result := et.Json{
 		"packageName": s.PackageName,
 		"group":       s.Group,
 		"method":      s.Method,
 		"path":        s.Path,
 		"name":        s.Name,
+		"access":      s.Access,
 	}
+	if s.Doc != nil {
+		result["doc"] = s.Doc.ToJson()
+	}
+	return result
 }
 
 /**
@@ -184,7 +200,18 @@ func (s *Api) UseRegisterEndpoint(registerEndpoint func(packageName, group, meth
 * @return error
 **/
 func (s *Api) RegisterEndpoint(packageName, group, method, path, name string) error {
-	s.endpoints = append(s.endpoints, Endpoint{PackageName: packageName, Group: group, Method: method, Path: path, Name: name})
+	endpoint := Endpoint{PackageName: packageName, Group: group, Method: method, Path: path, Name: name}
+	return s.registerRoute(endpoint)
+}
+
+/**
+* registerRoute: Keeps the endpoint (with its access and doc) and registers it with the UseRegisterEndpoint hook
+* @param endpoint Endpoint
+* @return error
+**/
+func (s *Api) registerRoute(endpoint Endpoint) error {
+	s.endpoints = append(s.endpoints, endpoint)
+	packageName, group, method, path, name := endpoint.PackageName, endpoint.Group, endpoint.Method, endpoint.Path, endpoint.Name
 	if s.registerEndpoint == nil {
 		return nil
 	}
@@ -246,7 +273,15 @@ func (s *Api) MountRpc(services any) error {
 }
 
 /**
-* ListRpcs: The RPC methods mounted by the service (GET /rpcs): {packageName, method, host, port, inputs, output}
+* DocRpc: The contract of an RPC method ("Struct.Method"), published by GET /rpcs; Query and Header do not apply
+* @param method string, doc Doc
+**/
+func (s *Api) DocRpc(method string, doc Doc) {
+	jrpc.SetDoc(method, doc.ToJson())
+}
+
+/**
+* ListRpcs: The RPC methods mounted by the service (GET /rpcs): {packageName, method, host, port, inputs, output, doc}
 * @param r *http.Request, body et.Json
 * @return et.Items, error
 **/
@@ -257,17 +292,19 @@ func (s *Api) ListRpcs(r *http.Request, body et.Json) (et.Items, error) {
 }
 
 /**
-* Public: A route without token; it is published to the endpoint catalog with its name.
-* @param method, path, name string, handler http.HandlerFunc
+* Public: A route without token; it is published to the endpoint catalog with its name and, if given, its contract.
+* @param group, method, path, name string, handler http.HandlerFunc, docs ...Doc
 **/
-func (s *Api) Public(group, method, path, name string, handler http.HandlerFunc) {
+func (s *Api) Public(group, method, path, name string, handler http.HandlerFunc, docs ...Doc) {
 	path = s.getPath(path)
-	s.RegisterEndpoint(s.Name, group, method, path, name)
+	doc := docOf(docs)
+	s.registerRoute(Endpoint{PackageName: s.Name, Group: group, Method: method, Path: path, Name: name, Access: AccessPublic, Doc: doc})
 	middlewares := make([]func(http.Handler) http.Handler, 0)
 	middlewares = append(middlewares, s.rateLimitMiddleware)
 	if s.idempotency != nil {
 		middlewares = append(middlewares, s.idempotency...)
 	}
+	middlewares = withValidate(middlewares, doc)
 	With(s.Router, Route{
 		Method:      method,
 		Path:        path,
@@ -278,12 +315,14 @@ func (s *Api) Public(group, method, path, name string, handler http.HandlerFunc)
 }
 
 /**
-* Session: A route with token that does not check the role; it is published to the endpoint catalog with its name.
-* @param method, path, name string, handler http.HandlerFunc
+* Session: A route with token that does not check the role; it is published to the endpoint catalog with its name and,
+* if given, its contract.
+* @param group, method, path, name string, handler http.HandlerFunc, docs ...Doc
 **/
-func (s *Api) Session(group, method, path, name string, handler http.HandlerFunc) {
+func (s *Api) Session(group, method, path, name string, handler http.HandlerFunc, docs ...Doc) {
 	path = s.getPath(path)
-	s.RegisterEndpoint(s.Name, group, method, path, name)
+	doc := docOf(docs)
+	s.registerRoute(Endpoint{PackageName: s.Name, Group: group, Method: method, Path: path, Name: name, Access: AccessSession, Doc: doc})
 	middlewares := make([]func(http.Handler) http.Handler, 0)
 	middlewares = append(middlewares, s.rateLimitMiddleware)
 	if s.authentication != nil {
@@ -292,6 +331,7 @@ func (s *Api) Session(group, method, path, name string, handler http.HandlerFunc
 	if s.idempotency != nil {
 		middlewares = append(middlewares, s.idempotency...)
 	}
+	middlewares = withValidate(middlewares, doc)
 	With(s.Router, Route{
 		Method:      method,
 		Path:        path,
@@ -303,12 +343,14 @@ func (s *Api) Session(group, method, path, name string, handler http.HandlerFunc
 }
 
 /**
-* Protected: A route with token and the role's authorization, published to the endpoint catalog in its group.
-* @param group, method, path, name string, handler http.HandlerFunc
+* Protected: A route with token and the role's authorization, published to the endpoint catalog in its group with, if
+* given, its contract.
+* @param group, method, path, name string, handler http.HandlerFunc, docs ...Doc
 **/
-func (s *Api) Protected(group, method, path, name string, handler http.HandlerFunc) {
+func (s *Api) Protected(group, method, path, name string, handler http.HandlerFunc, docs ...Doc) {
 	path = s.getPath(path)
-	s.RegisterEndpoint(s.Name, group, method, path, name)
+	doc := docOf(docs)
+	s.registerRoute(Endpoint{PackageName: s.Name, Group: group, Method: method, Path: path, Name: name, Access: AccessProtected, Doc: doc})
 	middlewares := make([]func(http.Handler) http.Handler, 0)
 	middlewares = append(middlewares, s.rateLimitMiddleware)
 	if s.authentication != nil {
@@ -320,6 +362,7 @@ func (s *Api) Protected(group, method, path, name string, handler http.HandlerFu
 	if s.authorization != nil {
 		middlewares = append(middlewares, s.authorization(method, path))
 	}
+	middlewares = withValidate(middlewares, doc)
 	With(s.Router, Route{
 		Method:      method,
 		Path:        path,
@@ -331,6 +374,19 @@ func (s *Api) Protected(group, method, path, name string, handler http.HandlerFu
 }
 
 // ---------- Helpers ----------
+
+/**
+* withValidate: The middlewares plus the validation of the query and the body when the doc asks for it (Validate)
+* @param middlewares []func(http.Handler) http.Handler, doc *Doc
+* @return []func(http.Handler) http.Handler
+**/
+func withValidate(middlewares []func(http.Handler) http.Handler, doc *Doc) []func(http.Handler) http.Handler {
+	if doc == nil || !doc.Validate {
+		return middlewares
+	}
+
+	return append(middlewares, validateMiddleware(doc))
+}
 
 /**
 * ReadBody

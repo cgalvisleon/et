@@ -86,6 +86,10 @@ type Engine struct {
 	// ckptMu: un checkpoint a la vez.
 	ckptMu sync.Mutex
 
+	// ckptHurry, mayor que 0, apura al checkpoint repartido en curso (pacer deja de dormir): lo suben Close, antes de
+	// esperar closeMu, y un Checkpoint() mientras espera ckptMu (N3 de la revisión del 2026-11-20).
+	ckptHurry atomic.Int32
+
 	// commitMu: una operación lo tiene en lectura desde antes de reservar su registro hasta anotar su estado en el
 	// archivo de estados; el checkpoint lo toma en escritura tras fijar el punto de rehacer, así ninguna
 	// confirmación anterior al punto de rehacer queda fuera del archivo de estados que guarda (delayChkpt de
@@ -201,12 +205,14 @@ func open(base vfs.FS, dir string, cfg config) (*Engine, error) {
 }
 
 /**
-* close detiene las operaciones nuevas, espera a las que están en curso (también la limpieza de un store), detiene el
-* checkpointer, el escritor del WAL y la limpieza de fondo, hace el checkpoint final (state = cerrado bien) y cierra todo. Si el motor quedó inutilizable no escribe nada y devuelve ese fallo.
+* close apura el checkpoint repartido en curso, detiene las operaciones nuevas, espera a las que están en curso
+* (también la limpieza de un store), detiene el checkpointer, el escritor del WAL y la limpieza de fondo, hace el
+* checkpoint final (state = cerrado bien) y cierra todo. Si el motor quedó inutilizable no escribe nada y devuelve ese fallo.
 * Cerrar dos veces no hace nada.
 * @return error
 **/
 func (e *Engine) close() error {
+	e.ckptHurry.Add(1) // antes de closeMu: un Checkpoint() con closeMu en lectura puede esperar al de fondo
 	e.closeMu.Lock()
 	if e.closed {
 		e.closeMu.Unlock()
@@ -266,6 +272,19 @@ func (e *Engine) enter() error {
 		return err
 	}
 	return nil
+}
+
+/**
+* stopping dice si Close ya cerró stop: lo miran los trabajos largos que corren contados en bg, sin closeMu.
+* @return bool
+**/
+func (e *Engine) stopping() bool {
+	select {
+	case <-e.stop:
+		return true
+	default:
+		return false
+	}
 }
 
 /**

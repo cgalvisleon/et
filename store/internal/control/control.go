@@ -14,8 +14,9 @@ const (
 	CatalogFileName = "catalog"
 	CatalogTempName = "catalog.tmp"
 
-	// FormatVersion es la versión del formato en disco del motor (control, catálogo, páginas y WAL).
-	FormatVersion = 1
+	// FormatVersion es la versión del formato en disco del motor (control, catálogo, páginas y WAL): la del encabezado
+	// de los segmentos del WAL, así hay un solo número.
+	FormatVersion = wal.FormatVersion
 
 	ControlMagic = 0x45544354 // "ETCT"
 	CatalogMagic = 0x45544347 // "ETCG"

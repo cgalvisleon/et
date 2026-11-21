@@ -61,14 +61,15 @@ type FS interface {
 	// FailSyncAfter es como FailAfter pero cuenta solo Sync y SyncDir: las escrituras siguen funcionando.
 	FailSyncAfter(n int)
 
-	// SetCapacity fija el tamaño del disco en bytes (la suma de los largos de los archivos con nombre): una escritura
-	// o un Truncate que lo pasen fallan con ErrNoSpace sin escribir nada, y crear un archivo con el disco lleno
-	// también. Con la capacidad por debajo de lo usado (un disco que prometió lugar y no lo tenía, como un volumen
+	// SetCapacity fija el tamaño del disco en bytes (la suma del lugar asignado de los archivos con nombre: los bytes
+	// escritos, sin los huecos): una escritura que lo pase falla con ErrNoSpace sin escribir nada, también la que cae
+	// dentro de un hueco, y crear un archivo con el disco lleno también. Un Truncate que agranda o una escritura más
+	// allá del final dejan un hueco, que no ocupa lugar (como ext4 y XFS). Con la capacidad por debajo de lo usado (un disco que prometió lugar y no lo tenía, como un volumen
 	// fino o la asignación diferida), además falla con ErrNoSpace el Sync de un archivo con escrituras pendientes, que
 	// las olvida como cualquier Sync fallido. Subir la capacidad vuelve a dejar escribir. n <= 0 es sin límite.
 	SetCapacity(n int64)
 
-	// Used es lo que ocupa el disco en bytes: la suma de los largos de los archivos con nombre.
+	// Used es lo que ocupa el disco en bytes: la suma del lugar asignado de los archivos con nombre (sin los huecos).
 	Used() int64
 
 	// SetDelay agrega una demora a cada escritura (WriteAt, Truncate) y a cada Sync o SyncDir, antes de hacerlos y

@@ -53,6 +53,12 @@ type manager struct {
 	dirDirty bool
 	failed   error // primer fsync fallido: desde ahí todo devuelve este error
 	closed   bool
+
+	// evicting cuenta las expulsiones de descriptores sucios con su fsync en curso; evicted avisa (con mu) cuando
+	// una termina. SyncAll las espera: un fsync de expulsión que falla después de que SyncAll miró failed no debe
+	// dejarlo volver con éxito (S2 de la revisión del 2026-11-20).
+	evicting int
+	evicted  *sync.Cond
 }
 
 /**
@@ -81,6 +87,7 @@ func open(fs vfs.FS, dir string, maxFiles int, blocksPerFile page.BlockNumber) (
 		forks:         map[forkKey]*forkState{},
 		dirty:         map[segKey]struct{}{},
 	}
+	m.evicted = sync.NewCond(&m.mu)
 	m.files = newFileCache(fs, maxFiles, m.evict)
 	return m, nil
 }
@@ -284,11 +291,15 @@ func (m *manager) Sync(file FileNo, fork Fork) error {
 	if err != nil {
 		return err
 	}
-	return m.syncHandles(handles)
+	if err := m.syncHandles(handles); err != nil {
+		return err
+	}
+	return m.check() // un fsync de expulsión que falló mientras tanto
 }
 
 /**
-* SyncAll hace fsync de todos los archivos escritos desde su último fsync (al terminar un checkpoint).
+* SyncAll hace fsync de todos los archivos escritos desde su último fsync (al terminar un checkpoint). Antes de volver
+* espera los fsync de expulsión en curso y mira el fallo del gestor: un éxito suyo cubre también a esos.
 * @return error
 **/
 func (m *manager) SyncAll() error {
@@ -307,7 +318,23 @@ func (m *manager) SyncAll() error {
 			return err
 		}
 	}
-	return m.SyncDir()
+	if err := m.SyncDir(); err != nil {
+		return err
+	}
+	m.waitEvictions()
+	return m.check()
+}
+
+/**
+* waitEvictions espera a que terminen los fsync de expulsión en curso (evict): su fallo queda en failed antes de que
+* SyncAll lo mire al final.
+**/
+func (m *manager) waitEvictions() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for m.evicting > 0 {
+		m.evicted.Wait()
+	}
 }
 
 /**
@@ -681,11 +708,18 @@ func (m *manager) syncHandles(handles []*handle) error {
 func (m *manager) evict(h *handle) {
 	m.mu.Lock()
 	_, dirty := m.dirty[h.key]
+	if dirty {
+		m.evicting++
+	}
 	m.mu.Unlock()
 	if dirty {
 		if err := vfs.FlushFile(h.f); err != nil {
 			m.fail(fmt.Errorf("smgr: fsync de %s al cerrarlo: %w", m.segName(h.key), err))
 		}
+		m.mu.Lock()
+		m.evicting--
+		m.evicted.Broadcast()
+		m.mu.Unlock()
 	}
 	h.f.Close()
 }

@@ -65,21 +65,27 @@ func (c *crash) dirPrefix(n int) int {
 	return c.rng.IntN(n + 1)
 }
 
-// survivor calcula el contenido de un archivo tras el corte: lo durable más lo que sobreviva de lo pendiente.
-func (c *crash) survivor(node *inode) []byte {
+// survivor calcula el contenido de un archivo tras el corte, lo durable más lo que sobreviva de lo pendiente, y su
+// lugar asignado: el del último Sync más el de lo que sobrevivió.
+func (c *crash) survivor(node *inode) ([]byte, extents) {
 	data := append([]byte(nil), node.durable...)
+	alloc := node.durableAlloc.clone()
+	keep := func(op fileOp) {
+		data = op.apply(data)
+		alloc = op.place(alloc)
+	}
 	for _, op := range node.pending {
 		if c.mode != TornWrites || op.truncate {
 			if c.lucky() {
-				data = op.apply(data)
+				keep(op)
 			}
 			continue
 		}
 		for _, piece := range op.sectors(c.sector) {
 			if c.lucky() {
-				data = piece.apply(data)
+				keep(piece)
 			}
 		}
 	}
-	return data
+	return data, alloc
 }

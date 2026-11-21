@@ -1,6 +1,7 @@
 package store
 
 import (
+	"errors"
 	"sync"
 
 	"github.com/cgalvisleon/et/store/internal/btree"
@@ -102,7 +103,9 @@ func (e *Engine) vacuumOptions(horizon, frozen page.XID) btree.VacuumOptions {
 
 /**
 * freezeStore limpia el árbol del store y, si la pasada lo cubrió entero (Complete), sube su frozenXID en la meta;
-* anota el resultado en el motor. Con vacuumMu y el store tomado en lectura.
+* anota el resultado en el motor. Con vacuumMu y el store tomado en lectura. Un DDL que espera el store o Close cortan
+* la pasada en la próxima hoja (btree.VacuumOptions.Stop): vuelve sin error y sin subir el frozenXID; la próxima
+* limpieza sigue.
 * @param horizon page.XID
 * @return error
 **/
@@ -114,9 +117,13 @@ func (s *Store) freezeStore(horizon page.XID) error {
 	frozen = s.e.frozen.atLeast(frozen)
 	opts := s.e.vacuumOptions(horizon, frozen)
 	opts.Free, opts.NextXID = s.freeDead, s.e.txs.NextXID
+	opts.Stop = func() bool { return s.ddlWaiting.Load() > 0 || s.e.stopping() }
 	st, err := s.tree.Vacuum(opts)
 	s.e.metrics.pagesDeleted.Add(int64(st.Deleted))
 	s.e.metrics.pagesRecycled.Add(int64(st.Recycled))
+	if errors.Is(err, btree.ErrVacuumStopped) {
+		return nil
+	}
 	if err != nil {
 		return err
 	}

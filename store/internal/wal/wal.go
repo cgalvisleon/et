@@ -30,6 +30,10 @@ const (
 	MinSegmentSize = 1 << 20
 )
 
+// minSegmentSize es el menor tamaño de segmento con el que Open abre: el encabezado, un registro del largo máximo y
+// la marca de sellado.
+const minSegmentSize = SegmentHeaderSize + MaxRecordSize + TrailerSize
+
 // ErrNeedImage: Reserve encontró un bloque que necesita su imagen entera (su página tiene un lsn anterior al punto
 // de rehacer vigente) y el registro no la trae. Quien llama agrega la imagen —con la página todavía bloqueada— y
 // vuelve a llamar.

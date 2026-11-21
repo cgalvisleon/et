@@ -493,7 +493,7 @@ func TestCheckpointAcrossSegments(t *testing.T) {
 	if got := w.SizeSince(redo); got != want || got <= 0 {
 		t.Fatalf("SizeSince %d, se esperaba %d", got, want)
 	}
-	if w.SizeSince(Start) != w.sizes[1].Offset+w.active.size {
+	if w.SizeSince(Start) != w.sizes[1].Offset+w.active.size-Start.Offset {
 		t.Fatalf("SizeSince(Start) %d", w.SizeSince(Start))
 	}
 	w.Close()

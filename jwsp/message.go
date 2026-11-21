@@ -1,1188 +1,495 @@
 package jwsp
 
 import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http"
+	"strconv"
+	"strings"
+	"unicode/utf8"
+
 	"github.com/cgalvisleon/et/et"
 )
 
+// CallbackMax: el largo máximo de biz_opaque_callback_data en caracteres (OpenAPI oficial de Meta, maxLength 512)
+const CallbackMax = 512
+
+// Message: un mensaje saliente con un solo contenido (Text, una media, Template, Interactive, Location, Contacts o Reaction).
+// ReplyTo es el id (wamid) del mensaje al que responde (context); CallbackData vuelve en los estados del webhook
+type Message struct {
+	To           string
+	ReplyTo      string
+	CallbackData string
+	Text         *Text
+	Image        *Media
+	Video        *Media
+	Audio        *Media
+	Document     *Media
+	Sticker      *Media
+	Template     *Template
+	Interactive  *Interactive
+	Location     *Location
+	Contacts     []Contact
+	Reaction     *Reaction
+}
+
+// Text: un texto; PreviewURL muestra la vista previa del primer enlace
+type Text struct {
+	Body       string `json:"body"`
+	PreviewURL bool   `json:"preview_url,omitempty"`
+}
+
+// Media: una imagen, video, audio, documento o sticker por su id (subido con UploadMedia) o por un link público. Caption no
+// aplica a audio ni sticker; Filename solo a documentos
+type Media struct {
+	Id       string `json:"id,omitempty"`
+	Link     string `json:"link,omitempty"`
+	Caption  string `json:"caption,omitempty"`
+	Filename string `json:"filename,omitempty"`
+}
+
+// Location: una ubicación
+type Location struct {
+	Latitude  float64 `json:"latitude"`
+	Longitude float64 `json:"longitude"`
+	Name      string  `json:"name,omitempty"`
+	Address   string  `json:"address,omitempty"`
+}
+
+// Reaction: una reacción (emoji) a un mensaje; Emoji vacío la quita
+type Reaction struct {
+	MessageId string `json:"message_id"`
+	Emoji     string `json:"emoji"`
+}
+
+// Contact: una tarjeta de contacto
+type Contact struct {
+	Name      ContactName      `json:"name"`
+	Phones    []ContactPhone   `json:"phones,omitempty"`
+	Emails    []ContactEmail   `json:"emails,omitempty"`
+	Urls      []ContactUrl     `json:"urls,omitempty"`
+	Addresses []ContactAddress `json:"addresses,omitempty"`
+	Org       *ContactOrg      `json:"org,omitempty"`
+	Birthday  string           `json:"birthday,omitempty"`
+}
+
+// ContactName: el nombre de un contacto (FormattedName es obligatorio)
+type ContactName struct {
+	FormattedName string `json:"formatted_name"`
+	FirstName     string `json:"first_name,omitempty"`
+	LastName      string `json:"last_name,omitempty"`
+	MiddleName    string `json:"middle_name,omitempty"`
+	Prefix        string `json:"prefix,omitempty"`
+	Suffix        string `json:"suffix,omitempty"`
+}
+
+// ContactPhone: un teléfono (Type HOME, WORK, CELL…; WaId si tiene WhatsApp)
+type ContactPhone struct {
+	Phone string `json:"phone"`
+	Type  string `json:"type,omitempty"`
+	WaId  string `json:"wa_id,omitempty"`
+}
+
+// ContactEmail: un correo
+type ContactEmail struct {
+	Email string `json:"email"`
+	Type  string `json:"type,omitempty"`
+}
+
+// ContactUrl: una dirección web
+type ContactUrl struct {
+	Url  string `json:"url"`
+	Type string `json:"type,omitempty"`
+}
+
+// ContactAddress: una dirección postal
+type ContactAddress struct {
+	Street      string `json:"street,omitempty"`
+	City        string `json:"city,omitempty"`
+	State       string `json:"state,omitempty"`
+	Zip         string `json:"zip,omitempty"`
+	Country     string `json:"country,omitempty"`
+	CountryCode string `json:"country_code,omitempty"`
+	Type        string `json:"type,omitempty"`
+}
+
+// ContactOrg: la empresa de un contacto
+type ContactOrg struct {
+	Company    string `json:"company,omitempty"`
+	Department string `json:"department,omitempty"`
+	Title      string `json:"title,omitempty"`
+}
+
+// Template: una plantilla aprobada para enviar (Language es el código, p. ej. es o en_US)
+type Template struct {
+	Name       string      `json:"name"`
+	Language   string      `json:"-"`
+	Components []Component `json:"components,omitempty"`
+}
+
 /**
-* Button: a reply button of an interactive message (id and label).
+* MarshalJSON: language va como {code}
+* @return []byte, error
 **/
+func (s Template) MarshalJSON() ([]byte, error) {
+	type plain Template
+	return json.Marshal(struct {
+		plain
+		Language et.Json `json:"language"`
+	}{plain(s), et.Json{"code": s.Language}})
+}
+
+// Component: los parámetros de un componente de plantilla al enviar: header, body o button (con SubType url, quick_reply,
+// copy_code o flow e Index, la posición del botón desde 0)
+type Component struct {
+	Type       string      `json:"type"`
+	SubType    string      `json:"sub_type,omitempty"`
+	Index      string      `json:"index,omitempty"`
+	Parameters []Parameter `json:"parameters,omitempty"`
+}
+
+// Parameter: un parámetro de plantilla: text, currency, date_time, image, video, document, payload o coupon_code. Name es
+// el parameter_name de las plantillas con parámetros con nombre
+type Parameter struct {
+	Type       string    `json:"type"`
+	Name       string    `json:"parameter_name,omitempty"`
+	Text       string    `json:"text,omitempty"`
+	Payload    string    `json:"payload,omitempty"`
+	CouponCode string    `json:"coupon_code,omitempty"`
+	Currency   *Currency `json:"currency,omitempty"`
+	DateTime   *DateTime `json:"date_time,omitempty"`
+	Image      *Media    `json:"image,omitempty"`
+	Video      *Media    `json:"video,omitempty"`
+	Document   *Media    `json:"document,omitempty"`
+}
+
+// Currency: un monto (Amount1000 es el monto por 1000)
+type Currency struct {
+	FallbackValue string `json:"fallback_value"`
+	Code          string `json:"code"`
+	Amount1000    int64  `json:"amount_1000"`
+}
+
+// DateTime: una fecha como texto de respaldo
+type DateTime struct {
+	FallbackValue string `json:"fallback_value"`
+}
+
+// Interactive: un mensaje interactivo: button (hasta 3 respuestas), list (secciones con filas) o cta_url (un botón con enlace)
+type Interactive struct {
+	Type   string             `json:"type"`
+	Header *InteractiveHeader `json:"header,omitempty"`
+	Body   *TextBody          `json:"body,omitempty"`
+	Footer *TextBody          `json:"footer,omitempty"`
+	Action Action             `json:"action"`
+}
+
+// InteractiveHeader: el encabezado: text, image, video o document
+type InteractiveHeader struct {
+	Type     string `json:"type"`
+	Text     string `json:"text,omitempty"`
+	Image    *Media `json:"image,omitempty"`
+	Video    *Media `json:"video,omitempty"`
+	Document *Media `json:"document,omitempty"`
+}
+
+// TextBody: un texto de cuerpo o pie
+type TextBody struct {
+	Text string `json:"text"`
+}
+
+// Action: los botones de respuesta (Buttons), el botón y las secciones de una lista (Button, Sections) o un cta_url (Name y
+// Parameters {display_text, url})
+type Action struct {
+	Buttons    []ReplyButton `json:"buttons,omitempty"`
+	Button     string        `json:"button,omitempty"`
+	Sections   []Section     `json:"sections,omitempty"`
+	Name       string        `json:"name,omitempty"`
+	Parameters et.Json       `json:"parameters,omitempty"`
+}
+
+// ReplyButton: un botón de respuesta (Type reply)
+type ReplyButton struct {
+	Type  string `json:"type"`
+	Reply Button `json:"reply"`
+}
+
+// Button: el id que vuelve en el webhook y el título del botón
 type Button struct {
-	ID   string `json:"id"`
-	Text string `json:"text"`
-}
-
-/**
-* Header: the header of an interactive message (type and content).
-**/
-type Header struct {
-	Type    string `json:"type"`
-	Content string `json:"content"`
-}
-
-/**
-* body: the header as the JSON WhatsApp expects.
-* @return et.Json
-**/
-func (s *Header) body() et.Json {
-	return et.Json{
-		"type": s.Type,
-		"text": s.Content,
-	}
-}
-
-/**
-* Footer: the footer text of an interactive message.
-**/
-type Footer struct {
-	Text string `json:"text"`
-}
-
-/**
-* Row: an option of a list section (id, title, description).
-**/
-type Row struct {
-	ID          string `json:"id"`
-	Title       string `json:"title"`
-	Description string `json:"description"`
-}
-
-/**
-* Section: a titled group of rows in a list message.
-**/
-type Section struct {
+	Id    string `json:"id"`
 	Title string `json:"title"`
+}
+
+// Section: una sección de una lista
+type Section struct {
+	Title string `json:"title,omitempty"`
 	Rows  []Row  `json:"rows"`
 }
 
-/**
-* TpAddress: the kind of a contact field (home or work).
-**/
-type TpAddress string
-
-const (
-	HOME TpAddress = "home"
-	WORK TpAddress = "work"
-)
-
-/**
-* Address: a postal address of a contact card.
-**/
-type Address struct {
-	Street      string    `json:"street"`
-	City        string    `json:"city"`
-	State       string    `json:"state"`
-	Zip         string    `json:"zip"`
-	Country     string    `json:"country"`
-	CountryCode string    `json:"country_code"`
-	Type        TpAddress `json:"type"`
-}
-
-/**
-* Email: an email of a contact card.
-**/
-type Email struct {
-	Email string    `json:"email"`
-	Type  TpAddress `json:"type"`
-}
-
-/**
-* Phone: a phone (and WhatsApp id) of a contact card.
-**/
-type Phone struct {
-	Phone string    `json:"phone"`
-	WaID  string    `json:"wa_id"`
-	Type  TpAddress `json:"type"`
-}
-
-/**
-* Url: a link, either a media/preview URL or a URL of a contact card.
-**/
-type Url struct {
-	Url  string    `json:"url"`
-	Type TpAddress `json:"type"`
-}
-
-/**
-* Contact: a contact card (name, birthday, organization, addresses, emails, phones, urls).
-**/
-type Contact struct {
-	Address       []Address `json:"Address"`
-	Birthday      string    `json:"birthday"`
-	Emails        []Email   `json:"emails"`
-	FormatedName  string    `json:"formated_name"`
-	FirstName     string    `json:"first_name"`
-	LastName      string    `json:"last_name"`
-	MiddleName    string    `json:"middle_name"`
-	Suffix        string    `json:"suffix"`
-	Prefix        string    `json:"prefix"`
-	OrgCompany    string    `json:"org_company"`
-	OrgDepartment string    `json:"org_department"`
-	OrgTitle      string    `json:"org_title"`
-	Phones        []Phone   `json:"phones"`
-	Urls          []Url     `json:"urls"`
-}
-
-/**
-* Action: the action of an interactive message (button label and sections).
-**/
-type Action struct {
-	Button   string        `json:"button"`
-	Sections ActionSection `json:"sections"`
-}
-
-/**
-* ActionSection: a section of an action, with its rows and the catalog/product ids used by product messages.
-**/
-type ActionSection struct {
-	Title                      string    `json:"title"`
-	Rows                       ActionRow `json:"rows"`
-	CatalogID                  string    `json:"catalog_id"`
-	ProductRetailerID          string    `json:"product_retailer_id"`
-	ThumbnailProductRetailerID string    `json:"thumbnail_product_retailer_id"`
-}
-
-/**
-* ActionRow: a row of an action section (id, title, description).
-**/
-type ActionRow struct {
-	ID          string `json:"id"`
+// Row: una fila de una lista
+type Row struct {
+	Id          string `json:"id"`
 	Title       string `json:"title"`
-	Description string `json:"description"`
+	Description string `json:"description,omitempty"`
+}
+
+// SendResult: la respuesta de un envío; Raw es lo que respondió Meta
+type SendResult struct {
+	MessageId     string  `json:"message_id"`
+	MessageStatus string  `json:"message_status,omitempty"`
+	WaId          string  `json:"wa_id,omitempty"`
+	Input         string  `json:"input,omitempty"`
+	Raw           et.Json `json:"raw"`
 }
 
 /**
-* Parameter: the values of a template component (text, currency, date_time, image, button payload and index).
+* TextMessage
+* @param to, body string
+* @return Message
 **/
-type Parameter struct {
-	Header        string `json:"header"`
-	Body          string `json:"body"`
-	Text          string `json:"text"`
-	DateTime      string `json:"date_time"`
-	Currency      string `json:"currency"`
-	FallbackValue string `json:"fallback_value"`
-	Code          string `json:"code"`
-	DayOfWeek     string `json:"day_of_week"`
-	Year          string `json:"year"`
-	Month         string `json:"month"`
-	DayOfMonth    string `json:"day_of_month"`
-	Hour          string `json:"hour"`
-	Minute        string `json:"minute"`
-	Calendar      string `json:"calendar"`
-	Amount1000    string `json:"amount_1000"`
-	Image         string `json:"image"`
-	Link          string `json:"link"`
-	String        string `json:"string"`
-	ImageUrl      string `json:"image_Url"`
-	Payload       string `json:"payload"`
-	Button        string `json:"button"`
-	Type          string `json:"type"`
-	Index         string `json:"index"`
+func TextMessage(to, body string) Message {
+	return Message{To: to, Text: &Text{Body: body}}
 }
 
 /**
-* Component: a template component (type and its parameters).
+* TemplateMessage
+* @param to, name, language string, components ...Component
+* @return Message
 **/
-type Component struct {
-	Type      string    `json:"type"`
-	Parameter Parameter `json:"parameter"`
+func TemplateMessage(to, name, language string, components ...Component) Message {
+	return Message{To: to, Template: &Template{Name: name, Language: language, Components: components}}
 }
 
 /**
-* Location: a geographic location message (latitude, longitude, name, address).
+* ButtonsMessage: hasta 3 botones de respuesta
+* @param to, body string, buttons ...Button
+* @return Message
 **/
-type Location struct {
-	Latitude  string `json:"latitude"`
-	Longitude string `json:"longitude"`
-	Name      string `json:"name"`
-	Address   string `json:"address"`
+func ButtonsMessage(to, body string, buttons ...Button) Message {
+	items := []ReplyButton{}
+	for _, button := range buttons {
+		items = append(items, ReplyButton{Type: "reply", Reply: button})
+	}
+	interactive := &Interactive{Type: "button", Body: &TextBody{Text: body}, Action: Action{Buttons: items}}
+	return Message{To: to, Interactive: interactive}
 }
 
 /**
-* Template: a message template (name, language code and components).
+* ListMessage: una lista con el texto de su botón y sus secciones
+* @param to, body, button string, sections ...Section
+* @return Message
 **/
-type Template struct {
-	Name       string      `json:"name"`
-	Language   string      `json:"language"`
-	Code       string      `json:"code"`
-	Components []Component `json:"components"`
+func ListMessage(to, body, button string, sections ...Section) Message {
+	interactive := &Interactive{Type: "list", Body: &TextBody{Text: body}, Action: Action{Button: button, Sections: sections}}
+	return Message{To: to, Interactive: interactive}
 }
 
 /**
-* MessageType: the kind of WhatsApp message a Message builds.
+* UrlButtonMessage: un botón con enlace (cta_url)
+* @param to, body, text, link string
+* @return Message
 **/
-type MessageType string
-
-const (
-	MessageTypeText                    MessageType = "text"
-	MessageTypeReplyText               MessageType = "reply_text"
-	MessageTypeTextWithPreviewURL      MessageType = "text_with_preview_url"
-	MessageTypeReplyWithReaction       MessageType = "reply_with_reaction"
-	MessageTypeImageById               MessageType = "image_by_id"
-	MessageTypeReplyImageById          MessageType = "reply_to_image_by_id"
-	MessageTypeImageByURL              MessageType = "image_by_URL"
-	MessageTypeReplyImageByURL         MessageType = "reply_to_image_by_URL"
-	MessageTypeAudioById               MessageType = "audio_by_id"
-	MessageTypeReplyAudioById          MessageType = "reply_to_audio_by_id"
-	MessageTypeAudioByURL              MessageType = "audio_by_URL"
-	MessageTypeReplyAudioByURL         MessageType = "reply_to_audio_by_URL"
-	MessageTypeDocumentById            MessageType = "send_document_by_ID"
-	MessageTypeReplyDocumentById       MessageType = "reply_to_document_by_ID"
-	MessageTypeDocumentByURL           MessageType = "send_document_by_URL"
-	MessageTypeReplyDocumentByURL      MessageType = "reply_to_document_by_URL"
-	MessageTypeStickerById             MessageType = "send_sticker_message_by_ID"
-	MessageTypeReplyStickerById        MessageType = "reply_to_sticker_message_by_ID"
-	MessageTypeStickerByURL            MessageType = "send_sticker_message_by_URL"
-	MessageTypeReplyStickerByURL       MessageType = "reply_to_sticker_message_by_URL"
-	MessageTypeVideoById               MessageType = "send_video_by_ID"
-	MessageTypeReplyVideoById          MessageType = "reply_to_video_by_ID"
-	MessageTypeVideoByURL              MessageType = "send_video_by_URL"
-	MessageTypeReplyVideoByURL         MessageType = "reply_to_video_by_URL"
-	MessageTypeSendContact             MessageType = "send_contact"
-	MessageTypeSendReplyContact        MessageType = "reply_to_contact"
-	MessageTypeSendLocation            MessageType = "send_location"
-	MessageTypeSendReplyLocation       MessageType = "reply_to_location"
-	MessageTypeSendTemplate            MessageType = "send_template_text"
-	MessageTypeSendTemplateMedia       MessageType = "send_template_media"
-	MessageTypeSendTemplateInteractive MessageType = "send_template_interactive"
-	MessageTypeSingleProduct           MessageType = "single_product"
-	MessageTypeMultiProduct            MessageType = "multi_product"
-	MessageTypeCatalog                 MessageType = "catalog"
-	MessageTypeCatalogTemplate         MessageType = "catalog_template"
-	MessageTypeList                    MessageType = "list"
-	MessageTypeReplyList               MessageType = "reply_list"
-	MessageTypeReplyButton             MessageType = "reply_button"
-)
-
-/**
-* Message: every value a WhatsApp message can carry; kind selects which JSON body is built.
-**/
-type Message struct {
-	kind                MessageType   `json:"-"`
-	To                  string        `json:"to"`
-	Text                string        `json:"text"`
-	Buttons             []Button      `json:"buttons"`
-	Header              Header        `json:"header"`
-	Footer              Footer        `json:"footer"`
-	Button              string        `json:"button"`
-	Sections            []Section     `json:"sections"`
-	ImageObjectID       string        `json:"image_object_id"`
-	MessageID           string        `json:"message_id"`
-	Emoji               string        `json:"emoji"`
-	AudioObjectID       string        `json:"audio_object_id"`
-	DocumentObjectID    string        `json:"document_object_id"`
-	DocumentCaptionText string        `json:"document_caption_text"`
-	DocumentFilename    string        `json:"document_filename"`
-	MediaObjectID       string        `json:"media_object_id"`
-	VideoObjectID       string        `json:"video_object_id"`
-	VideoCaptionText    string        `json:"video_caption_text"`
-	Address             Address       `json:"address"`
-	Contact             Contact       `json:"contact"`
-	Email               Email         `json:"email"`
-	Phone               Phone         `json:"phone"`
-	Url                 Url           `json:"url"`
-	Location            Location      `json:"location"`
-	Template            Template      `json:"template"`
-	Parameter           Parameter     `json:"parameter"`
-	Action              Action        `json:"action"`
-	Component           Component     `json:"component"`
-	ActionSection       ActionSection `json:"action_section"`
+func UrlButtonMessage(to, body, text, link string) Message {
+	action := Action{Name: "cta_url", Parameters: et.Json{"display_text": text, "url": link}}
+	return Message{To: to, Interactive: &Interactive{Type: "cta_url", Body: &TextBody{Text: body}, Action: action}}
 }
 
 /**
-* btns
-* @return et.Json
+* TextParams: parámetros de texto en orden
+* @param values ...string
+* @return []Parameter
 **/
-func (m *Message) btns() []et.Json {
-	result := []et.Json{}
-	for _, btn := range m.Buttons {
-		result = append(result, et.Json{
-			"type": "reply",
-			"reply": et.Json{
-				"id":    btn.ID,
-				"title": btn.Text,
-			},
-		})
+func TextParams(values ...string) []Parameter {
+	result := []Parameter{}
+	for _, value := range values {
+		result = append(result, Parameter{Type: "text", Text: value})
 	}
 	return result
 }
 
 /**
-* sections: the list sections as the JSON WhatsApp expects.
-* @return []et.Json
+* BodyComponent: el cuerpo con sus parámetros de texto
+* @param values ...string
+* @return Component
 **/
-func (m *Message) sections() []et.Json {
-	result := []et.Json{}
-	for _, section := range m.Sections {
-		result = append(result, et.Json{
-			"title": section.Title,
-			"rows":  section.Rows,
-		})
-	}
-	return result
+func BodyComponent(values ...string) Component {
+	return Component{Type: "body", Parameters: TextParams(values...)}
 }
 
 /**
-* body
-* @return et.Json
+* HeaderComponent: el encabezado con un texto
+* @param value string
+* @return Component
 **/
-func (s *Message) body() et.Json {
-	switch s.kind {
-	case "action":
-		return et.Json{
-			"messaging_product": "whatsapp",
-			"recipient_type":    "individual",
-			"to":                s.To,
-			"type":              "interactive",
-			"interactive": et.Json{
-				"type": "button",
-				"body": et.Json{
-					"text": s.Text,
-				},
-				"action": et.Json{
-					"buttons": s.btns(),
-				},
-			},
-		}
-	case MessageTypeList:
-		return et.Json{
-			"messaging_product": "whatsapp",
-			"recipient_type":    "individual",
-			"to":                s.To,
-			"type":              "interactive",
-			"interactive": et.Json{
-				"type":   "list",
-				"header": s.Header.body(),
-				"body": et.Json{
-					"text": s.Text,
-				},
-				"footer": et.Json{
-					"text": s.Footer.Text,
-				},
-				"action": et.Json{
-					"button":   s.Button,
-					"sections": s.sections(),
-				},
-			},
-		}
+func HeaderComponent(value string) Component {
+	return Component{Type: "header", Parameters: TextParams(value)}
+}
 
-	case MessageTypeReplyList:
-		return et.Json{
-			"messaging_product": "whatsapp",
-			"recipient_type":    "individual",
-			"to":                s.To,
-			"context": et.Json{
-				"message_id": s.MessageID,
-			},
-			"type": "interactive",
-			"interactive": et.Json{
-				"type":   "list",
-				"header": s.Header.body(),
-				"body": et.Json{
-					"text": s.Text,
-				},
-				"footer": et.Json{
-					"text": s.Footer.Text,
-				},
-				"action": et.Json{
-					"button":   s.Button,
-					"sections": s.sections(),
-				},
-			},
-		}
-
-	case MessageTypeReplyButton:
-		Button := s.Buttons[0]
-		return et.Json{
-			"messaging_product": "whatsapp",
-			"recipient_type":    "individual",
-			"to":                s.To,
-			"type":              "interactive",
-			"interactive": et.Json{
-				"type": "button",
-				"body": et.Json{
-					"text": s.Text,
-				},
-				"action": et.Json{
-					"buttons": et.Json{
-						"type": "reply",
-						"reply": et.Json{
-							"id":    Button.ID,
-							"title": Button.Text,
-						},
-					},
-				},
-			},
-		}
-
-	case MessageTypeReplyText:
-		return et.Json{
-			"messaging_product": "whatsapp",
-			"recipient_type":    "individual",
-			"to":                s.To,
-			"context": et.Json{
-				"message_id": s.MessageID,
-			},
-			"type": "text",
-			"text": et.Json{
-				"preview_url": false,
-				"body":        s.Text,
-			}}
-
-	case MessageTypeTextWithPreviewURL:
-		return et.Json{
-			"messaging_product": "whatsapp",
-			"to":                s.To,
-			"text": et.Json{
-				"preview_url": true,
-				"body":        s.Url.Url,
-			}}
-
-	case MessageTypeReplyWithReaction:
-		return et.Json{
-			"messaging_product": "whatsapp",
-			"recipient_type":    "individual",
-			"to":                s.To,
-			"type":              "reaction",
-			"reaction": et.Json{
-				"message_id": s.MessageID,
-				"emoji":      s.Emoji,
-			},
-		}
-	case MessageTypeImageById:
-		return et.Json{
-			"messaging_product": "whatsapp",
-			"recipient_type":    "individual",
-			"to":                s.To,
-			"type":              "image",
-			"image": et.Json{
-				"id": s.ImageObjectID,
-			},
-		}
-	case MessageTypeReplyImageById:
-		return et.Json{
-			"messaging_product": "whatsapp",
-			"recipient_type":    "individual",
-			"to":                s.To,
-			"context": et.Json{
-				"message_id": s.MessageID,
-			},
-			"type": "image",
-			"image": et.Json{
-				"id": s.ImageObjectID,
-			},
-		}
-	case MessageTypeImageByURL:
-		return et.Json{
-			"messaging_product": "whatsapp",
-			"recipient_type":    "individual",
-			"to":                s.To,
-			"type":              "image",
-			"image": et.Json{
-				"link": s.Url,
-			},
-		}
-	case MessageTypeReplyImageByURL:
-		return et.Json{
-			"messaging_product": "whatsapp",
-			"recipient_type":    "individual",
-			"to":                s.To,
-			"context": et.Json{
-				"message_id": s.MessageID,
-			},
-			"type": "image",
-			"image": et.Json{
-				"link": s.Url,
-			},
-		}
-	case MessageTypeAudioById:
-		return et.Json{
-			"messaging_product": "whatsapp",
-			"recipient_type":    "individual",
-			"to":                s.To,
-			"type":              "audio",
-			"audio": et.Json{
-				"id": s.AudioObjectID,
-			},
-		}
-	case MessageTypeReplyAudioById:
-		return et.Json{
-			"messaging_product": "whatsapp",
-			"recipient_type":    "individual",
-			"to":                s.To,
-			"context": et.Json{
-				"message_id": s.MessageID,
-			},
-			"type": "audio",
-			"audio": et.Json{
-				"id": s.AudioObjectID,
-			},
-		}
-	case MessageTypeAudioByURL:
-		return et.Json{
-			"messaging_product": "whatsapp",
-			"recipient_type":    "individual",
-			"to":                s.To,
-			"type":              "audio",
-			"audio": et.Json{
-				"link": s.Url,
-			},
-		}
-	case MessageTypeReplyAudioByURL:
-		return et.Json{
-			"messaging_product": "whatsapp",
-			"recipient_type":    "individual",
-			"to":                s.To,
-			"context": et.Json{
-				"message_id": s.MessageID,
-			},
-			"type": "audio",
-			"audio": et.Json{
-				"link": s.Url,
-			},
-		}
-
-	case MessageTypeDocumentById:
-		return et.Json{
-			"messaging_product": "whatsapp",
-			"recipient_type":    "individual",
-			"to":                s.To,
-			"type":              "document",
-			"document": et.Json{
-				"id":       s.DocumentObjectID,
-				"caption":  s.DocumentCaptionText,
-				"filename": s.DocumentFilename,
-			},
-		}
-	case MessageTypeReplyDocumentById:
-		return et.Json{
-			"messaging_product": "whatsapp",
-			"recipient_type":    "individual",
-			"to":                s.To,
-			"context": et.Json{
-				"message_id": s.MessageID,
-			},
-			"type": "document",
-			"document": et.Json{
-				"id":       s.DocumentObjectID,
-				"caption":  s.DocumentCaptionText,
-				"filename": s.DocumentFilename,
-			},
-		}
-	case MessageTypeDocumentByURL:
-		return et.Json{
-			"messaging_product": "whatsapp",
-			"recipient_type":    "individual",
-			"to":                s.To,
-			"type":              "document",
-			"document": et.Json{
-				"link":    s.Url,
-				"caption": s.DocumentCaptionText,
-			},
-		}
-	case MessageTypeReplyDocumentByURL:
-		return et.Json{
-			"messaging_product": "whatsapp",
-			"recipient_type":    "individual",
-			"to":                s.To,
-			"context": et.Json{
-				"message_id": s.MessageID,
-			},
-			"type": "document",
-			"document": et.Json{
-				"link":    s.Url,
-				"caption": s.DocumentCaptionText,
-			},
-		}
-	case MessageTypeStickerById:
-		return et.Json{
-			"messaging_product": "whatsapp",
-			"recipient_type":    "individual",
-			"to":                s.To,
-			"type":              "sticker",
-			"sticker": et.Json{
-				"id": s.MediaObjectID,
-			},
-		}
-	case MessageTypeReplyStickerById:
-		return et.Json{
-			"messaging_product": "whatsapp",
-			"recipient_type":    "individual",
-			"to":                s.To,
-			"context": et.Json{
-				"message_id": s.MessageID,
-			},
-			"type": "sticker",
-			"sticker": et.Json{
-				"id": s.MediaObjectID,
-			},
-		}
-	case MessageTypeStickerByURL:
-		return et.Json{
-			"messaging_product": "whatsapp",
-			"recipient_type":    "individual",
-			"to":                s.To,
-			"type":              "sticker",
-			"sticker": et.Json{
-				"link": s.Url,
-			},
-		}
-	case MessageTypeReplyStickerByURL:
-		return et.Json{
-			"messaging_product": "whatsapp",
-			"recipient_type":    "individual",
-			"to":                s.To,
-			"context": et.Json{
-				"message_id": s.MessageID,
-			},
-			"type": "sticker",
-			"sticker": et.Json{
-				"link": s.Url,
-			},
-		}
-	case MessageTypeVideoById:
-		return et.Json{
-			"messaging_product": "whatsapp",
-			"recipient_type":    "individual",
-			"to":                s.To,
-			"type":              "video",
-			"video": et.Json{
-				"caption": s.VideoCaptionText,
-				"id":      s.VideoObjectID,
-			},
-		}
-	case MessageTypeReplyVideoById:
-		return et.Json{
-			"messaging_product": "whatsapp",
-			"recipient_type":    "individual",
-			"to":                s.To,
-			"context": et.Json{
-				"message_id": s.MessageID,
-			},
-			"type": "video",
-			"video": et.Json{
-				"caption": s.VideoCaptionText,
-				"id":      s.VideoObjectID,
-			},
-		}
-	case MessageTypeVideoByURL:
-		return et.Json{
-			"messaging_product": "whatsapp",
-			"recipient_type":    "individual",
-			"to":                s.To,
-			"type":              "video",
-			"video": et.Json{
-				"link":    s.Url,
-				"caption": s.VideoCaptionText,
-			},
-		}
-	case MessageTypeReplyVideoByURL:
-		return et.Json{
-			"messaging_product": "whatsapp",
-			"recipient_type":    "individual",
-			"to":                s.To,
-			"context": et.Json{
-				"message_id": s.MessageID,
-			},
-			"type": "video",
-			"video": et.Json{
-				"link":    s.Url,
-				"caption": s.VideoCaptionText,
-			},
-		}
-	case MessageTypeSendContact:
-		address := s.Address
-		contact := s.Contact
-		email := s.Email
-		phone := s.Phone
-		url := s.Url
-		return et.Json{
-			"messaging_product": "whatsapp",
-			"to":                s.To,
-			"type":              "contacts",
-			"contacts": []et.Json{
-				{
-					"addresses": []et.Json{
-						{
-							"street":       address.Street,
-							"city":         address.City,
-							"state":        address.State,
-							"zip":          address.Zip,
-							"country":      address.Country,
-							"country_code": address.CountryCode,
-							"type":         address.Type,
-						},
-					},
-					"birthday": contact.Birthday,
-					"emails": []et.Json{
-						{
-							"email": email.Email,
-							"type":  email.Type,
-						},
-					},
-					"name": et.Json{
-						"formatted_name": contact.FormatedName,
-						"first_name":     contact.FirstName,
-						"last_name":      contact.LastName,
-						"middle_name":    contact.MiddleName,
-						"suffix":         contact.Suffix,
-						"prefix":         contact.Prefix,
-					},
-					"org": et.Json{
-						"company":    contact.OrgCompany,
-						"department": contact.OrgDepartment,
-						"title":      contact.OrgTitle,
-					},
-					"phones": []et.Json{
-						{
-							"phone": phone.Phone,
-							"wa_id": phone.WaID,
-							"type":  phone.Type,
-						},
-					},
-					"urls": []et.Json{
-						{
-							"url":  url.Url,
-							"type": url.Type,
-						},
-					},
-				},
-			},
-		}
-
-	case MessageTypeSendReplyContact:
-		address := s.Address
-		contact := s.Contact
-		email := s.Email
-		phone := s.Phone
-		url := s.Url
-		return et.Json{
-			"messaging_product": "whatsapp",
-			"recipient_type":    "individual",
-			"to":                s.To,
-			"context": et.Json{
-				"message_id": s.MessageID,
-			},
-			"type": "contacts",
-			"contacts": []et.Json{
-				{
-					"addresses": []et.Json{
-						{
-							"street":       address.Street,
-							"city":         address.City,
-							"state":        address.State,
-							"zip":          address.Zip,
-							"country":      address.Country,
-							"country_code": address.CountryCode,
-							"type":         address.Type,
-						},
-					},
-					"birthday": contact.Birthday,
-					"emails": []et.Json{
-						{
-							"email": email.Email,
-							"type":  email.Type,
-						},
-					},
-					"name": et.Json{
-						"formatted_name": contact.FormatedName,
-						"first_name":     contact.FirstName,
-						"last_name":      contact.LastName,
-						"middle_name":    contact.MiddleName,
-						"suffix":         contact.Suffix,
-						"prefix":         contact.Prefix,
-					},
-					"org": et.Json{
-						"company":    contact.OrgCompany,
-						"department": contact.OrgDepartment,
-						"title":      contact.OrgTitle,
-					},
-					"phones": []et.Json{
-						{
-							"phone": phone.Phone,
-							"wa_id": phone.WaID,
-							"type":  phone.Type,
-						},
-					},
-					"urls": []et.Json{
-						{
-							"url":  url.Url,
-							"type": url.Type,
-						},
-					},
-				},
-			},
-		}
-
-	case MessageTypeSendLocation:
-		location := s.Location
-		return et.Json{
-			"messaging_product": "whatsapp",
-			"recipient_type":    "individual",
-			"to":                s.To,
-			"type":              "location",
-			"location": et.Json{
-				"latitude":  location.Latitude,
-				"longitude": location.Longitude,
-				"name":      location.Name,
-				"address":   location.Address,
-			},
-		}
-
-	case MessageTypeSendReplyLocation:
-		location := s.Location
-		return et.Json{
-			"messaging_product": "whatsapp",
-			"recipient_type":    "individual",
-			"to":                s.To,
-			"context": et.Json{
-				"message_id": s.MessageID,
-			},
-			"type": "location",
-			"location": et.Json{
-				"latitude":  location.Latitude,
-				"longitude": location.Longitude,
-				"name":      location.Name,
-				"address":   location.Address,
-			},
-		}
-	case MessageTypeSendTemplate:
-		template := s.Template
-		parameter := s.Component.Parameter
-		return et.Json{
-			"messaging_product": "whatsapp",
-			"recipient_type":    "individual",
-			"to":                s.To,
-			"type":              "template",
-			"template": et.Json{
-				"name": template.Name,
-				"language": et.Json{
-					"code": template.Language,
-				},
-				"components": []et.Json{
-					{
-						"type": "body",
-						"parameters": []et.Json{
-							{
-								"type": "text",
-								"text": parameter.Text,
-							},
-							{
-								"type": "currency",
-								"currency": et.Json{
-									"fallback_value": parameter.FallbackValue,
-									"code":           parameter.Code,
-									"amount_1000":    parameter.Amount1000,
-								},
-							},
-							{
-								"type": "date_time",
-								"date_time": et.Json{
-									"day_of_week":  parameter.DayOfWeek,
-									"year":         parameter.Year,
-									"month":        parameter.Month,
-									"day_of_month": parameter.DayOfMonth,
-									"hour":         parameter.Hour,
-									"minute":       parameter.Minute,
-									"calendar":     parameter.Calendar,
-								},
-							},
-						},
-					},
-				},
-			},
-		}
-
-	case MessageTypeSendTemplateMedia:
-		template := s.Template
-		parameter := s.Component.Parameter
-		return et.Json{
-			"messaging_product": "whatsapp",
-			"recipient_type":    "individual",
-			"to":                s.To,
-			"type":              "template",
-			"template": et.Json{
-				"name": template.Name,
-				"language": et.Json{
-					"code": template.Language,
-				},
-				"components": []et.Json{
-					{
-						"type": "header",
-						"parameters": []et.Json{
-							{
-								"type": "image",
-								"image": et.Json{
-									"link": parameter.ImageUrl,
-								},
-							},
-							{
-								"type": "body",
-								"parameters": []et.Json{
-									{
-										"type": "text",
-										"text": parameter.Text,
-									},
-									{
-										"type": "currency",
-										"currency": et.Json{
-											"fallback_value": parameter.FallbackValue,
-											"code":           parameter.Code,
-											"amount_1000":    parameter.Amount1000,
-										},
-									},
-									{
-										"type": "date_time",
-										"date_time": et.Json{
-											"fallback_value": parameter.FallbackValue,
-											"day_of_week":    parameter.DayOfWeek,
-											"year":           parameter.Year,
-											"month":          parameter.Month,
-											"day_of_month":   parameter.DayOfMonth,
-											"hour":           parameter.Hour,
-											"minute":         parameter.Minute,
-											"calendar":       parameter.Calendar,
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		}
-
-	case MessageTypeSendTemplateInteractive:
-		template := s.Template
-		parameter := s.Component.Parameter
-		return et.Json{
-			"messaging_product": "whatsapp",
-			"recipient_type":    "individual",
-			"to":                s.To,
-			"type":              "template",
-			"template": et.Json{
-				"name": template.Name,
-				"language": et.Json{
-					"code": template.Language,
-				},
-				"components": []et.Json{
-					{
-						"type": "header",
-						"parameters": []et.Json{
-							{
-								"type": "image",
-								"image": et.Json{
-									"link": parameter.ImageUrl,
-								},
-							},
-							{
-								"type": "body",
-								"parameters": []et.Json{
-									{
-										"type": "text",
-										"text": parameter.Text,
-									},
-									{
-										"type": "currency",
-										"currency": et.Json{
-											"fallback_value": parameter.FallbackValue,
-											"code":           parameter.Code,
-											"amount_1000":    parameter.Amount1000,
-										},
-									},
-									{
-										"type": "date_time",
-										"date_time": et.Json{
-											"fallback_value": parameter.FallbackValue,
-											"day_of_week":    parameter.DayOfWeek,
-											"year":           parameter.Year,
-											"month":          parameter.Month,
-											"day_of_month":   parameter.DayOfMonth,
-											"hour":           parameter.Hour,
-											"minute":         parameter.Minute,
-											"calendar":       parameter.Calendar,
-										},
-									},
-									{
-										"type":     "button",
-										"sub_type": "quick_reply",
-										"index":    parameter.Index,
-										"parameters": []et.Json{
-											{
-												"type":    "payload",
-												"payload": parameter.Payload,
-											},
-										},
-									},
-									{
-										"type":     "button",
-										"sub_type": "quick_reply",
-										"index":    parameter.Index,
-										"parameters": []et.Json{
-											{
-												"type":    "payload",
-												"payload": parameter.Payload,
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		}
-
-	case MessageTypeSingleProduct:
-		sections := s.Action.Sections
-		return et.Json{
-			"messaging_product": "whatsapp",
-			"recipient_type":    "individual",
-			"to":                s.To,
-			"type":              "interactive",
-			"interactive": et.Json{
-				"type": "product",
-				"body": et.Json{
-					"text": s.Text,
-				},
-				"footer": et.Json{
-					"text": s.Footer,
-				},
-				"action": et.Json{
-					"catalog_id":          sections.CatalogID,
-					"product_retailer_id": sections.ProductRetailerID,
-				},
-			},
-		}
-	case MessageTypeMultiProduct:
-		sections := s.Action.Sections
-		return et.Json{
-			"messaging_product": "whatsapp",
-			"recipient_type":    "individual",
-			"to":                s.To,
-			"type":              "interactive",
-			"interactive": et.Json{
-				"type": "product_list",
-				"header": et.Json{
-					"type": "text",
-					"text": s.Header,
-				},
-				"body": et.Json{
-					"text": s.Text,
-				},
-				"footer": et.Json{
-					"text": s.Footer,
-				},
-				"action": et.Json{
-					"catalog_id": sections.CatalogID,
-					"sections": []et.Json{
-						{
-							"title": sections.Title,
-							"product_items": []et.Json{
-								{
-									"product_retailer_id": sections.ProductRetailerID,
-								},
-								{
-									"product_retailer_id": sections.ProductRetailerID,
-								},
-							},
-						},
-						{
-							"title": sections.Title,
-							"product_items": []et.Json{
-								{
-									"product_retailer_id": sections.ProductRetailerID,
-								},
-								{
-									"product_retailer_id": sections.ProductRetailerID,
-								},
-							},
-						},
-					},
-				},
-			},
-		}
-	case MessageTypeCatalog:
-		sections := s.Action.Sections
-		return et.Json{
-			"messaging_product": "whatsapp",
-			"recipient_type":    "individual",
-			"to":                s.To,
-			"type":              "interactive",
-			"interactive": et.Json{
-				"type": "catalog_message",
-				"body": et.Json{
-					"text": s.Text,
-				},
-				"action": et.Json{
-					"type": "catalog_message",
-					"parameters": et.Json{
-						"thumbnail_product_retailer_id": sections.ThumbnailProductRetailerID,
-					},
-				},
-				"footer": et.Json{
-					"text": s.Footer,
-				},
-			},
-		}
-	case MessageTypeCatalogTemplate:
-		sections := s.Action.Sections
-		template := s.Template
-		parameter := s.Component.Parameter
-		return et.Json{
-			"messaging_product": "whatsapp",
-			"recipient_type":    "individual",
-			"to":                s.To,
-			"type":              "template",
-			"template": et.Json{
-				"name": template.Name,
-				"language": et.Json{
-					"code": template.Language,
-				},
-				"components": []et.Json{
-					{
-						"type": "body",
-						"parameters": []et.Json{
-							{
-								"type": "text",
-								"text": parameter.Text,
-							},
-							{
-								"type": "text",
-								"text": parameter.Text,
-							},
-							{
-								"type": "text",
-								"text": parameter.Text,
-							},
-						},
-					},
-					{
-						"type":     "button",
-						"sub_type": "CATALOG",
-						"index":    parameter.Index,
-						"parameters": []et.Json{
-							{
-								"type": "action",
-								"action": et.Json{
-									"thumbnail_product_retailer_id": sections.ThumbnailProductRetailerID,
-								},
-							},
-						},
-					},
-				},
-			},
-		}
+/**
+* HeaderMediaComponent: el encabezado con una imagen, video o documento (kind image|video|document)
+* @param kind string, media Media
+* @return Component
+**/
+func HeaderMediaComponent(kind string, media Media) Component {
+	parameter := Parameter{Type: kind}
+	switch kind {
+	case "video":
+		parameter.Video = &media
+	case "document":
+		parameter.Document = &media
 	default:
-		return et.Json{
-			"messaging_product": "whatsapp",
-			"recipient_type":    "individual",
-			"to":                s.To,
-			"type":              "text",
-			"text": et.Json{
-				"preview_url": false,
-				"body":        s.Text,
-			},
+		parameter.Type = "image"
+		parameter.Image = &media
+	}
+	return Component{Type: "header", Parameters: []Parameter{parameter}}
+}
+
+/**
+* UrlButtonComponent: el sufijo dinámico del botón de URL en la posición index
+* @param index int, value string
+* @return Component
+**/
+func UrlButtonComponent(index int, value string) Component {
+	return Component{Type: "button", SubType: "url", Index: strconv.Itoa(index), Parameters: TextParams(value)}
+}
+
+/**
+* QuickReplyComponent: el payload que vuelve en el webhook al tocar el botón de respuesta rápida en la posición index
+* @param index int, payload string
+* @return Component
+**/
+func QuickReplyComponent(index int, payload string) Component {
+	parameters := []Parameter{{Type: "payload", Payload: payload}}
+	return Component{Type: "button", SubType: "quick_reply", Index: strconv.Itoa(index), Parameters: parameters}
+}
+
+/**
+* CopyCodeComponent: el código del botón de copiar código de una plantilla de marketing en la posición index
+* @param index int, code string
+* @return Component
+**/
+func CopyCodeComponent(index int, code string) Component {
+	parameters := []Parameter{{Type: "coupon_code", CouponCode: code}}
+	return Component{Type: "button", SubType: "copy_code", Index: strconv.Itoa(index), Parameters: parameters}
+}
+
+/**
+* OtpComponents: el código de una plantilla AUTHENTICATION: en el cuerpo y en el botón (sub_type url, index 0), como lo pide Meta
+* también para el botón COPY_CODE
+* @param code string
+* @return []Component
+**/
+func OtpComponents(code string) []Component {
+	return []Component{BodyComponent(code), UrlButtonComponent(0, code)}
+}
+
+/**
+* body: el cuerpo de POST /{phone_number_id}/messages; valida que haya un solo contenido y el largo de CallbackData
+* @return et.Json, error
+**/
+func (s Message) body() (et.Json, error) {
+	if strings.TrimSpace(s.To) == "" {
+		return et.Json{}, errors.New(MSG_TO_REQUIRED)
+	}
+	if size := utf8.RuneCountInString(s.CallbackData); size > CallbackMax {
+		return et.Json{}, fmt.Errorf(MSG_CALLBACK_TOO_LONG, size, CallbackMax)
+	}
+
+	contents := map[string]any{}
+	add := func(kind string, set bool, value any) {
+		if set {
+			contents[kind] = value
 		}
 	}
+	add("text", s.Text != nil, s.Text)
+	add("image", s.Image != nil, s.Image)
+	add("video", s.Video != nil, s.Video)
+	add("audio", s.Audio != nil, s.Audio)
+	add("document", s.Document != nil, s.Document)
+	add("sticker", s.Sticker != nil, s.Sticker)
+	add("template", s.Template != nil, s.Template)
+	add("interactive", s.Interactive != nil, s.Interactive)
+	add("location", s.Location != nil, s.Location)
+	add("contacts", len(s.Contacts) > 0, s.Contacts)
+	add("reaction", s.Reaction != nil, s.Reaction)
+	if len(contents) == 0 {
+		return et.Json{}, errors.New(MSG_MESSAGE_EMPTY)
+	}
+	if len(contents) > 1 {
+		kinds := []string{}
+		for kind := range contents {
+			kinds = append(kinds, kind)
+		}
+		return et.Json{}, fmt.Errorf(MSG_MESSAGE_AMBIGUOUS, strings.Join(kinds, ", "))
+	}
+
+	result := et.Json{
+		"messaging_product": "whatsapp",
+		"recipient_type":    "individual",
+		"to":                strings.TrimPrefix(strings.TrimSpace(s.To), "+"),
+	}
+	for kind, value := range contents {
+		result["type"] = kind
+		result[kind] = value
+	}
+	if s.ReplyTo != "" {
+		result["context"] = et.Json{"message_id": s.ReplyTo}
+	}
+	if s.CallbackData != "" {
+		result["biz_opaque_callback_data"] = s.CallbackData
+	}
+	return result, nil
+}
+
+/**
+* Send: POST /{phone_number_id}/messages
+* @param ctx context.Context, message Message
+* @return SendResult, error
+**/
+func (s *Client) Send(ctx context.Context, message Message) (SendResult, error) {
+	path, err := s.phonePath("/messages")
+	if err != nil {
+		return SendResult{}, err
+	}
+	body, err := message.body()
+	if err != nil {
+		return SendResult{}, err
+	}
+
+	output, err := s.Call(ctx, http.MethodPost, path, nil, body)
+	if err != nil {
+		return SendResult{}, err
+	}
+
+	result := SendResult{Raw: output}
+	if messages := output.ArrayJson("messages"); len(messages) > 0 {
+		result.MessageId = messages[0].Str("id")
+		result.MessageStatus = messages[0].Str("message_status")
+	}
+	if contacts := output.ArrayJson("contacts"); len(contacts) > 0 {
+		result.WaId = contacts[0].Str("wa_id")
+		result.Input = contacts[0].Str("input")
+	}
+	return result, nil
+}
+
+/**
+* MarkRead: marca como leído un mensaje recibido (y los anteriores); typing muestra «escribiendo…» hasta la respuesta (máx. 25 s)
+* @param ctx context.Context, messageId string, typing bool
+* @return error
+**/
+func (s *Client) MarkRead(ctx context.Context, messageId string, typing bool) error {
+	path, err := s.phonePath("/messages")
+	if err != nil {
+		return err
+	}
+
+	body := et.Json{"messaging_product": "whatsapp", "status": "read", "message_id": messageId}
+	if typing {
+		body["typing_indicator"] = et.Json{"type": "text"}
+	}
+	_, err = s.Call(ctx, http.MethodPost, path, nil, body)
+	return err
 }

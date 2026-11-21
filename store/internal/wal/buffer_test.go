@@ -20,7 +20,7 @@ func TestBufferLazy(t *testing.T) {
 	if w.Published() != 0 {
 		t.Fatalf("published %d antes de pedirlo", w.Published())
 	}
-	if size := vfsSize(t, fsys, segPath(dir, 1)); size != 0 {
+	if size := vfsSize(t, fsys, segPath(dir, 1)); size != SegmentHeaderSize {
 		t.Fatalf("el segmento mide %d antes de pedirlo", size)
 	}
 	if err := w.WaitDurable(20); err != nil {

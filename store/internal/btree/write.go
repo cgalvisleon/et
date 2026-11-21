@@ -29,7 +29,7 @@ func (t *BTree) Write(id string, w Write) (Result, error) {
 	defer t.guard.leave(t.guard.enter())
 	var hs hints
 	defer t.flushHints(&hs)
-	grow := t.grower != nil
+	prep := beforeSplit{prune: t.horizon != nil, grow: t.grower != nil}
 	for {
 		h, n, rootLevel, err := t.leafForWrite(k, len(item))
 		var fe *finishError
@@ -42,7 +42,7 @@ func (t *BTree) Write(id string, w Write) (Result, error) {
 		if err != nil {
 			return Result{}, err
 		}
-		res, done, err := t.writeLeaf(h, n, k, item, w, rootLevel, &hs, &grow)
+		res, done, err := t.writeLeaf(h, n, k, item, w, rootLevel, &hs, &prep)
 		if err != nil || done {
 			return res, err
 		}
@@ -92,10 +92,10 @@ func (t *BTree) tryFastLeaf(k key, size int) (buffer.Handle, node, bool) {
 * @param h buffer.Handle, n node: la hoja, bloqueada en exclusivo
 * @param k key: searchKey(id), item []byte: la entrada sin lsn, w Write, rootLevel uint32
 * @param hs *hints: las marcas de visibilidad que se ponen al mirar las versiones
-* @param grow *bool: si todavía puede soltar la hoja para extender el archivo antes de partirla (una vez por Write)
+* @param prep *beforeSplit: lo que todavía se puede intentar antes de partir (una vez cada cosa por Write)
 * @return Result, bool: false si la hoja se partió (o se soltó para extender) y hay que volver a bajar, error
 **/
-func (t *BTree) writeLeaf(h buffer.Handle, n node, k key, item []byte, w Write, rootLevel uint32, hs *hints, grow *bool) (Result, bool, error) {
+func (t *BTree) writeLeaf(h buffer.Handle, n node, k key, item []byte, w Write, rootLevel uint32, hs *hints, prep *beforeSplit) (Result, bool, error) {
 	pos, err := n.lowerBound(k)
 	if err != nil {
 		h.Release()
@@ -113,15 +113,25 @@ func (t *BTree) writeLeaf(h buffer.Handle, n node, k key, item []byte, w Write, 
 		return Result{}, true, nil
 	}
 	if !fits(n.p, len(item)) {
-		if *grow {
+		if prep.prune {
+			prep.prune = false
+			removed, err := t.pruneLeaf(h, n)
+			if err != nil {
+				h.Release()
+				return Result{}, true, err
+			}
+			if removed > 0 { // la hoja cambió: se vuelve a buscar la posición y la última versión
+				return t.writeLeaf(h, n, k, item, w, rootLevel, hs, prep)
+			}
+		}
+		if prep.grow {
 			// La página nueva de la partición se pide antes, con la hoja suelta: extender el archivo es lento y con
 			// la hoja de más a la derecha bloqueada frenaba a todos los escritores (tarea 100 de F-23)
-			*grow = false
+			prep.grow = false
 			h.Release()
 			return Result{}, false, t.grower.Grow(t.file, w.XID)
 		}
-		atEnd := n.rightmost() && pos > n.maxOff()
-		return Result{}, false, t.splitAndFinish(h, n, atEnd, w.XID)
+		return Result{}, false, t.splitAndFinish(h, n, pos, w.XID)
 	}
 
 	if err := t.clearVisible(n); err != nil {
@@ -146,6 +156,40 @@ func (t *BTree) writeLeaf(h buffer.Handle, n node, k key, item []byte, w Write, 
 		t.fastLeaf.Store(uint32(n.blk))
 	}
 	return Result{Applied: true, LSN: lsn, CountDelta: delta}, true, nil
+}
+
+// beforeSplit es lo que una escritura que no cabe intenta antes de partir la hoja, una vez cada cosa: podar sus
+// versiones muertas (pruneLeaf) y extender el archivo con la hoja suelta (fsm.Grower).
+type beforeSplit struct {
+	prune, grow bool
+}
+
+/**
+* pruneLeaf quita de la hoja, bloqueada en exclusivo, las versiones en línea que ningún snapshot puede ver, con el
+* mismo criterio que la limpieza (planLeaf con el horizonte de Config.Horizon, sin congelar, sin marcar
+* «liberándose» ni liberar desbordes, sin bits del mapa) y su mismo registro: un KindLeafVacuum con solo la lista de
+* quitar y xid 0. Es la limpieza simple / bottom-up deletion de nbtree: una hoja llena de versiones muertas se vacía
+* en lugar de partirse. Como el registro lleva la lista de números, una réplica que lo rehace queda igual byte a
+* byte. Una hoja con page.FlagAllVisible no tiene nada muerto (y quitar no le cambia la marca): no se mira. Las
+* versiones de un id que vienen de la hoja izquierda no heredan su versión de referencia (no se mira esa hoja): poda
+* menos que la limpieza, nunca más; tampoco se mira la hermana derecha (la limpieza puede estar desenganchando hojas
+* ahí): si el último id de la hoja puede seguir a la derecha, su lápida se queda.
+* @param h buffer.Handle, n node: la hoja, bloqueada en exclusivo; sigue bloqueada al volver
+* @return int: cuántas versiones quitó, error
+**/
+func (t *BTree) pruneLeaf(h buffer.Handle, n node) (int, error) {
+	if n.p.Flags()&page.FlagAllVisible != 0 {
+		return 0, nil
+	}
+	plan, err := t.planLeaf(n, VacuumOptions{Horizon: t.horizon()}, &vacuumGroup{}, false)
+	if err != nil || len(plan.remove) == 0 {
+		return 0, err
+	}
+	if err := t.logVacuum(h, pageVacuum{remove: plan.remove}, 0); err != nil {
+		return 0, err
+	}
+	t.pruned.Add(uint64(len(plan.remove)))
+	return len(plan.remove), nil
 }
 
 /**

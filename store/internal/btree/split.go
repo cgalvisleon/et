@@ -9,11 +9,16 @@ import (
 )
 
 // Llenado de la izquierda al partir la página de más a la derecha cuando la inserción va al final (claves
-// crecientes): casi llena, como el fillfactor de nbtree (90 hojas, 70 internas). Si no, mitad y mitad por bytes.
+// crecientes): casi llena, como el fillfactor de nbtree (90 hojas, 70 internas). Si no, mitad y mitad por bytes, salvo
+// en una hoja con inserción ascendente local (ver ascendingAt).
 const (
 	leafFillAtEnd     = 0.9
 	internalFillAtEnd = 0.7
 	balancedFill      = 0.5
+
+	// ascendingRun es el largo de la racha de lsn creciente antes del punto de inserción que hace partir ahí
+	// (ascendingAt).
+	ascendingRun = 4
 )
 
 // splitPlan es cómo se parte una página: cuántos ítems de datos quedan a la izquierda, su clave alta nueva (que es
@@ -28,12 +33,12 @@ type splitPlan struct {
 * splitAndFinish parte la página (primer paso, KindSplit) y termina la partición (segundo paso, el enlace en el padre
 * o la raíz nueva). Consume h.
 * @param h buffer.Handle, n node: bloqueada en exclusivo, sin partición incompleta
-* @param atEnd bool: la inserción que no cupo iba al final de la página de más a la derecha
+* @param pos page.OffsetNumber: dónde iba la inserción que no cupo
 * @param xid page.XID: la transacción que pide la página nueva
 * @return error
 **/
-func (t *BTree) splitAndFinish(h buffer.Handle, n node, atEnd bool, xid page.XID) error {
-	if err := t.split(h, n, atEnd, xid); err != nil {
+func (t *BTree) splitAndFinish(h buffer.Handle, n node, pos page.OffsetNumber, xid page.XID) error {
+	if err := t.split(h, n, pos, xid); err != nil {
 		return err
 	}
 	if t.afterSplit != nil {
@@ -52,11 +57,11 @@ func (t *BTree) splitAndFinish(h buffer.Handle, n node, atEnd bool, xid page.XID
 * store/doc.go: la regla de no fijar con una página bloqueada); la página nueva no la ve nadie más, y la antigua
 * hermana se bloquea de izquierda a derecha. Consume h.
 * @param h buffer.Handle, n node: la página, bloqueada en exclusivo, sin partición incompleta
-* @param atEnd bool, xid page.XID: ver splitAndFinish
+* @param pos page.OffsetNumber, xid page.XID: ver splitAndFinish
 * @return error
 **/
-func (t *BTree) split(h buffer.Handle, n node, atEnd bool, xid page.XID) error {
-	plan, err := planSplit(n, atEnd)
+func (t *BTree) split(h buffer.Handle, n node, pos page.OffsetNumber, xid page.XID) error {
+	plan, err := planSplit(n, pos)
 	if err == nil {
 		err = t.clearVisible(n) // la izquierda se arma de nuevo, sin page.FlagAllVisible
 	}
@@ -112,10 +117,10 @@ func (t *BTree) split(h buffer.Handle, n node, atEnd bool, xid page.XID) error {
 * En una hoja la clave alta nueva es el separador truncado entre la última clave de la izquierda y la primera de la
 * derecha; en una interna, la clave del primer enlace de la derecha, que pasa a ser menos infinito ahí.
 * @param n node: la página, bloqueada en exclusivo
-* @param atEnd bool: llenar la izquierda (claves crecientes)
+* @param pos page.OffsetNumber: dónde iba la inserción que no cupo (decide el llenado buscado, splitTarget)
 * @return splitPlan, error: ErrCorrupt si no hay punto válido (no pasa con MaxEntrySize)
 **/
-func planSplit(n node, atEnd bool) (splitPlan, error) {
+func planSplit(n node, pos page.OffsetNumber) (splitPlan, error) {
 	first, count := n.firstData(), n.dataCount()
 	if count < 2 {
 		return splitPlan{}, corruptAt(n.blk, "page with %d items cannot be split", count)
@@ -143,7 +148,7 @@ func planSplit(n node, atEnd bool) (splitPlan, error) {
 		rightBase = page.SpaceFor(len(hk))
 	}
 
-	target := int(float64(total) * fillFor(n.leaf(), atEnd))
+	target := splitTarget(n, pos, items, keys, total)
 	best, bestDiff, left := -1, 0, 0
 	for s := 1; s < count; s++ {
 		left += page.SpaceFor(len(items[s-1]))
@@ -205,6 +210,56 @@ func splitKey(leaf bool, last, first key) key {
 		return separator(last, first)
 	}
 	return cloneKey(first)
+}
+
+/**
+* splitTarget es cuántos bytes de datos buscan quedar a la izquierda. Al final de la página de más a la derecha, el
+* llenado de claves crecientes (fillFor). En una hoja con inserción ascendente local (ascendingAt), el punto de
+* inserción: lo de la izquierda no vuelve a recibir inserciones, así que queda llena; acotado arriba al 90 % (la
+* inserción al final de una hoja que no es la de más a la derecha deja un 10 % a la derecha, como el usemult de
+* _bt_findsplitloc) y solo si deja la izquierda al menos a la mitad (si no, mitad y mitad: partir antes de la mitad
+* dejaría la izquierda medio vacía para siempre). Si no, mitad y mitad.
+* @param n node, pos page.OffsetNumber, items [][]byte, keys []key: los ítems de datos, total int: sus bytes
+* @return int
+**/
+func splitTarget(n node, pos page.OffsetNumber, items [][]byte, keys []key, total int) int {
+	atEnd := n.rightmost() && pos > n.maxOff()
+	if atEnd || !n.leaf() || !ascendingAt(n, pos, keys) {
+		return int(float64(total) * fillFor(n.leaf(), atEnd))
+	}
+	left := 0
+	for i := range int(pos - n.firstData()) {
+		left += page.SpaceFor(len(items[i]))
+	}
+	if left < int(float64(total)*balancedFill) {
+		return int(float64(total) * balancedFill)
+	}
+	return min(left, int(float64(total)*leafFillAtEnd))
+}
+
+/**
+* ascendingAt dice si la inserción en pos sigue una racha ascendente local (como _bt_afternewitemoff de nbtree): las
+* ascendingRun versiones justo antes de pos se escribieron en ese orden (lsn creciente hacia pos). Es lo que deja un
+* grupo de duplicados con sufijo creciente que crece por el final (un índice valor + jid de josefina: cada documento
+* nuevo va al final del grupo de su valor), aunque varios grupos terminen en la misma hoja, y cualquier secuencia
+* creciente que cae en medio del árbol. No se guarda nada en memoria: el lsn de cada versión ya dice el orden. Con
+* inserciones al azar la racha sale una vez cada ascendingRun! (24) y además tiene que caer pasada la mitad de la
+* hoja; si no, se parte mitad y mitad. Las versiones de un mismo id van de la más nueva a la más vieja: cortan la
+* racha.
+* @param n node: una hoja, pos page.OffsetNumber, keys []key: las claves de sus ítems de datos
+* @return bool
+**/
+func ascendingAt(n node, pos page.OffsetNumber, keys []key) bool {
+	end := int(pos - n.firstData()) // la racha son keys[end-ascendingRun : end]
+	if end < ascendingRun || end > len(keys) {
+		return false
+	}
+	for i := end - ascendingRun + 1; i < end; i++ {
+		if keys[i].lsn <= keys[i-1].lsn {
+			return false
+		}
+	}
+	return true
 }
 
 /**

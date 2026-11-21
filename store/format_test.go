@@ -17,12 +17,14 @@ import (
 	"github.com/cgalvisleon/et/store/internal/crashfs"
 	"github.com/cgalvisleon/et/store/internal/page"
 	"github.com/cgalvisleon/et/store/internal/smgr"
+	"github.com/cgalvisleon/et/store/internal/wal"
 )
 
 // Pruebas de la versión del formato en disco (tarea 54 de F-23; «Versiones del formato» en doc.go).
 
-// updateFormatV1 regenera store/testdata/format-v1 (el directorio de referencia del formato 1). Solo al congelar el
-// formato: después, cambiarlo exige una versión nueva, su migración y otro directorio de referencia.
+// updateFormatV1 regenera store/testdata/format-v1 (el directorio de referencia del formato 1). Se usó una vez, al
+// congelar el formato (2026-11-21): no se vuelve a usar; un cambio de formato lleva versión nueva, su migración y
+// otro directorio de referencia.
 var updateFormatV1 = flag.Bool("update-format-v1", false, "regenerate store/testdata/format-v1")
 
 // formatV1Dir es el directorio de referencia del formato 1.
@@ -41,12 +43,13 @@ var (
 )
 
 /**
-* formatConfig es testConfig para el directorio de referencia: WAL sin preasignar ni repuestos (archivos chicos) y
-* con el archivo continuo (archive_status).
+* formatConfig es testConfig para el directorio de referencia: WAL de segmentos de 128 KB sin preasignar ni repuestos
+* (archivos chicos: un segmento sellado mide entero) y con el archivo continuo (archive_status).
 * @return config
 **/
 func formatConfig() config {
 	cfg := testConfig()
+	cfg.wal.SegmentSize = 128 << 10
 	cfg.wal.Preallocate = false
 	cfg.wal.Spares = 0
 	cfg.archive = true
@@ -71,19 +74,19 @@ func buildFormatReference(t testing.TB) formatReference {
 		mustOK(t, err)
 
 		small := mustStore(t, e, "small")
-		for i := range 400 {
-			mustOK(t, small.Put(fmt.Sprintf("s%04d", i), bytes.Repeat([]byte{byte('a' + i%26)}, 80)))
+		for i := range 120 {
+			mustOK(t, small.Put(fmt.Sprintf("s%04d", i), bytes.Repeat([]byte{byte('a' + i%26)}, 40)))
 		}
 		big := mustStore(t, e, "big")
 		for i := range 3 {
-			mustOK(t, big.Put(fmt.Sprintf("b%d", i), bytes.Repeat([]byte{byte('A' + i)}, 20_000)))
+			mustOK(t, big.Put(fmt.Sprintf("b%d", i), bytes.Repeat([]byte{byte('A' + i)}, 10_000)))
 		}
-		mustOK(t, big.Put("b0", bytes.Repeat([]byte{'Z'}, 18_000))) // la cadena vieja se libera en la limpieza
+		mustOK(t, big.Put("b0", bytes.Repeat([]byte{'Z'}, 9_000))) // la cadena vieja se libera en la limpieza
 		pages := mustStore(t, e, "pages")
-		for i := range 800 {
+		for i := range 500 {
 			mustOK(t, pages.Put(fmt.Sprintf("p%04d", i), bytes.Repeat([]byte{'p'}, 60)))
 		}
-		for i := 50; i < 750; i++ {
+		for i := 50; i < 450; i++ {
 			mustOK(t, pages.Remove(fmt.Sprintf("p%04d", i)))
 		}
 		emptied := mustStore(t, e, "emptied")
@@ -208,6 +211,21 @@ func checkCodecs(t testing.TB, img diskImage, label, strict bool) {
 	if pages == 0 {
 		t.Fatal("no data pages")
 	}
+	segments := 0
+	for _, p := range img.paths {
+		if filepath.Base(filepath.Dir(p)) != wal.Dir {
+			continue
+		}
+		h, err := wal.ParseSegmentHeader(img.files[p])
+		mustOK(t, err)
+		if wal.SegmentName(h.Num) != filepath.Base(p) || h.Version != control.FormatVersion || h.First == 0 {
+			t.Fatalf("%s: header %+v", p, h)
+		}
+		segments++
+	}
+	if segments == 0 {
+		t.Fatal("no WAL segments")
+	}
 }
 
 /**
@@ -246,7 +264,7 @@ func TestFormatV1Reference(t *testing.T) {
 		writeReference(t, buildFormatReference(t))
 	}
 	if _, err := os.Stat(formatV1Dir); errors.Is(err, os.ErrNotExist) {
-		t.Skip("tarea 54: el formato 1 todavía no se congeló (ver doc.go, «Versiones del formato»)")
+		t.Fatalf("falta %s: el formato 1 está congelado (tarea 54; doc.go, «Versiones del formato»)", formatV1Dir)
 	}
 	checkReference(t, readReference(t))
 }
@@ -331,6 +349,37 @@ func setVersion(b []byte, chunk int, version uint32) []byte {
 	return out
 }
 
+// segmentHeaderChunk marca en TestOpenFormatVersion un segmento del WAL: la versión va en su encabezado.
+const segmentHeaderChunk = -1
+
+/**
+* firstSegment es el primer segmento del WAL de img, relativo al motor («wal/0000000001.seg»).
+* @param img diskImage
+* @return string
+**/
+func firstSegment(img diskImage) string {
+	first := ""
+	for _, p := range img.paths {
+		if filepath.Base(filepath.Dir(p)) == wal.Dir && (first == "" || filepath.Base(p) < first) {
+			first = filepath.Base(p)
+		}
+	}
+	return filepath.Join(wal.Dir, first)
+}
+
+/**
+* setSegmentVersion pone version en el encabezado de un segmento del WAL (byte 8) y recalcula su suma (CRC-32C de
+* [4, 32) en el byte 0): un segmento bien escrito por un binario de otra versión.
+* @param b []byte, version uint32
+* @return []byte: una copia cambiada
+**/
+func setSegmentVersion(b []byte, version uint32) []byte {
+	out := bytes.Clone(b)
+	le.PutUint32(out[8:], version)
+	le.PutUint32(out[0:], crc32.Checksum(out[4:wal.SegmentHeaderSize], crc32.MakeTable(crc32.Castagnoli)))
+	return out
+}
+
 // TestOpenFormatVersion (tarea 54): Open sobre un directorio con un archivo de otra versión del formato (más nueva o
 // anterior) devuelve ErrFormatVersion y no toca nada del disco.
 func TestOpenFormatVersion(t *testing.T) {
@@ -348,6 +397,8 @@ func TestOpenFormatVersion(t *testing.T) {
 		{"slots newer", ref.primary, slotsFileName, 0, 2},
 		{"archive_status older", ref.primary, archiveStatusName, 0, 0},
 		{"backup_label newer", ref.backup, backupLabelName, 0, 9},
+		{"wal segment newer", ref.primary, firstSegment(ref.primary), segmentHeaderChunk, 2},
+		{"wal segment older", ref.backup, firstSegment(ref.backup), segmentHeaderChunk, 0},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -360,7 +411,11 @@ func TestOpenFormatVersion(t *testing.T) {
 			if chunk == 0 {
 				chunk = len(img.files[p])
 			}
-			img.files[p] = setVersion(img.files[p], chunk, c.version)
+			if chunk == segmentHeaderChunk {
+				img.files[p] = setSegmentVersion(img.files[p], c.version)
+			} else {
+				img.files[p] = setVersion(img.files[p], chunk, c.version)
+			}
 			fsys := writeImage(t, img)
 			_, err := open(fsys, testDir, formatConfig())
 			if !errors.Is(err, ErrFormatVersion) {
@@ -379,6 +434,31 @@ func TestOpenFormatVersion(t *testing.T) {
 				if _, ok := img.files[q]; !ok && filepath.Base(q) != lockName {
 					t.Fatalf("open created %s", q)
 				}
+			}
+		})
+	}
+}
+
+// TestOpenBrokenSegmentHeader (pregunta 76): un encabezado de segmento del WAL roto (el del punto de rehacer) hace
+// fallar Open con ErrCorrupt; el primario y la copia de Backup, cada uno con su último segmento.
+func TestOpenBrokenSegmentHeader(t *testing.T) {
+	ref := buildFormatReference(t)
+	for name, src := range map[string]diskImage{"primary": ref.primary, "backup": ref.backup} {
+		t.Run(name, func(t *testing.T) {
+			img := diskImage{files: map[string][]byte{}, paths: src.paths, dirs: src.dirs}
+			last := ""
+			for p, data := range src.files {
+				img.files[p] = data
+				if filepath.Base(filepath.Dir(p)) == wal.Dir && p > last {
+					last = p
+				}
+			}
+			broken := bytes.Clone(img.files[last])
+			broken[20] ^= 0xff // el número del segmento: el crc ya no coincide
+			img.files[last] = broken
+			_, err := open(writeImage(t, img), testDir, formatConfig())
+			if !errors.Is(err, ErrCorrupt) {
+				t.Fatalf("open with a broken header in %s: %v, want ErrCorrupt", last, err)
 			}
 		})
 	}

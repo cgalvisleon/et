@@ -18,7 +18,25 @@ var (
 	ErrorPackageNotMounted = errors.New("rpc package not mounted")
 	pkg                    *Package
 	resolver               func(method string) (*Solver, error)
+	// docs: the contract of each method ("Struct.Method") that declares one (SetDoc), as GET /rpcs publishes it
+	docs = map[string]et.Json{}
 )
+
+/**
+* SetDoc: The contract of a method ("Struct.Method"): {description, body, response} in JSON Schema, published by
+* Methods (GET /rpcs). It may be set before or after Mount; an empty doc removes it
+* @param method string, doc et.Json
+**/
+func SetDoc(method string, doc et.Json) {
+	mu.Lock()
+	defer mu.Unlock()
+
+	if len(doc) == 0 {
+		delete(docs, method)
+		return
+	}
+	docs[method] = doc
+}
 
 /**
 * SetResolver: Where to find a method that this process did not mount (another service): GetSolver asks it after the
@@ -64,6 +82,7 @@ func GetSolver(method string) (*Solver, error) {
 
 /**
 * Methods: The methods mounted in this process, as GET /rpcs gives them: {packageName, method, host, port, inputs, output}
+* and doc for the ones that declare it (SetDoc)
 * @return []et.Json
 **/
 func Methods() []et.Json {
@@ -77,14 +96,18 @@ func Methods() []et.Json {
 
 	for _, method := range slices.Sorted(maps.Keys(pkg.Solvers)) {
 		solver := pkg.Solvers[method]
-		result = append(result, et.Json{
+		item := et.Json{
 			"packageName": pkg.Name,
 			"method":      method,
 			"host":        solver.Host,
 			"port":        solver.Port,
 			"inputs":      solver.Inputs,
 			"output":      solver.Output,
-		})
+		}
+		if doc, ok := docs[method]; ok {
+			item["doc"] = doc
+		}
+		result = append(result, item)
 	}
 	return result
 }

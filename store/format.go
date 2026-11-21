@@ -9,6 +9,7 @@ import (
 	"slices"
 
 	"github.com/cgalvisleon/et/store/internal/control"
+	"github.com/cgalvisleon/et/store/internal/wal"
 )
 
 // Versión del formato en disco (tarea 54 de F-23): ver «Versiones del formato» en doc.go. Open revisa, antes de leer
@@ -30,7 +31,7 @@ var formatHeaders = []formatHeader{
 
 /**
 * checkFormat comprueba, sin escribir nada, la versión del formato de los archivos de la raíz: el control (cualquier
-* copia con su crc válido), el catálogo, backup_label, archive_status y slots. Un archivo que no existe no cuenta; uno
+* copia con su crc válido), el catálogo, el encabezado de cada segmento del WAL, backup_label, archive_status y slots. Un archivo que no existe no cuenta; uno
 * sin la magia de su formato tampoco (es daño, y lo informa quien lo lee después).
 * @return error: ErrFormatVersion
 **/
@@ -48,6 +49,12 @@ func (e *Engine) checkFormat() error {
 		if _, err := e.catFile.Read(); errors.Is(err, control.ErrFormatVersion) {
 			return fmt.Errorf(MSG_FORMAT_CONTROL, ErrFormatVersion, err)
 		}
+	}
+	if name, version, found, err := wal.OtherVersion(e.fs, e.dir); err != nil || found {
+		if err != nil {
+			return err
+		}
+		return formatError(name, version)
 	}
 	for _, h := range formatHeaders {
 		if !slices.Contains(names, h.name) {

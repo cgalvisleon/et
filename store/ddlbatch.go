@@ -194,7 +194,7 @@ func (e *Engine) dropStoreInLocked(b *Batch, name string, waitedDrop bool) (page
 * @return error: ErrBusy
 **/
 func (b *Batch) markDrop(s *Store) error {
-	s.mu.Lock()
+	s.lockDDL()
 	defer s.mu.Unlock()
 	others := s.batchWriters.Load()
 	if _, ok := b.written[s]; ok {
@@ -416,7 +416,7 @@ func (b *Batch) applyDDL() error {
 	e := b.e
 	for _, s := range b.creates {
 		e.cat.ClearFlags(s.file, control.FlagPendingCreate)
-		s.mu.Lock()
+		s.lockDDL()
 		s.creator, s.createdBy = 0, b.xid
 		s.mu.Unlock()
 	}
@@ -443,7 +443,7 @@ func (b *Batch) applyDDL() error {
 func (b *Batch) undoDDL() error {
 	e := b.e
 	for _, s := range b.drops {
-		s.mu.Lock()
+		s.lockDDL()
 		s.dropper = 0
 		s.mu.Unlock()
 	}

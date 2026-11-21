@@ -82,8 +82,7 @@ func (t *BTree) insertPivot(h buffer.Handle, n node, link []byte) (bool, error) 
 	pos := off + 1
 	if !fits(pn.p, len(link)) {
 		h.Release()
-		atEnd := pn.rightmost() && pos > pn.maxOff()
-		return false, t.split(ph, pn, atEnd, 0)
+		return false, t.split(ph, pn, pos, 0)
 	}
 	refs := []wal.BlockRef{{Delta: itemDelta(pos, link)}, {}}
 	hs := []buffer.Handle{ph, h}

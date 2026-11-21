@@ -148,6 +148,11 @@ type VacuumOptions struct {
 	// safexid de nbtree), leída al desengancharla. Una pasada posterior la recicla cuando su Horizon la supera: ningún
 	// snapshot de antes del borrado sigue abierto. nil = Horizon de esta pasada (pruebas).
 	NextXID func() page.XID
+
+	// Stop, si no es nil, se mira antes de cada hoja: si da true la pasada se corta con ErrVacuumStopped (Complete
+	// = false; lo hecho hasta ahí queda, cada hoja es un cambio completo). El motor la corta cuando un DDL espera el
+	// store o Close detiene el motor (V2 y V3 de la revisión del 2026-11-20).
+	Stop func() bool
 }
 
 // VacuumStats es lo que hizo una limpieza.

@@ -68,7 +68,7 @@ Medido con 100 millones de claves (`RESULTADOS.md`, VM Linux): el heap vivo qued
 | recorrido dentro de un lote | no existe (`ForEachIn`). Se recorre con un snapshot y, dentro del lote, se lee por id con `ReadIn` |
 | réplica síncrona | no existe: el primario no espera a la réplica al confirmar |
 | líneas de tiempo | no existen: el primario viejo no puede seguir a una réplica promovida |
-| formato en disco | versión 1, todavía **no congelado** (tarea 54; ver la sección 10) |
+| formato en disco | versión 1, **congelada** el 2026-11-21 (tarea 54; ver la sección 10) |
 
 ### Abrir y cerrar
 
@@ -146,11 +146,19 @@ reemplazado, limpieza de fondo frecuente). La meta del bloque A es ≤ 1,5 × lo
 | Valor | Disco del store / datos vivos (ids + valores) |
 |---|---|
 | 100 B | 1,65 × (pesan los 32 B por versión) |
-| **256 B** | **1,48 ×** (dentro de la meta) |
+| **256 B** | **1,38 ×** (dentro de la meta) |
 | 1 KB | 1,40 × |
 
 En una carga sin reemplazos (`RESULTADOS.md`, 100 millones de claves de 11 B con valores de 100 B) se midieron
 ~167 B por clave: 16,7 GB en total.
+
+Con muchas claves chicas sin valor (los índices de josefina) pesan más el encabezado y el llenado. En un modelo de
+100.000 documentos con 7 índices (`TestIndexHeaderShare`, `STORE_BENCH=1`; claves de ~54 B sin valor) los índices
+ocupan **2,0 × sus datos** recién cargados (hojas al 82 %) y **2,1 ×** tras actualizar una cuarta parte de los
+documentos (al 79 %); el store de documentos queda en 1,3 × (al 85 %). Los 28 B por versión son ~25 % de ese disco.
+Antes de la tarea 108 (2026-11-21) eran 2,5 × y 2,9 × y el store de documentos subía a 2,3 ×: ahora una escritura
+poda las versiones muertas de la hoja antes de partirla y el final de un grupo de duplicados se parte en el punto de
+inserción. Para dimensionar, cuenta ~2,2 × los ids de los índices.
 
 Además del store, cuenta con lo siguiente:
 
@@ -432,7 +440,7 @@ que sigue abierto (también un `SnapshotFor(0)` olvidado o un recorrido detenido
 - **retiene las versiones muertas**: el disco crece con cada reemplazo;
 - **retiene las páginas borradas**: no se reciclan mientras su `safeXID` no quede por debajo del horizonte;
 - **frena el congelado**: el archivo de estados no se trunca y crece `FrozenAge`;
-- **hace que `Empty` devuelva `ErrBusy`**, y que `DropStoreIn` espere.
+- **hace que `Empty` devuelva `ErrBusy`**, y que `DropStore` y `DropStoreIn` esperen (si el lote escribió en ese store).
 
 En la práctica:
 
@@ -978,7 +986,7 @@ Compara siempre con `errors.Is`. Los errores pueden venir envueltos: un disco ll
 | `ErrTimeout` | el lote o el snapshot pasó su tiempo máximo | sí, más corto | Lotes más cortos, o `SnapshotFor`. | no |
 | `ErrTxDone` | el lote o el snapshot ya terminó | no | Error de la aplicación. | no |
 | `ErrOtherEngine` | el lote o el snapshot es de otro motor | no | Error de la aplicación. | no |
-| `ErrBusy` | `Empty` con lotes o snapshots abiertos; `DropStoreIn` con otros lotes que escribieron en el store; `CreateLogicalSlot` que no pudo esperar | sí, cuando terminen | Cierra snapshots y lotes largos. | no |
+| `ErrBusy` | `Empty` con lotes o snapshots abiertos; `DropStore` o `DropStoreIn` con otros lotes abiertos que escribieron en el store (los espera hasta `LOCK_TIMEOUT`); `CreateLogicalSlot` que no pudo esperar | sí, cuando terminen | Cierra snapshots y lotes largos. | no |
 | `ErrStorePending` | el store lo crea o lo borra un lote abierto | sí, cuando ese lote termine | — | no |
 | `ErrStoreNotFound` | `DropStore` de un store que no existe, o `Store` de uno inexistente en una réplica | no | — | no |
 | `ErrStoreDropped` | el store se borró; su `*Store` ya no sirve | no | Pide el store de nuevo con `Store(name)`. | no |
@@ -1091,33 +1099,35 @@ Nada crece en el heap de Go cuando el disco tarda:
 
 ## 10. Actualizar de versión
 
-**El formato en disco todavía no está congelado.** La tarea 54 (versión 1.0: formato congelado; todo cambio posterior
-con migración y prueba de ida y vuelta) está **en curso**: ya están la versión por archivo, `ErrFormatVersion` y la
-prueba de ida y vuelta, pero falta guardar el directorio de referencia `store/testdata/format-v1`, que espera dos
-decisiones que cambiarían el formato (compactar el encabezado de cada versión, tarea 96, y un encabezado con versión
-en los segmentos del WAL). Hasta la versión 1.0, actualizar `et` puede exigir migrar los datos. Desde la 1.0, todo
-cambio de formato llevará versión nueva, migración y prueba de ida y vuelta.
+**El formato en disco 1 está congelado desde el 2026-11-21** (tarea 54). El directorio de referencia
+`store/testdata/format-v1` (un motor y su copia de `Backup`) lo abre `TestFormatV1Reference` en cada corrida de las
+pruebas: un cambio que lo rompa no pasa. Desde ahora, **todo cambio en disco sube la versión** y lleva migración,
+otro directorio de referencia junto al anterior y su prueba de ida y vuelta.
 
-Lo que hay hoy:
+**Directorios anteriores al 2026-11-21 no abren.** El encabezado de los segmentos del WAL (pregunta 76) cambió el
+formato antes de congelarlo: un directorio escrito antes tiene segmentos sin encabezado y `Open` falla con
+`ErrFormatVersion` («wal/0000000001.seg has format version 0, older … not migratable») sin tocar nada. Para pasarlo,
+migra (paso 4 de abajo) con el binario de `et` con que se escribió.
 
-- **Una sola versión de formato.** El control (cada copia), el catálogo, `backup_label`, `archive_status` y `slots`
-  llevan `FormatVersion = 1`; las páginas, la suya en `pd_pagesize_version`, y la meta de cada store, la suya. El WAL y
-  el archivo de estados no llevan versión propia: los cubre la del control. La tabla completa está en `store/doc.go`
-  («Versiones del formato»).
+Lo que hay:
+
+- **Una sola versión de formato.** El control (cada copia), el catálogo, el encabezado de cada segmento del WAL,
+  `backup_label`, `archive_status` y `slots` llevan `FormatVersion = 1`; las páginas, la suya en `pd_pagesize_version`,
+  y la meta de cada store, la suya. El archivo de estados no lleva versión propia: lo cubre la del control. La tabla
+  completa está en `store/doc.go` («Versiones del formato»).
+- **Un segmento del WAL suelto dice su versión.** Uno archivado, en una copia o recibido por una réplica empieza con
+  un encabezado de 32 B (magia, versión, número y lsn de su primer registro; `store/internal/wal/doc.go`). Uno roto
+  hace fallar `Open`, `OpenAt`, `OpenReplica`, `WalSince` y el archivo continuo con `ErrCorrupt`.
 - **Otra versión hace fallar `Open` sin tocar nada**, con `ErrFormatVersion` (`errors.Is(err, store.ErrFormatVersion)`).
   El mensaje nombra el archivo y dice si la versión es más nueva («upgrade et») o anterior («not migratable»). Basta
   con que una copia válida del control sea de otra versión: `Open` no vuelve a la copia vieja.
-- **Cambios compatibles dentro de la versión 1.** El formato cambió sin subir la versión, de modo que el código nuevo lee
-  lo viejo:
-  - la pila de páginas borradas de la meta (tarea 70: una meta anterior se lee con la pila vacía);
-  - la cola de DDL y el origen en `KindCommit` (tarea 83: los registros viejos se leen igual);
-  - la marca de sellado de los segmentos del WAL (tarea 90).
-
-  Lo contrario (un binario viejo que lee lo que escribió uno nuevo) no está garantizado (**a confirmar**): **no vuelvas
-  atrás de versión sobre el mismo directorio**.
+- **Antes de congelar, el formato cambió sin subir la versión** (la pila de páginas borradas de la meta, tarea 70; la
+  cola de DDL y el origen en `KindCommit`, tarea 83; la marca de sellado de los segmentos, tarea 90): todo eso es parte
+  de la versión 1. Un binario viejo que lee lo que escribió uno nuevo no está garantizado: **no vuelvas atrás de
+  versión sobre el mismo directorio**.
 - **La réplica física copia el WAL byte a byte.** El primario y sus réplicas tienen que correr la misma versión de `et`.
 
-Procedimiento hasta la 1.0:
+Procedimiento para actualizar:
 
 1. Fija la versión de `et` en el `go.mod` del servicio con un tag (`./version.sh` en `et`). No dependas del `go.work`
    en producción.

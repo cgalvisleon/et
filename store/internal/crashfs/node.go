@@ -22,6 +22,15 @@ func (op fileOp) apply(buf []byte) []byte {
 	return buf
 }
 
+// place devuelve el lugar asignado tras op: una escritura ocupa los bytes que escribe (también dentro de un hueco);
+// un truncado libera lo que corta y, si agranda, no ocupa nada (deja un hueco).
+func (op fileOp) place(alloc extents) extents {
+	if op.truncate {
+		return alloc.cut(op.off)
+	}
+	return alloc.add(op.off, op.off+int64(len(op.data)))
+}
+
 // resize corta buf o lo extiende con ceros hasta size.
 func resize(buf []byte, size int64) []byte {
 	if size <= int64(len(buf)) {
@@ -47,11 +56,15 @@ type inode struct {
 	data    []byte   // lo que ven las lecturas
 	durable []byte   // el contenido en el último Sync
 	pending []fileOp // escrituras y truncados desde el último Sync, en orden
+
+	alloc        extents // los bytes con lugar asignado (escritos): un hueco no ocupa disco
+	durableAlloc extents // alloc en el último Sync
 }
 
-// change aplica op al contenido actual y la anota como pendiente de Sync.
+// change aplica op al contenido actual y a su lugar asignado, y la anota como pendiente de Sync.
 func (n *inode) change(op fileOp) {
 	n.data = op.apply(n.data)
+	n.alloc = op.place(n.alloc)
 	n.pending = append(n.pending, op)
 }
 
@@ -60,6 +73,7 @@ func (n *inode) sync() {
 	for _, op := range n.pending {
 		n.durable = op.apply(n.durable)
 	}
+	n.durableAlloc = n.alloc.clone()
 	n.pending = nil
 }
 
@@ -68,10 +82,11 @@ func (n *inode) dropPending() {
 	n.pending = nil
 }
 
-// reset deja el nodo en data, todo durable (el estado tras un corte).
-func (n *inode) reset(data []byte) {
+// reset deja el nodo en data con el lugar asignado alloc, todo durable (el estado tras un corte).
+func (n *inode) reset(data []byte, alloc extents) {
 	n.data = data
 	n.durable = append([]byte(nil), data...)
+	n.alloc, n.durableAlloc = alloc, alloc.clone()
 	n.pending = nil
 }
 

@@ -56,7 +56,7 @@ func TestSwitchSegmentInfo(t *testing.T) {
 	}
 	w, _, recs := openTest(t, fsys, dir, opts, Start)
 	checkHistory(t, recs, 200)
-	if info := info1(w); info.End.LSN != 31 || info.End.Offset != fileSizeOfHistory(t, 30) {
+	if info := info1(w); info.End.LSN != 31 || info.End.Offset != SegmentHeaderSize+fileSizeOfHistory(t, 30) {
 		t.Fatalf("segment 1 after reopening: %+v", info)
 	}
 	check(w)
@@ -64,7 +64,7 @@ func TestSwitchSegmentInfo(t *testing.T) {
 
 	// Desde un punto de rehacer posterior: el segmento 1 no se recorrió al abrir y SegmentInfo lo lee entero.
 	second := firstOf(t, fsys, dir, 2)
-	w, _, _ = openTest(t, fsys, dir, opts, Position{Segment: 2, Offset: 0, LSN: second})
+	w, _, _ = openTest(t, fsys, dir, opts, Position{Segment: 2, Offset: SegmentHeaderSize, LSN: second})
 	if _, known := w.sizes[1]; known {
 		t.Fatal("segment 1 should not be known")
 	}
@@ -118,7 +118,7 @@ func fileSizeOfHistory(t testing.TB, n int) int64 {
 **/
 func firstOf(t testing.TB, fsys vfs.FS, dir string, num uint64) page.LSN {
 	t.Helper()
-	lsn, ok, err := newSegmentScanner().firstLSN(fsys, dir+"/"+Dir, num)
+	lsn, ok, err := firstLSN(fsys, dir+"/"+Dir, num)
 	if err != nil || !ok {
 		t.Fatalf("first record of segment %d: %v %v", num, ok, err)
 	}

@@ -50,6 +50,11 @@ type Config struct {
 	// registros propios, y una marca sin WAL tras un restartpoint podría romper la suma de una página a medio
 	// escribir). El estado se lee siempre del archivo de estados.
 	NoHints bool
+
+	// Horizon da el xid vivo más viejo (xact.Manager.OldestActive), el mismo horizonte que usa la limpieza: con él,
+	// una escritura que no cabe poda antes de partir la hoja las versiones que ningún snapshot puede ver (pruneLeaf,
+	// tarea 108). nil = no poda (pruebas).
+	Horizon func() page.XID
 }
 
 // HintGate es la compuerta entre las marcas de visibilidad y el comienzo de un checkpoint.
@@ -71,10 +76,14 @@ type BTree struct {
 	gate    HintGate
 	vm      fsm.VisibilityMap
 	noHints bool
+	horizon func() page.XID
 
 	// fastLeaf es la pista de la inserción rápida: la última hoja de más a la derecha donde se escribió (0 = ninguna).
 	// Solo es una pista: se comprueba con la hoja bloqueada antes de usarla.
 	fastLeaf atomic.Uint32
+
+	// pruned cuenta las versiones que quitaron las escrituras antes de partir (pruneLeaf): Pruned.
+	pruned atomic.Uint64
 
 	// guard cuenta las operaciones en vuelo: el reciclado de páginas borradas las espera (guard.go).
 	guard opGuard
@@ -102,7 +111,7 @@ func Open(cfg Config) (*BTree, error) {
 	}
 	grower, _ := cfg.Free.(fsm.Grower)
 	return &BTree{file: cfg.File, pool: cfg.Pool, sm: cfg.Smgr, free: cfg.Free, grower: grower, log: cfg.Log,
-		status: cfg.Status, gate: cfg.HintGate, vm: cfg.VM, noHints: cfg.NoHints}, nil
+		status: cfg.Status, gate: cfg.HintGate, vm: cfg.VM, noHints: cfg.NoHints, horizon: cfg.Horizon}, nil
 }
 
 /**
@@ -221,4 +230,13 @@ func releaseAll(hs ...buffer.Handle) {
 			h.Release()
 		}
 	}
+}
+
+/**
+* Pruned es cuántas versiones muertas quitaron las escrituras de las hojas antes de partirlas desde que se abrió el
+* árbol (pruneLeaf).
+* @return uint64
+**/
+func (t *BTree) Pruned() uint64 {
+	return t.pruned.Load()
 }

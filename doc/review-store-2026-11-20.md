@@ -84,10 +84,14 @@ Formato de cada hallazgo: **[gravedad, estado]** `archivo:línea`, con qué pasa
 - **Medida:** con `checkpointTimeout=6s`, Close tardó 4,8 s. En producción puede llegar a unos 4,5 min con el motor detenido.
 - **Sugerencia:** cerrar `stop` (o un canal propio para apurar el checkpoint) antes de `closeMu.Lock`. Que `Checkpoint()` también apure al de fondo.
 
+> **Arreglado (tarea 110, 2026-11-21).** `Engine.ckptHurry` (atómico): `close` lo sube antes de pedir `closeMu.Lock`, y `checkpointNow` (el `Checkpoint()` del usuario) mientras espera `ckptMu`; `pacer` deja de dormir en cuanto es mayor que 0. Prueba: `TestCloseHurriesCheckpoint` (`harden_test.go`: `CHECKPOINT_TIMEOUT` = 30 s, checkpoint de fondo repartiendo, `Checkpoint()` esperando y `Close` con plazo de 3 s; sin el arreglo, Close se colgaba).
+
 **N4. [Medio, confirmado por lectura] `ddl.go:296-302`: `DropStore` suelto no mira los lotes que escribieron en el store.**
 
 - **Qué pasa:** el `Commit` posterior del lote devuelve nil y sus escrituras se pierden en silencio. `DropStoreIn` sí devuelve ErrBusy por `batchWriters`.
 - **Sugerencia:** el mismo chequeo, o documentarlo como decisión. Se relaciona con la tarea 86, la del DDL en lote según 73 y 74.
+
+> **Arreglado (tarea 111, 2026-11-21).** `dropStore` repite `dropStoreOnce`: si un lote abierto escribió en el store (`Store.markDroppedIfIdle` mira `batchWriters` con `Store.mu` en escritura) suelta todo y espera como `DropStoreIn`, hasta `LOCK_TIMEOUT` (0 = sin límite), y al vencer da `ErrBusy`. Prueba: `TestDropStoreWaitsBatchWriters` (con un lote abierto que escribió, `ErrBusy` y el lote confirma su valor; con el lote confirmando durante la espera, el borrado sigue; sin el arreglo `DropStore` devolvía nil). `TestLockWaitDropStore` acepta ahora que la escritura suelta entre antes del borrado.
 
 **N5. [Bajo, plausible] `empty.go:20` y `ddl.go:286`: `Empty` y `DropStore` no pasan por `writable()`/`admit()`.**
 
@@ -147,10 +151,14 @@ Formato de cada hallazgo: **[gravedad, estado]** `archivo:línea`, con qué pasa
 - **Qué pasa:** un `Read` dentro de `fn` mientras `Close` espera en `closeMu.Lock` es un RLock anidado detrás de un escritor pendiente. Close y el lector quedan colgados para siempre.
 - **Sugerencia:** soltar `closeMu` alrededor de `fn`, como hacen los recorridos.
 
+> **Arreglado (tarea 112, 2026-11-21).** `ChangeReader.next` ya no tiene `closeMu`: entra, se cuenta en `Engine.bg` (como un respaldo) y sale; `Close` lo espera en `bg.Wait` y lo corta entre registros (`Engine.stopping`, `ErrClosed`). Una lectura dentro de `fn` con `Close` en curso da `ErrClosed` en vez de colgarse. Prueba: `TestChangesReadInsideFnWithClose` (un `Read` dentro de `fn` con `Close` esperando; sin el arreglo, `Next` y `Close` se colgaban).
+
 **R4. [Medio, confirmado por lectura] `slots.go:181-189`: `waitConsistent` espera hasta TRANSACTION_TIMEOUT (600 s) dentro de `enterSlots`, o sea con `closeMu.RLock` tomado.**
 
 - **Qué pasa:** el comentario dice «sin candados», y no es cierto. Un `Close` en medio congela el motor: los `Commit` que se esperan no pueden entrar.
 - **Sugerencia:** soltar `closeMu` durante la espera.
+
+> **Arreglado (tarea 112, 2026-11-21).** `createSlot` de una ranura lógica se cuenta en `Engine.bg` y suelta `closeMu` antes de `addSlot` y de `waitConsistent`, que espera de a `consistentPoll` (50 ms) mirando `Engine.stopping`: con `Close` devuelve `ErrClosed` y borra la ranura. Comentario «sin candados» corregido (R14). Prueba: `TestLogicalSlotWaitWithClose` (`TRANSACTION_TIMEOUT` = 30 s, un lote abierto, `CreateLogicalSlot` esperando y `Close` con plazo de 3 s; al reabrir no hay ranuras; sin el arreglo, Close se colgaba).
 
 **R5. [Medio, confirmado por lectura] `decode.go:363-365,596`: el nombre del derrame es `hex(slot)-nextFile.spill`, y `nextFile` arranca en 1 en cada lector.**
 
@@ -339,6 +347,8 @@ Formato de cada hallazgo: **[gravedad, estado]** `archivo:línea`, con qué pasa
 - **Qué pasa:** `evict` anota `m.failed` cuando falla su fsync, pero solo lo ven las llamadas que empiezan después.
 - **Escenario:** en Linux (errseq), el `syncSegs` del checkpoint abre un descriptor nuevo y ve éxito. El checkpoint avanza el punto de rehacer y las páginas se pierden.
 - **Sugerencia:** terminar `Sync` y `SyncAll` con `return m.check()`.
+
+> **Arreglado (tarea 113, 2026-11-21).** `return m.check()` al final no alcanzaba: el fsync de la expulsión puede seguir en curso cuando `SyncAll` termina. `manager.evicting` cuenta las expulsiones de descriptores sucios con su fsync en curso (`evicted`, un `sync.Cond` sobre `mu`); `SyncAll` las espera (`waitEvictions`) y termina con `m.check()`; `Sync` también termina con `m.check()`. Prueba: `TestSyncAllSeesEvictFailure` (`smgr/evictsync_test.go`: el fsync de la expulsión del archivo 1 se traba y falla, el descriptor nuevo de `SyncAll` sincroniza bien, como errseq en Linux; sin el arreglo `SyncAll` devolvía nil).
 
 **S3. [Medio, confirmado] `filecache.go:94-101,186-190` y `manager.go:519`: el fsync de la expulsión de un descriptor sucio corre en la goroutine que lo suelta.**
 
@@ -611,7 +621,9 @@ Es la misma revisión de solo lectura y usa el mismo formato. Se miró contra `s
   - una marca «borrando» que la corte con `Complete=false`;
   - que el DDL espere `s.mu` sin `ddlMu`.
 
-**V3. [Bajo, confirmado por lectura] `vacuum.go:68` y `engine.go:211`: `btree.Vacuum` no mira `e.stop`.** `Close` espera la pasada en curso con `closeMu.Lock` pendiente, y eso frena todo `enter()` y `enterRead()` del motor. Sugerencia: `VacuumOptions.Stop`, revisado por hoja.
+> **Arreglado (tarea 113, 2026-11-21).** Se eligió la marca: todo DDL que pide `Store.mu` en escritura con `ddlMu` tomado (`DropStore`, `DropStoreIn`/`markDrop`, `Empty`, `applyDDL`, `undoDDL`) pasa por `Store.lockDDL`, que sube `Store.ddlWaiting` antes de esperar; `btree.VacuumOptions.Stop` (nuevo) se mira antes de cada hoja y corta la pasada con `btree.ErrVacuumStopped` (`Complete = false`; cada hoja ya es un cambio completo); `freezeStore` la vuelve nil sin subir el frozenXID. `Stop` también mira `Engine.stopping`, así que cubre V3. `Verify` sigue con `Store.mu` en escritura todo el store (decidido: lo pide el usuario, no corre de fondo). Prueba: `TestVacuumYieldsToDDL` (5.000 claves con una versión muerta cada una, escrituras del disco de 3 ms, `Vacuum` en curso, `DropStore` con plazo de 1 s y un checkpoint después; sin el corte, DropStore esperaba ~1,5 s con 3.000 claves).
+
+**V3. [Bajo, confirmado por lectura] `vacuum.go:68` y `engine.go:211`: `btree.Vacuum` no mira `e.stop`.** `Close` espera la pasada en curso con `closeMu.Lock` pendiente, y eso frena todo `enter()` y `enterRead()` del motor. Sugerencia: `VacuumOptions.Stop`, revisado por hoja. **Arreglado (tarea 113, 2026-11-21)** con el mismo `VacuumOptions.Stop` de V2 (mira `Engine.stopping`).
 
 **V4. [Bajo, confirmado por lectura] `verify.go:313-339` (`checkHandle`): en una réplica abre y registra en `e.handles` un store con `FlagPendingCreate`.**
 

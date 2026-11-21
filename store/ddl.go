@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/cgalvisleon/et/store/internal/btree"
@@ -267,6 +268,7 @@ func (e *Engine) treeConfig(file smgr.FileNo) btree.Config {
 	return btree.Config{
 		File: file, Pool: e.pool, Smgr: e.sm, Free: e.free, Log: e.log, Status: e.status, HintGate: &e.hintGate,
 		VM: e.free, FrozenXID: e.txs.OldestActive(), NoHints: e.isReplica(),
+		Horizon: func() page.XID { return e.txs.OldestActive() }, // la poda antes de partir (tarea 108)
 	}
 }
 
@@ -312,11 +314,40 @@ func (e *Engine) initialized(file smgr.FileNo) (bool, error) {
 
 /**
 * dropStore borra el store name: espera a sus operaciones en curso, escribe KindDropStore (durable), lo saca del
-* catálogo y borra sus páginas de la caché y sus archivos. Su *Store queda inservible (ErrStoreDropped).
+* catálogo y borra sus páginas de la caché y sus archivos. Su *Store queda inservible (ErrStoreDropped). Si un lote
+* abierto escribió en el store, lo espera como DropStoreIn (sus escrituras se perderían en silencio al confirmar):
+* con el motor suelto, hasta LOCK_TIMEOUT (0 = sin límite, como xact.Transactions.Wait).
 * @param name string
-* @return error: ErrStoreNotFound, ErrClosed, ErrFailed
+* @return error: ErrStoreNotFound, ErrStorePending, ErrBusy (lotes que escribieron en él), ErrClosed, ErrFailed
 **/
 func (e *Engine) dropStore(name string) error {
+	var since time.Time
+	for {
+		err := e.dropStoreOnce(name)
+		if !errors.Is(err, errWritersBusy) {
+			return err
+		}
+		if since.IsZero() {
+			since = time.Now()
+		}
+		waited, limit := time.Since(since), e.cfg.lockTimeout
+		if limit > 0 && waited >= limit {
+			return fmt.Errorf(MSG_BUSY_WRITERS, ErrBusy, name)
+		}
+		pause := min(max(waited/4, time.Millisecond), writersPoll)
+		if limit > 0 {
+			pause = min(pause, limit-waited)
+		}
+		time.Sleep(pause)
+	}
+}
+
+/**
+* dropStoreOnce es un intento de dropStore.
+* @param name string
+* @return error: errWritersBusy si un lote abierto escribió en el store, o los de dropStore
+**/
+func (e *Engine) dropStoreOnce(name string) error {
 	if err := e.enter(); err != nil {
 		return err
 	}
@@ -331,7 +362,9 @@ func (e *Engine) dropStore(name string) error {
 		if s.creator != 0 || s.dropper != 0 {
 			return fmt.Errorf(MSG_STORE_PENDING, ErrStorePending, name)
 		}
-		s.markDropped()
+		if !s.markDroppedIfIdle() {
+			return errWritersBusy
+		}
 		delete(e.handles, name)
 	}
 	if err := e.dropFiles(entry); err != nil {

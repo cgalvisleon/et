@@ -51,7 +51,8 @@ func (f *file) ReadAt(p []byte, off int64) (int, error) {
 	return n, nil
 }
 
-// WriteAt escribe p en off (extendiendo con ceros si off pasa del final); no es durable hasta Sync.
+// WriteAt escribe p en off (si off pasa del final, lo de en medio queda como hueco); no es durable hasta Sync. Pide
+// lugar para los bytes que todavía no lo tienen: los nuevos y los de un hueco.
 func (f *file) WriteAt(p []byte, off int64) (int, error) {
 	delay(&f.fs.writeDelay)
 	f.fs.mu.Lock()
@@ -59,23 +60,21 @@ func (f *file) WriteAt(p []byte, off int64) (int, error) {
 	if err := f.writable("write", off); err != nil {
 		return 0, err
 	}
-	if err := f.fs.checkSpace(off + int64(len(p)) - int64(len(f.node.data))); err != nil {
+	if err := f.fs.checkSpace(f.node.alloc.missing(off, off+int64(len(p)))); err != nil {
 		return 0, &fs.PathError{Op: "write", Path: f.name, Err: err}
 	}
 	f.node.change(fileOp{off: off, data: append([]byte(nil), p...)})
 	return len(p), nil
 }
 
-// Truncate fija el largo del archivo; no es durable hasta Sync.
+// Truncate fija el largo del archivo; no es durable hasta Sync. Agrandar deja un hueco, que no pide lugar (como ext4:
+// el disco lleno sale después, al escribir en él); achicar libera lo cortado.
 func (f *file) Truncate(size int64) error {
 	delay(&f.fs.writeDelay)
 	f.fs.mu.Lock()
 	defer f.fs.mu.Unlock()
 	if err := f.writable("truncate", size); err != nil {
 		return err
-	}
-	if err := f.fs.checkSpace(size - int64(len(f.node.data))); err != nil {
-		return &fs.PathError{Op: "truncate", Path: f.name, Err: err}
 	}
 	f.node.change(fileOp{off: size, truncate: true})
 	return nil

@@ -65,14 +65,14 @@ func (w *WAL) Locate(lsn page.LSN) (Position, error) {
 		if num > active {
 			continue // un repuesto reciclado: registros viejos
 		}
-		first, ok, err := s.firstLSN(w.fs, w.dir, num)
+		first, ok, err := firstLSN(w.fs, w.dir, num)
 		if err != nil {
 			return Position{}, err
 		}
 		if !ok || first > lsn {
 			continue
 		}
-		return w.locateIn(s, Position{Segment: num, Offset: 0, LSN: first}, lsn)
+		return w.locateIn(s, Position{Segment: num, Offset: SegmentHeaderSize, LSN: first}, lsn)
 	}
 	return Position{}, fmt.Errorf(MSG_LSN_GONE, ErrRemoved, lsn)
 }
@@ -93,14 +93,12 @@ func (w *WAL) SegmentOf(lsn page.LSN) (uint64, error) {
 	if err != nil {
 		return 0, err
 	}
-	s := getScanner()
-	defer putScanner(s)
 	for i := len(nums) - 1; i >= 0; i-- {
 		num := nums[i]
 		if num > active {
 			continue
 		}
-		first, ok, err := s.firstLSN(w.fs, w.dir, num)
+		first, ok, err := firstLSN(w.fs, w.dir, num)
 		if err != nil {
 			return 0, err
 		}
@@ -173,7 +171,7 @@ func (w *WAL) placeRaw(at Position, lsn page.LSN, size int64) (*reservation, err
 		return nil, err
 	}
 	next := page.LSN(w.lastLSN.Load()) + 1
-	rotate := at.Segment == w.active.num+1 && at.Offset == 0
+	rotate := at.Segment == w.active.num+1 && at.Offset == SegmentHeaderSize
 	inPlace := at.Segment == w.active.num && at.Offset == w.active.size
 	if lsn != next || at.LSN != lsn || !rotate && !inPlace || at.Offset+size > w.capacity() {
 		return nil, fmt.Errorf(MSG_APPEND_ORDER, ErrOutOfOrder, lsn, at, w.active.num, w.active.size, next)

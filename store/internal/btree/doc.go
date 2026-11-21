@@ -172,7 +172,10 @@
 //     mayor—, mira las versiones del id (siguiendo a la derecha, con la hoja bloqueada y la hermana en compartido) para
 //     armar Latest, aplica la condición; si la entrada no cabe, parte la hoja, termina la partición y vuelve a bajar.
 //   - Partición: el punto de corte equilibra bytes (90 % a la izquierda en la hoja de más a la derecha cuando la
-//     inserción va al final, 70 % en una interna; 50 % si no; a confirmar). La clave alta nueva de una hoja es el
+//     inserción va al final, 70 % en una interna; 50 % si no). En una hoja con inserción ascendente local —las 4
+//     versiones antes del punto de inserción tienen lsn creciente, como al final de un grupo de duplicados con sufijo
+//     creciente (índice valor + jid de josefina)— se parte en el punto de inserción, con la izquierda entre el 50 % y
+//     el 90 % (ver «Llenado de las hojas»). La clave alta nueva de una hoja es el
 //     separador truncado; la de una interna, la clave de su primer enlace a la derecha, que ahí pasa a ser menos
 //     infinito. Después busca el padre bajando otra vez hasta la clave alta (sin pila) y siguiendo a la derecha hasta
 //     el enlace a la hija; si el padre no tiene lugar, lo parte y repite.
@@ -217,7 +220,8 @@
 //
 // # Limpieza (ola 5B, fase 1)
 //
-// Vacuum(VacuumOptions{Horizon, FreezeLimit, Aggressive, XID, Free}) recorre las hojas de izquierda a derecha, una
+// Vacuum(VacuumOptions{Horizon, FreezeLimit, Aggressive, XID, Free, NextXID, Stop}) recorre las hojas de izquierda a
+// derecha (Stop, mirado antes de cada hoja, la corta con ErrVacuumStopped y Complete = false), una
 // bloqueada en exclusivo a la vez (por los enlaces del nivel 1 si hay mapa y dos niveles, saltando hojas: ver
 // «Congelado y mapa de visibilidad»; si no, por los enlaces de las hojas). Por id, de la versión más nueva a la más
 // vieja: la de referencia es la primera confirmada visible para todos (EntryFrozen, o xid < Horizon: toda transacción
@@ -259,6 +263,31 @@
 // VacuumStats: Frozen, Skipped, SkippedVisible, Complete (sin error y sin saltar hojas solo todo-visibles) y FrozenXID
 // (el menor xid que quedó sin congelar en lo recorrido, acotado por Horizon: el frozenXID que el store puede guardar
 // con SetFrozenXID si Complete). FrozenXID y SetFrozenXID leen y suben el de la meta.
+//
+// # Llenado de las hojas (tarea 108)
+//
+// Dos cosas, sin cambio de formato ni estado en memoria, para que las hojas no queden a medio llenar:
+//
+//   - Partir en el punto de inserción (splitTarget y ascendingAt en split.go, como _bt_afternewitemoff de nbtree): si
+//     las ascendingRun (4) versiones justo antes del punto de inserción se escribieron en ese orden (lsn creciente),
+//     la inserción sigue una racha ascendente local y lo de la izquierda no vuelve a recibir inserciones: se busca
+//     dejar a la izquierda exactamente lo anterior al punto, acotado al 90 % (una inserción al final de una hoja que
+//     no es la de más a la derecha deja un 10 % a la derecha, como el usemult de _bt_findsplitloc) y solo si eso es
+//     al menos la mitad (si no, mitad y mitad). Es la heurística más simple que encontramos que sirve con varios
+//     grupos terminando en la misma hoja; «la anterior es la más nueva de la hoja» fallaba ahí (las inserciones de los
+//     grupos se alternan). Con inserciones al azar la racha sale una vez cada 24 y además tiene que caer pasada la
+//     mitad. Cada grupo deja su hoja de cola a medio llenar (recibe las inserciones) y a veces un resto del comienzo
+//     del grupo siguiente (lo que quedó a la derecha del primer corte): pesa poco cuando cada grupo ocupa muchas hojas.
+//   - Podar antes de partir (pruneLeaf en write.go, como la limpieza simple / bottom-up deletion de nbtree): una
+//     escritura que no cabe, una vez por Write y antes de extender el archivo, quita de la hoja las versiones en línea
+//     que ningún snapshot puede ver con el criterio de la limpieza (planLeaf con Config.Horizon = xact OldestActive,
+//     sin congelar, sin marcar «liberándose» ni liberar desbordes, sin bits del mapa, sin heredar la versión de
+//     referencia de la hoja izquierda ni mirar la hermana derecha: poda menos que la limpieza, nunca más) y, si quitó
+//     algo, vuelve a buscar la posición y la última versión con la hoja todavía bloqueada. El registro es el mismo
+//     KindLeafVacuum de la limpieza con solo la lista de quitar (xid 0): el WAL va antes que la página, la réplica
+//     lo rehace byte a byte con applyLeafVacuum y no hace falta un Kind nuevo. Una hoja con page.FlagAllVisible no se
+//     mira (no tiene nada muerto). No pone marcas de visibilidad (statusOf sin hints: la regla 49 no se toca) ni
+//     recicla páginas (opGuard no cambia). Pruned cuenta lo quitado.
 //
 // # Borrado de páginas (tarea 70)
 //

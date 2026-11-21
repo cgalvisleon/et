@@ -452,13 +452,54 @@ func TestCapacity(t *testing.T) {
 	if _, err := g.WriteAt(fill('y', 50), 0); !errors.Is(err, ErrNoSpace) {
 		t.Fatalf("WriteAt = %v; want ErrNoSpace", err)
 	}
-	if err := g.Truncate(41); !errors.Is(err, ErrNoSpace) {
-		t.Fatalf("Truncate = %v; want ErrNoSpace", err)
-	}
 	write(t, g, fill('y', 40), 0)
 	write(t, f, fill('z', 60), 0) // sobrescribir no crece
 	if size, _ := g.Size(); size != 40 {
 		t.Fatalf("size = %d", size)
+	}
+}
+
+// TestCapacityHoles: un Truncate que agranda y una escritura más allá del final dejan un hueco que no ocupa lugar;
+// escribir dentro del hueco sí lo ocupa y puede dar ErrNoSpace (como ext4: el hueco no reserva lugar, tarea 107);
+// achicar libera; un corte deja el lugar de lo que sobrevivió.
+func TestCapacityHoles(t *testing.T) {
+	m := newDisk(t)
+	m.SetCapacity(100)
+	f := open(t, m, "data")
+	if err := f.Truncate(1000); err != nil {
+		t.Fatalf("Truncate that grows over the capacity = %v; a hole takes no space", err)
+	}
+	write(t, f, fill('x', 10), 990)
+	if used := m.Used(); used != 10 {
+		t.Fatalf("Used = %d after Truncate(1000) and 10 bytes at 990; want 10", used)
+	}
+	if _, err := f.WriteAt(fill('y', 100), 0); !errors.Is(err, ErrNoSpace) {
+		t.Fatalf("WriteAt into the hole = %v; want ErrNoSpace", err)
+	}
+	if got, _ := contents(t, m, "data"); !bytes.Equal(got[:100], make([]byte, 100)) {
+		t.Fatal("a failed write into the hole must not write anything")
+	}
+	write(t, f, fill('y', 90), 0) // entra justo: 10 + 90
+	if _, err := f.WriteAt([]byte{'z'}, 5000); !errors.Is(err, ErrNoSpace) {
+		t.Fatalf("WriteAt past the end on a full disk = %v; want ErrNoSpace", err)
+	}
+	write(t, f, fill('w', 50), 20) // sobrescribir lo ya escrito no pide lugar
+	if err := errors.Join(f.Sync(), m.SyncDir(dir)); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := f.Truncate(50); err != nil {
+		t.Fatal(err)
+	}
+	if used := m.Used(); used != 50 {
+		t.Fatalf("Used = %d after Truncate(50); want 50", used)
+	}
+	m.Crash(LoseUnsynced, 1) // se pierde el truncado: vuelve el lugar del último Sync
+	if used := m.Used(); used != 100 {
+		t.Fatalf("Used = %d after a crash that lost the Truncate; want 100", used)
+	}
+	if got, _ := contents(t, m, "data"); len(got) != 1000 {
+		t.Fatalf("size after the crash = %d; want 1000", len(got))
 	}
 }
 

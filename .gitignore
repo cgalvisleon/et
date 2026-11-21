@@ -13,6 +13,7 @@
 *.dylib
 .env
 data
+!store/testdata/**/data/
 build
 dist
 web

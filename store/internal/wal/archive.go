@@ -45,7 +45,7 @@ func (w *WAL) Switch() (uint64, error) {
 	if err := w.writable(); err != nil {
 		return 0, err
 	}
-	if w.active.size == 0 {
+	if w.active.size <= SegmentHeaderSize {
 		return 0, nil
 	}
 	num := w.active.num
@@ -68,7 +68,7 @@ func (w *WAL) SegmentInfo(num uint64) (SegmentInfo, error) {
 	}
 
 	s := newSegmentScanner()
-	first, ok, err := s.firstLSN(w.fs, w.dir, num)
+	first, ok, err := firstLSN(w.fs, w.dir, num)
 	if err != nil {
 		return SegmentInfo{}, err
 	}
@@ -76,7 +76,7 @@ func (w *WAL) SegmentInfo(num uint64) (SegmentInfo, error) {
 		return SegmentInfo{}, fmt.Errorf(MSG_SEGMENT_EMPTY, ErrCorrupted, num)
 	}
 	if !known {
-		start := Position{Segment: num, Offset: 0, LSN: first}
+		start := Position{Segment: num, Offset: SegmentHeaderSize, LSN: first}
 		if end, err = s.records(w.fs, w.dir, start, func(Position, []byte, *Record) error { return nil }); err != nil {
 			return SegmentInfo{}, err
 		}

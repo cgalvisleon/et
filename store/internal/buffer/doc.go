@@ -77,7 +77,7 @@
 // búferes sucios sin pins y con uso 0; después, si las sucias pasan BgWriterDirtyTarget (la mitad) de la caché,
 // escribe las que sobran (hasta BgWriterMaxDirtyPages = 1.000 por ronda) aunque estén en uso, salvo las fijadas,
 // desde bgHand: sin reemplazo la manecilla no gira (tarea 97). ExtendBy (interfaz opcional Extender, tarea 100)
-// agrega n páginas en ceros a un fork con una sola escritura (la última; las del medio quedan en ceros) y no fija
+// agrega n páginas en ceros a un fork con un solo smgr.Extend (que escribe los ceros de todas, sin huecos, tarea 107) y no fija
 // ninguna: fsm.Manager.Grow las fija con PinZero. FlushAll anota los sucios, los ordena por tag y escribe los que siguen con la
 // misma página. El anillo es uno por caché, compartido por los recorridos con Ring (a confirmar). PinNew serializa
 // las extensiones con un solo lock por caché (a confirmar). Reemplazar una página sucia espera al WAL: con el

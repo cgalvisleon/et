@@ -203,7 +203,9 @@ func (s *Store) write(id string, c change) (bool, error) {
 	var xid page.XID
 	defer func() {
 		if xid != 0 {
-			s.e.heads.forget(xid) // después de la hoja: ChangeHead ya ve su confirmación
+			if !c.tombstone && !inline(id, c.data) {
+				s.e.heads.forget(xid) // la anotó prepare; después de la hoja, ChangeHead ya ve su confirmación
+			}
 			s.e.txs.End(xid)
 		}
 	}()

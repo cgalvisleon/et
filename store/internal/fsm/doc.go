@@ -82,7 +82,7 @@
 //
 // Grow (tarea 100, interfaz opcional Grower): el árbol lo llama sin páginas bloqueadas antes de partir una hoja. Si la
 // lista de libres está vacía, extiende el archivo con 1/growPart (1/64) de su largo, entre 1 y growMax (16) páginas,
-// con una sola escritura (buffer.Extender.ExtendBy; si la caché no sabe, una página con PinNew), y pone cada página en
+// con un solo smgr.Extend que escribe los ceros de todas, sin huecos (buffer.Extender.ExtendBy; si la caché no sabe, una página con PinNew), y pone cada página en
 // la lista (KindFreePush, de la última a la primera, con PinZero: nadie más las ve), así la partición saca la suya con
 // Allocate sin extender con la hoja bloqueada. En macOS una escritura a un archivo de datos espera al F_FULLFSYNC en
 // curso del WAL: extender con la hoja de más a la derecha bloqueada frenaba a todos sus escritores. Un corte entre la

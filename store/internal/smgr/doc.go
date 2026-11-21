@@ -25,9 +25,13 @@
 // primero. Un Extend que hace nacer un archivo hace fsync de los anteriores (ya llenos) antes de crearlo y de data/
 // después: así un corte nunca deja un archivo corto en el medio del fork (lo encontró TestExtendNewFileCrash). Ese
 // fsync va con el fork en exclusivo, una vez por GB de crecimiento: es la única espera a un fsync bajo el candado del
-// fork. Create y Unlink no hacen fsync de data/ (tarea 98 de F-23): lo anotan y lo hace el próximo SyncAll, el del
-// checkpoint, antes de que el punto de rehacer pase su registro; un corte antes lo arregla el WAL (el rehacer crea
-// el archivo que falte, ensureBlock de btree, y vuelve a borrar el que reaparezca).
+// fork. Create y Unlink no hacen fsync de data/ (tarea 98 de F-23): lo anotan y lo hace el próximo SyncAll (paso 2
+// del checkpoint) o SyncDir (paso 3, con ddlMu: el unlink de una baja que llegó después del paso 2, hallazgo D1),
+// antes de que el control pase su registro; un corte antes lo arregla el WAL (el rehacer crea el archivo que falte,
+// ensureBlock de btree, y vuelve a borrar el que reaparezca). Un Extend más allá de NBlocks escribe en ceros los
+// bloques intermedios (writeZeros, de a 128 KB), nunca un hueco con Truncate ni escribiendo más allá del final: ext4 y
+// XFS no reservan el lugar de un hueco, y la página sucia que se escribiera después ahí daría ENOSPC en el
+// desalojo o el checkpoint, donde ya no hay vuelta atrás (tarea 107 de F-23; lo encontró diskfull.sh en la VM).
 // Bloqueos: el fork (RWMutex: exclusivo para Create, Extend y Unlink) → el mutex del gestor y el de la caché, que son
 // hojas.
 package smgr

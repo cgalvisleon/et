@@ -119,13 +119,14 @@
 //	storecheck.go  storeCheck: el inventario de páginas de un store, el conteo, el mapa, el congelado, fixCount
 //	backup.go      BackupInfo, backups (retenciones y borrados que esperan), unlinkData, backupRun (los pasos)
 //	restore.go     el marcador backup_label, checkBackupWAL, removeBackupLabel, checkTarget (el objetivo de OpenAt)
+//	format.go      checkFormat: la versión del formato de los archivos de la raíz antes de abrir (ErrFormatVersion)
 //	archive.go     archiveState, startArchive, PendingArchive, SetArchived, SwitchWAL, el tope, archive_status
 //	walsince.go    WalReader (WalSince, Next): leer el WAL durable desde un lsn, del disco
 //	replica.go     WalEntry, replicaState, startReplica, applyWal (conflictos con snapshots), restartpoint
 //	slots.go       slotState, CreateSlot, DropSlot, AdvanceSlot, checkpointSlots (el tope), el archivo slots
 //	decode.go      ChangeReader: búfer de reordenamiento por xid con derrame a disco, Next, Confirm
 //
-// # Formatos en disco (little-endian; versión del formato 1)
+// # Formatos en disco (little-endian; versión del formato 1, ver «Versiones del formato»)
 //
 // Todos los enteros son little-endian: el orden nativo de arm64 y amd64, que permite poner las marcas de visibilidad
 // de una entrada con un OR atómico sobre su uint32. Las sumas son CRC-32C (Castagnoli).
@@ -233,6 +234,55 @@
 //
 // Los magic se guardan como uint32 little-endian del texto leído de izquierda a derecha (0x4554424B = "ETBK"), como
 // los de control, catálogo y página meta.
+//
+// # Versiones del formato
+//
+// Tarea 54 de F-23. Cada archivo que se lee sin depender de otro lleva su versión; los demás los gobierna la del
+// control, porque nunca se leen sin él (o sin el backup_label de una copia, que también la lleva):
+//
+//	archivo                       dónde está la versión                       si no coincide
+//	control (cada copia)          version(4), byte 4; FormatVersion = 1       ErrFormatVersion (una copia con su crc
+//	                                                                          válido basta, aunque la otra valga)
+//	catalog                       version(4), byte 4                          ErrFormatVersion
+//	backup_label                  version(4), byte 4                          ErrFormatVersion
+//	archive_status                version(4), byte 4                          ErrFormatVersion
+//	slots                         version(4), byte 4                          ErrFormatVersion
+//	página (todas las clases)     pd_pagesize_version = 8.192 | 1             daño de la página (ErrCorrupt al leerla,
+//	                                                                          hallazgo de Verify)
+//	página meta de un store       version(4) = 1, tras su magic               daño de la página
+//	segmentos del WAL y su sello  sin versión propia: la del control          —
+//	archivo de estados (xact/)    sin versión propia: la del control          —
+//	derrame replslot/             sin versión: no es durable, se borra        —
+//
+// Open (checkFormat, antes de leer backup_label, el control para recuperar, el catálogo o el WAL, y de cambiar nada)
+// compara la versión del control, del catálogo, de backup_label, de archive_status y de slots con la que lee el
+// binario: una mayor es de un binario más nuevo (MSG_FORMAT_NEWER: actualizar et) y una menor, de un formato anterior
+// sin migración (MSG_FORMAT_OLDER); las dos dan ErrFormatVersion y el directorio queda como estaba (TestOpenFormatVersion).
+// Un archivo sin la magia de su formato no es «otra versión» sino daño, y lo informa quien lo lee. La versión de las
+// páginas y de la meta no se mira al abrir: el control las cubre, y una página de otra versión con un control de esta
+// es daño. La réplica física copia el WAL byte a byte: primario y réplica tienen que leer la misma versión.
+//
+// Prueba de ida y vuelta (format_test.go): TestFormatRoundTrip arma un directorio de referencia (hojas, páginas
+// internas, meta, desborde y una cadena liberada, páginas borradas y libres, versiones congeladas y el mapa de
+// visibilidad, un store vaciado y uno borrado, un lote con origen, una ranura física y una lógica, un segmento
+// sellado y archivado, y una copia de Backup con backup_label), comprueba que cada archivo de la raíz se decodifica
+// y se vuelve a escribir igual byte a byte (control.DecodeCopy/EncodeCopy, DecodeCatalog/EncodeCatalog,
+// decodeSlots/encodeSlots, decodeArchiveStatus, decodeLabel), la suma de cada página de data/, y que el motor y la
+// copia abren con el contenido esperado, Verify limpio, también tras reabrir. TestFormatV1Reference hace lo mismo
+// con el directorio guardado en store/testdata/format-v1 (primary/, backup/ y want.json), que se genera una sola vez
+// con go test ./store -run TestFormatV1Reference -update-format-v1.
+//
+// Regla: a partir de la 1.0, todo cambio de formato lleva versión nueva, migración y prueba de ida y vuelta (un
+// directorio de referencia nuevo junto al anterior, que se sigue abriendo o migrando).
+//
+// Estado (2026-11-20): el formato 1 todavía no está congelado; la tarea 54 sigue en curso. Hecho: ErrFormatVersion
+// y checkFormat, la tabla de arriba, la prueba de ida y vuelta y el generador del directorio de referencia. No se
+// guardó store/testdata/format-v1 (TestFormatV1Reference se salta sin él) porque queda abierto lo que cambiaría el
+// formato: la tarea 96 (compactar el encabezado de 28 B de la entrada de hoja antes del 1.0, o aceptar el
+// sobrecosto) y si los segmentos del WAL llevan un encabezado con versión propia (hoy dependen del control; un
+// segmento archivado o recibido por una réplica no dice su versión). El directorio generado hoy pesa ~2 MB (1 MB es
+// el segmento sellado, casi todo ceros, y 100 KB el want.json): al congelar, achicarlo (ranuras creadas después del
+// sellado, valores más chicos) para quedar en unos cientos de KB.
 //
 // # Límites
 //
@@ -363,7 +413,8 @@
 // ErrValueTooLarge, ErrBadName, ErrStoreNotFound, ErrStoreDropped, ErrConflict, ErrSerialization, ErrTimeout,
 // ErrTxDone, ErrOtherEngine, ErrBusy, ErrStorePending, ErrDiskFull, ErrThrottled, ErrArchiveOff, ErrNotSealed,
 // ErrRecoveryTarget, ErrBackupDir, ErrBackupIncomplete, ErrReadOnly, ErrNotReplica, ErrWalGap, ErrWalRemoved,
-// ErrSlotNotFound, ErrSlotExists, ErrSlotLimit, ErrRecoveryConflict, ErrCorrupt; se comparan con errors.Is.
+// ErrSlotNotFound, ErrSlotExists, ErrSlotLimit, ErrRecoveryConflict, ErrCorrupt (también el daño que encuentra el
+// paquete wal: wal.ErrCorrupted se traduce, tarea 101), ErrFormatVersion; se comparan con errors.Is.
 //
 // Sync de josefina (un gancho por cambio aplicado) queda cubierto por Changes (el flujo lógico). Decidido no hacer: un recorrido dentro de un lote (ForEachIn, pregunta 64: se recorre con un snapshot
 // y dentro del lote se lee por id con ReadIn).
@@ -839,7 +890,8 @@
 //
 // En el orden de engine.go (open) y recovery.go (recover):
 //
-//  1. Tomar LOCK (vfs.ErrLocked → ErrLocked).
+//  1. Tomar LOCK (vfs.ErrLocked → ErrLocked). Antes de leer o cambiar nada más, checkFormat: un archivo de la raíz
+//     de otra versión del formato es ErrFormatVersion (ver «Versiones del formato»).
 //  2. Leer backup_label si lo hay (una copia de Backup; dañado o sin fin: ErrBackupIncomplete) y el control (la copia
 //     válida más nueva). Un motor es nuevo si no tiene archivo de control, o si su control no tiene copias válidas y el
 //     catálogo no tiene stores (un Create cortado); uno nuevo con marcador es ErrBackupIncomplete. Con marcador,
@@ -1044,7 +1096,7 @@
 //	catalog.tmp (checkpoint o DDL)         el catálogo anterior sigue entero: el checkpoint aborta; el DDL sigue
 //	WAL en medio de una operación          solo lectura (wal.ErrNoRoom fuera de admit)
 //	registro del WAL ya reservado          solo lectura (no pasa con los segmentos preasignados, salvo copia en escritura)
-//	página sucia (checkpoint, reemplazo)   solo lectura (sobrescribe un bloque ya extendido: idem)
+//	página sucia (checkpoint, reemplazo)   solo lectura (sobrescribe un bloque ya extendido y escrito: idem)
 //	control                                solo lectura (dos copias fijas que se sobrescriben: idem)
 //	cualquier fsync                        solo lectura (volumen fino, NFS, asignación diferida)
 //
@@ -1058,7 +1110,10 @@
 // espacio las escrituras vuelven solas, sin reabrir. Lo que ya está preasignado alcanza para las operaciones en curso.
 //
 // Archivos de datos: buffer.PinNew escribe la página nueva en ceros (smgr.Extend) antes de usarla, como smgrextend,
-// así el disco lleno sale ahí y no al escribir la página sucia después. Quien la pidió vuelve sin dejar nada a
+// así el disco lleno sale ahí y no al escribir la página sucia después. Lo mismo al extender de a varias páginas
+// (buffer.ExtendBy, fsm.Grow): smgr.Extend escribe en ceros cada bloque intermedio, nunca deja un hueco (Truncate o
+// escribir más allá del final), porque ext4 y XFS no reservan el lugar de un hueco y el ENOSPC saldría después, al
+// desalojar la página, con el motor ya sin vuelta atrás (tarea 107). Quien la pidió vuelve sin dejar nada a
 // medias: una partición no empieza (o queda incompleta, que es un estado válido que termina el próximo que pase),
 // una cadena de desborde libera los trozos ya escritos; la escritura devuelve ErrDiskFull, libera el desborde que
 // había preparado y un lote aborta (txError). Crear un store cuya página meta no entra devuelve ErrDiskFull: el store

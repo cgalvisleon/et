@@ -444,6 +444,8 @@ Es la misma revisión de solo lectura y usa el mismo formato. Se miró contra `s
   - `DropStoreIn` con espera y `droppedNames`;
   - la segunda pasada del escritor de fondo.
 
+> **Estado (2026-11-20):** los 3 altos (C1, C2 y V1) y el medio D1 están arreglados, cada uno con su prueba de regresión en `store/review2_test.go` (tareas 102–105; detalle debajo de cada hallazgo). Los demás medios, bajos y de estilo siguen pendientes.
+
 **Cómo se confirmó:** tres pruebas temporales con `go test -p 1`, escritas en un archivo que después se borró: `TestReviewSlotLazyCommit`, `TestReviewHeadOverflow` y `TestReviewUnlinkAfterSyncAll`. Las tres fallaron como se esperaba. No queda nada en el repo.
 
 ### Resumen
@@ -501,6 +503,8 @@ Es la misma revisión de solo lectura y usa el mismo formato. Se miró contra `s
   - revisar los otros usos de `Published()` como «lo escrito», es decir `slots.go:136,364` y `pressure.go:47` (ver W2);
   - agregar el caso con `CommitDeferred` a las pruebas de ranuras.
 
+> **Arreglado (tarea 102, 2026-11-20).** `createSlot` deja la posición consistente en `LastLSN()` después de `waitConsistent` (no en `Published()`): cubre lo reservado que sigue en el búfer del WAL, como el `KindCommit` de un `CommitDeferred`. Un lote que confirmó antes de ese punto se salta entero; uno que confirma después tiene todos sus registros desde `restart`. Prueba: `TestSlotDeferredCommitConsistent` (el escenario del informe; sin el arreglo entrega `[a/k2]`). Los otros usos de `Published()` (W2) siguen como estaban.
+
 **C2. [Alto, confirmado con prueba] `changes.go:87-101` (`changeHead`): `Restart` solo considera los lotes (`noteFirst`), no las escrituras sueltas que están escribiendo su cadena de desborde.**
 
 - **Qué pasa:** una escritura suelta grande escribe primero sus `KindOverflowWrite`, con su xid (`store.go:247`, `prepare`), y después el `KindLeafWrite` con `FlagCommit`. Si `ChangeHead` cae entre los dos:
@@ -513,6 +517,8 @@ Es la misma revisión de solo lectura y usa el mismo formato. Se miró contra `s
   - anotar también en `headState` la primera reserva de una escritura suelta con desborde (`LastLSN()+1` antes de `chains.Write`), y olvidarla al confirmar o liberar;
   - otra opción: que `changeHead` use la cota de las transacciones vivas (`txs`);
   - además, que un trozo faltante para una transacción que empezó antes de `Restart` no se informe como corrupción del motor.
+
+> **Arreglado (tarea 103, 2026-11-20).** `headState` anota también las escrituras sueltas con desborde: `prepare` llama a `heads.note(xid, LastLSN)` antes de `chains.Write`, y `write` la olvida después de la hoja (`heads.forget`, junto a `txs.End`). `noteFirst`/`forgetFirst` de los lotes usan los mismos métodos. Así `ChangeHead` nunca da un `Restart` entre la cadena y la hoja. Prueba: `TestChangeHeadOverflowWrite` (un `Put` de 60 KB en bucle con `ChangeHead` + `ChangesFrom` + `Next`; sin el arreglo falla en las primeras iteraciones con «logical decoding spill file: corrupted engine»). El tercer punto de la sugerencia no se hizo.
 
 #### store/ — catálogo diferido y fsync de data/ (ddl, checkpoint, smgr)
 
@@ -528,7 +534,9 @@ Es la misma revisión de solo lectura y usa el mismo formato. Se miró contra `s
 - **Escenario de la prueba:** un `hookFS` frena el `Remove` de `data/` hasta `afterStep(2)`. El resultado es «orphan files 1».
 - **Lo mismo pasa con:** el archivo viejo de `Empty` y el DDL en lote (`applyDDL`).
 - **`Create` no tiene el problema:** siempre va antes del registro que nombra el archivo.
-- **Sugerencia:** en `saveCatalog`, ya con `ddlMu`, hacer el fsync de `data/` si `dirDirty` (un `smgr.SyncDir()` aparte). Toda baja con registro < R terminó su unlink antes de soltar `ddlMu`. Corregir la frase de `doc.go:1637`.
+- **Sugerencia original:** en `saveCatalog`, ya con `ddlMu`, hacer el fsync de `data/` si `dirDirty` (un `smgr.SyncDir()` aparte). Toda baja con registro < R terminó su unlink antes de soltar `ddlMu`. Corregir la frase de `doc.go:1637`.
+
+> **Arreglado (tarea 105, 2026-11-20).** `smgr.Manager.SyncDir()` hace el fsync de `data/` si `Create` o `Unlink` lo cambiaron (`SyncAll` termina llamándolo), y `saveCatalog` (paso 3, con `ddlMu`) lo llama antes de guardar el catálogo; un fsync fallido deja el motor inutilizable. Cubre `DropStore`, `Empty` y el DDL en lote. `doc.go` («Muchos stores y DDL en lote») y `smgr/doc.go` corregidos. Prueba: `TestDropUnlinkAfterSyncAll` (el escenario del informe; sin el arreglo, «orphan files 1»).
 
 **W3. [Bajo, confirmado por lectura] `checkpoint.go:205`: `saveCatalog` espera `WaitDurable(ddlLSN)` con `ddlMu` tomado.**
 
@@ -586,6 +594,8 @@ Es la misma revisión de solo lectura y usa el mismo formato. Se miró contra `s
   - en una réplica, tomar `ckptMu` antes que `applyMu` en `check()`, o tomar `applyMu` dentro de `checkFiles` (después de `ckptMu`) y otra vez para los stores;
   - fijar el orden en `doc.go` («Orden de los bloqueos») y en `engine.go:28-34`;
   - agregar una prueba con `Verify` y `Checkpoint` concurrentes en una réplica.
+
+> **Arreglado (tarea 104, 2026-11-20).** Un solo orden en la réplica: `closeMu` (lectura) → `ckptMu` → `applyMu` → `replayMu` → `ddlMu` → `Store.mu`. `check` ya no toma `applyMu` alrededor de todo: `quietReplica` lo toma en `checkFiles` después de `ckptMu`, y en `checkHandle` y `checkStore` después de `closeMu`. Escrito en `doc.go` («Orden de los bloqueos») y en `engine.go`. Prueba con plazo: `TestReplicaVerifyLockOrder` (con `ckptMu` tomado, un `Verify` que espera no puede tener `applyMu`; sin el arreglo falla a los 2 s en vez de colgarse; después, `Verify`, `Checkpoint` y `ApplyWal` a la vez con plazo de 60 s).
 
 **V2. [Medio, confirmado por lectura] `vacuum.go:68-78`, frente a `ddlbatch.go:197` (`markDrop`), `ddl.go:330` (`dropStore`), `Empty` y `checkpoint.go:196`: la limpieza bloquea `ddlMu`, y con él el checkpoint.**
 

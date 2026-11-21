@@ -207,7 +207,7 @@ func (e *Engine) saveCatalog(counts map[smgr.FileNo]int64, redoLSN page.LSN) err
 		return err
 	}
 	// toda baja con registro antes del punto de rehacer terminó su unlink antes de soltar ddlMu, quizá después de
-	// SyncAll (paso 2): su fsync de data/ va acá, antes del control que pasa su registro (D1, tarea nueva de F-23)
+	// SyncAll (paso 2): su fsync de data/ va acá, antes del control que pasa su registro (D1, tarea 105 de F-23)
 	if err := e.sm.SyncDir(); err != nil {
 		return e.fail(err)
 	}

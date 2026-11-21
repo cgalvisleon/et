@@ -226,6 +226,46 @@ func TestExtendGapAcrossSegments(t *testing.T) {
 	mustRead(t, m, 3, ForkVM, 9, 2)
 }
 
+// Extender más allá del final no deja huecos (tarea 107): cada página intermedia se escribe en ceros, en el archivo
+// del bloque nuevo y en los anteriores, así el sistema de archivos reserva su lugar y escribir después esas páginas
+// sucias no puede dar ENOSPC. Antes quedaban como hueco (buffer.ExtendBy escribía solo la última) y diskfull.sh en
+// la VM dejaba el motor inutilizable al desalojar una de ellas.
+func TestExtendGapLeavesNoHoles(t *testing.T) {
+	dir := t.TempDir()
+	fs := newWrittenFS()
+	m, err := open(fs, dir, 8, testBlocksPerFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.Close()
+	if err := m.Create(2, ForkMain); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.Extend(2, ForkMain, 0, pageOf(1)); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.Extend(2, ForkMain, 2, pageOf(2)); err != nil { // hueco en el mismo archivo
+		t.Fatal(err)
+	}
+	if err := m.Extend(2, ForkMain, 9, pageOf(3)); err != nil { // hueco que salta al archivo 3
+		t.Fatal(err)
+	}
+	for _, seg := range []string{"0001", "0002", "0003"} {
+		name := filepath.Join(dir, "data", "0000000002."+seg)
+		info, err := os.Stat(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if holes := fs.holes(name, info.Size()); len(holes) > 0 {
+			t.Errorf("archivo %s: páginas sin escribir (hueco) %v", seg, holes)
+		}
+	}
+	mustRead(t, m, 2, ForkMain, 1, 0)
+	mustRead(t, m, 2, ForkMain, 2, 2)
+	mustRead(t, m, 2, ForkMain, 5, 0)
+	mustRead(t, m, 2, ForkMain, 9, 3)
+}
+
 // Archivos cortos: uno del medio (al abrir) y el último cortado desde fuera (al leer).
 func TestShortFile(t *testing.T) {
 	m, fs, dir := newTestManager(t, 8)

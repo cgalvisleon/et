@@ -171,8 +171,8 @@ func (p *pool) extend(file smgr.FileNo, fork smgr.Fork) (*desc, error) {
 var _ Extender = (*pool)(nil)
 
 /**
-* ExtendBy agrega n páginas en ceros al final del fork (ver Extender): escribe solo la última, los bloques del medio
-* quedan en ceros.
+* ExtendBy agrega n páginas en ceros al final del fork (ver Extender): extiende hasta la última y smgr escribe los
+* ceros de las del medio (sin huecos: su lugar queda reservado y escribirlas después no da ENOSPC).
 * @param file smgr.FileNo, fork smgr.Fork, n int: al menos 1
 * @return page.BlockNumber: la primera página nueva, error
 **/

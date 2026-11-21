@@ -34,8 +34,8 @@ type Manager interface {
 	// NBlocks es la cantidad de bloques del fork (el largo de su último archivo cuenta).
 	NBlocks(file FileNo, fork Fork) (page.BlockNumber, error)
 
-	// Extend escribe buf como el bloque block, que debe ser NBlocks (o mayor: los intermedios quedan en ceros),
-	// creando el archivo siguiente cuando hace falta (con fsync de data/).
+	// Extend escribe buf como el bloque block, que debe ser NBlocks (o mayor: los intermedios se escriben en ceros,
+	// sin huecos, así su lugar queda reservado), creando el archivo siguiente cuando hace falta (con fsync de data/).
 	Extend(file FileNo, fork Fork, block page.BlockNumber, buf page.Page) error
 
 	// Read lee el bloque en buf. Un bloque más allá del final es un error; uno que existe y está en ceros se

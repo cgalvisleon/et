@@ -144,8 +144,8 @@ func (m *manager) NBlocks(file FileNo, fork Fork) (page.BlockNumber, error) {
 }
 
 /**
-* Extend escribe buf como el bloque block (≥ NBlocks; los intermedios quedan en ceros). Los archivos anteriores al del
-* bloque se completan a su largo entero y, si nace un archivo, hace fsync de data/.
+* Extend escribe buf como el bloque block (≥ NBlocks; los intermedios se escriben en ceros, sin huecos). Los archivos
+* anteriores al del bloque se completan a su largo entero y, si nace un archivo, hace fsync de data/.
 * @param file FileNo, fork Fork, block page.BlockNumber, buf page.Page
 * @return error
 **/
@@ -166,16 +166,22 @@ func (m *manager) Extend(file FileNo, fork Fork, block page.BlockNumber, buf pag
 		return m.blockErr(ErrBlockExists, file, fork, block)
 	}
 
-	// Los archivos entre el último y el del bloque nuevo quedan llenos (en ceros): todos menos el último miden 1 GB.
+	// Los bloques entre el final y el nuevo se escriben en ceros, sin huecos: un hueco (Truncate, o escribir más allá
+	// del final) no reserva lugar en ext4 o XFS, y la escritura posterior de esa página sucia daría ENOSPC cuando ya
+	// no se puede volver atrás. Así el disco lleno sale acá, como ErrDiskFull limpio. Los archivos entre el último y
+	// el del bloque nuevo quedan llenos: todos menos el último miden 1 GB.
 	lastSeg := m.lastSeg(st.nblocks)
 	target := m.segOf(block)
-	fullSize := int64(m.blocksPerFile) * page.Size
-	for seg := m.segOf(st.nblocks); seg < target; seg++ {
-		key := segKey{file: file, fork: fork, seg: seg}
-		if err := m.withFile(key, true, func(f vfs.File) error { return f.Truncate(fullSize) }); err != nil {
+	for from := st.nblocks; from < block; {
+		seg := m.segOf(from)
+		to := min(block, page.BlockNumber(seg)*m.blocksPerFile) // el bloque nuevo o el primero del archivo siguiente
+		if seg == target {
+			break // los ceros del archivo del bloque nuevo van después de crearlo, abajo
+		}
+		if err := m.writeZeros(segKey{file: file, fork: fork, seg: seg}, from, to); err != nil {
 			return err
 		}
-		m.markDirty(key)
+		from = to
 	}
 
 	// Antes de que nazca un archivo nuevo, los anteriores tienen que estar llenos en disco: si el nombre del nuevo
@@ -192,6 +198,9 @@ func (m *manager) Extend(file FileNo, fork Fork, block page.BlockNumber, buf pag
 	}
 
 	key := segKey{file: file, fork: fork, seg: target}
+	if err := m.writeZeros(key, max(st.nblocks, page.BlockNumber(target-1)*m.blocksPerFile), block); err != nil {
+		return err
+	}
 	if err := m.withFile(key, true, func(f vfs.File) error { return m.writeBlock(f, block, buf) }); err != nil {
 		return err
 	}
@@ -567,6 +576,37 @@ func (m *manager) writeBlock(f vfs.File, block page.BlockNumber, buf page.Page) 
 	if n < page.Size {
 		return io.ErrShortWrite
 	}
+	return nil
+}
+
+// zeroRun es el trozo de ceros con que writeZeros llena los bloques intermedios (16 páginas, 128 KB). Nadie lo cambia.
+var zeroRun = make([]byte, 16*page.Size)
+
+/**
+* writeZeros escribe ceros en los bloques [from, to) del archivo key (todos del mismo archivo), de a trozos de
+* zeroRun: escribirlos, y no dejar un hueco, hace que el sistema de archivos reserve su lugar ya.
+* @param key segKey, from, to page.BlockNumber
+* @return error
+**/
+func (m *manager) writeZeros(key segKey, from, to page.BlockNumber) error {
+	if from >= to {
+		return nil
+	}
+	err := m.withFile(key, true, func(f vfs.File) error {
+		off, end := m.offsetOf(from), m.offsetOf(to-1)+page.Size
+		for off < end {
+			n, err := f.WriteAt(zeroRun[:min(end-off, int64(len(zeroRun)))], off)
+			if err != nil {
+				return err
+			}
+			off += int64(n)
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	m.markDirty(key)
 	return nil
 }
 

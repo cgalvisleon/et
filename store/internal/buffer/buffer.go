@@ -63,8 +63,8 @@ type Handle interface {
 // Extender es lo opcional de una Pool que extiende un fork con varias páginas de una vez (la caché del motor lo
 // cumple; fsm.Manager.Grow lo usa).
 type Extender interface {
-	// ExtendBy agrega n páginas en ceros al final del fork con una sola escritura (la última; las demás quedan en
-	// ceros) y devuelve la primera. No fija ninguna: quien llama las fija con PinZero.
+	// ExtendBy agrega n páginas en ceros al final del fork con una sola llamada a smgr.Extend (que escribe los ceros
+	// de todas, sin huecos) y devuelve la primera. No fija ninguna: quien llama las fija con PinZero.
 	ExtendBy(file smgr.FileNo, fork smgr.Fork, n int) (page.BlockNumber, error)
 }
 

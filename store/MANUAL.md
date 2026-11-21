@@ -960,7 +960,8 @@ Compara siempre con `errors.Is`. Los errores pueden venir envueltos: un disco ll
 | `ErrFailed` + `ErrDiskFull` | disco lleno donde ya no se podía volver atrás: **solo lectura** (`Stats.ReadOnly`) | no (las lecturas siguen) | Libera disco (sección 9). | **sí** |
 | `ErrDiskFull` (solo) | sin lugar; la operación no hizo nada; un lote queda abortado | sí, con lugar | Libera disco. Las escrituras vuelven solas, sin reabrir. | no |
 | `ErrThrottled` | el WAL sin reciclar (o sin archivar, o retenido por una ranura sin tope) pasa de 2 × `MAX_WAL_SIZE` desde hace `LOCK_TIMEOUT`; no hizo nada | sí, con espera | Mira `PressureCause`: disco lento (`wal`), archivador caído (`archive`) o réplica caída (`slot`). | no |
-| `ErrCorrupt` | el WAL, el control o el catálogo no son coherentes (falta el registro del checkpoint, un registro mal formado, `archive_status` o `slots` dañados) | no | Guarda el directorio; restaura el respaldo. **Ojo:** el daño en un segmento sellado del WAL llega como el error interno de `wal` («wal: corrupted») envuelto en «store: open …», y no cumple `errors.Is(err, ErrCorrupt)` (**a confirmar**). | `Open` falla |
+| `ErrCorrupt` | el WAL, el control o el catálogo no son coherentes (falta el registro del checkpoint, un registro mal formado, un segmento sellado del WAL dañado, `archive_status` o `slots` dañados) | no | Guarda el directorio; restaura el respaldo. El daño en un segmento sellado también cumple `errors.Is(err, ErrCorrupt)` (desde la tarea 101; el mensaje trae además el detalle de `wal`). | `Open` falla |
+| `ErrFormatVersion` | el directorio es de otra versión del formato en disco: más nueva que la que lee el binario, o anterior y sin migración (el mensaje dice cuál archivo y qué versión) | no | `Open` no tocó nada. Con una más nueva, abre con la versión de `et` que lo escribió (o una posterior); con una anterior, migra (sección 10). | `Open` falla |
 | `ErrBackupIncomplete` | `Open` de una copia que no terminó o cuyo WAL no llega a su fin | no | La copia no sirve; la copia no se tocó. Usa otro respaldo o completa `wal/`. | — |
 | `ErrBackupDir` | el destino de `Backup` no está vacío | no | Usa un directorio nuevo. | no |
 | `ErrRecoveryTarget` | `OpenAt`/`OpenAtTime` con un objetivo inalcanzable | no | Corrige el objetivo o agrega los segmentos que faltan; la copia sigue igual. | — |
@@ -1033,7 +1034,7 @@ El motor distingue dónde faltó el lugar:
 | Dónde | Resultado |
 |---|---|
 | a la entrada de una escritura (cada escritura exige medio segmento del WAL preasignado) | `ErrDiskFull` limpio: no se escribió nada y el motor sigue |
-| al extender un archivo de datos | `ErrDiskFull` limpio |
+| al extender un archivo de datos (cada página nueva se escribe entera en ceros, sin huecos: escribirla después nunca pide lugar nuevo en ext4 o XFS) | `ErrDiskFull` limpio |
 | en el archivo de estados o el catálogo durante un checkpoint | el checkpoint aborta y se reintenta; el motor sigue |
 | en el WAL en medio de una operación, al escribir una página sucia o el control, o cualquier fsync | **solo lectura**: `ErrDiskFull` + `ErrFailed`, `Stats.ReadOnly = true`, `PressureCause = read_only` |
 
@@ -1091,13 +1092,21 @@ Nada crece en el heap de Go cuando el disco tarda:
 ## 10. Actualizar de versión
 
 **El formato en disco todavía no está congelado.** La tarea 54 (versión 1.0: formato congelado; todo cambio posterior
-con migración y prueba de ida y vuelta) está **pendiente**. Hasta la versión 1.0, actualizar `et` puede exigir migrar
-los datos.
+con migración y prueba de ida y vuelta) está **en curso**: ya están la versión por archivo, `ErrFormatVersion` y la
+prueba de ida y vuelta, pero falta guardar el directorio de referencia `store/testdata/format-v1`, que espera dos
+decisiones que cambiarían el formato (compactar el encabezado de cada versión, tarea 96, y un encabezado con versión
+en los segmentos del WAL). Hasta la versión 1.0, actualizar `et` puede exigir migrar los datos. Desde la 1.0, todo
+cambio de formato llevará versión nueva, migración y prueba de ida y vuelta.
 
 Lo que hay hoy:
 
-- **Una sola versión de formato.** El control y el catálogo llevan `FormatVersion = 1`. Una versión distinta hace
-  fallar `Open` (el error exacto que recibe el usuario, **a confirmar**).
+- **Una sola versión de formato.** El control (cada copia), el catálogo, `backup_label`, `archive_status` y `slots`
+  llevan `FormatVersion = 1`; las páginas, la suya en `pd_pagesize_version`, y la meta de cada store, la suya. El WAL y
+  el archivo de estados no llevan versión propia: los cubre la del control. La tabla completa está en `store/doc.go`
+  («Versiones del formato»).
+- **Otra versión hace fallar `Open` sin tocar nada**, con `ErrFormatVersion` (`errors.Is(err, store.ErrFormatVersion)`).
+  El mensaje nombra el archivo y dice si la versión es más nueva («upgrade et») o anterior («not migratable»). Basta
+  con que una copia válida del control sea de otra versión: `Open` no vuelve a la copia vieja.
 - **Cambios compatibles dentro de la versión 1.** El formato cambió sin subir la versión, de modo que el código nuevo lee
   lo viejo:
   - la pila de páginas borradas de la meta (tarea 70: una meta anterior se lee con la pila vacía);
@@ -1182,12 +1191,15 @@ CHECKPOINT_TIMEOUT=3600 ./storebench -crashwal 1024 -dir /datos/c   # carga hast
 
 - [ ] `ci.sh` en verde, y el nocturno en verde durante 30 días (criterio del bloque D).
 - [ ] Revisión del código sin hallazgos graves abiertos. El crítico y los altos de `doc/review-store-2026-11-20.md`
-      están arreglados (tareas 88–95). Siguen pendientes los medios, entre ellos:
+      están arreglados (tareas 88–95), y también los tres altos de la segunda parte (C1, C2 y V1: tareas 102–104) y
+      el medio D1 (un `DropStore` que podía dejar un archivo huérfano tras un corte). Siguen pendientes los medios,
+      entre ellos:
   - N3: `Close` detrás de un checkpoint repartido;
   - N4: `DropStore` suelto no mira los lotes que escribieron en el store (sus escrituras se pierden en silencio);
   - R3: `fn` del flujo lógico con el motor tomado;
   - R4: `CreateLogicalSlot` espera con el motor tomado;
-  - S2: `SyncAll` puede devolver nil tras un fsync fallido.
+  - S2: `SyncAll` puede devolver nil tras un fsync fallido;
+  - V2: la limpieza de un store grande frena el DDL sobre ese store, y con él el checkpoint.
 - [ ] `storebench` en el hardware de producción: Put/s durable, `Open` tras `-crashwal` con tu `MAX_WAL_SIZE`, y RSS
       con tu caché.
 - [ ] `powercut` sobre el disco y el sistema de archivos de producción.

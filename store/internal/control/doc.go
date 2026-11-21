@@ -8,7 +8,9 @@
 //
 // Dos copias de CopySize = 512 bytes: la A en el byte 0 y la B en el 512. Cada escritura va a la copia seq % 2 (la
 // que no tiene la última versión) y termina con Sync: si un corte rompe la que se escribía, queda la otra entera.
-// Al leer gana la copia válida (magia, versión y CRC correctos) con mayor seq; si ninguna es válida, Open falla.
+// Al leer gana la copia válida (magia, versión y CRC correctos) con mayor seq; si ninguna es válida, Open falla. Una
+// copia con su CRC y su magia válidos pero de otra versión del formato da ErrFormatVersion aunque la otra copia valga
+// (tarea 54: no se vuelve atrás de lo que escribió otro binario); el catálogo de otra versión, también.
 // Cada copia, little-endian:
 //
 //	off tam campo

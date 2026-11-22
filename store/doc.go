@@ -257,7 +257,9 @@
 //	derrame replslot/             sin versión: no es durable, se borra        —
 //
 // Open (checkFormat, antes de leer backup_label, el control para recuperar, el catálogo o el WAL, y de cambiar nada)
-// compara la versión del control, del catálogo, del encabezado de cada segmento del WAL (wal.OtherVersion), de
+// compara la versión del control, del catálogo, del encabezado de cada segmento del WAL desde el punto de rehacer del
+// control y hacia atrás hasta el lsn más viejo que retiene una ranura (wal.OtherVersion: lo que Open lee; los que
+// retiene solo el archivo continuo atrasado los valida quien los lee), de
 // backup_label, de archive_status y de slots con la que lee el binario: una mayor es de un binario más nuevo (MSG_FORMAT_NEWER: actualizar et) y una menor, de un formato anterior
 // sin migración (MSG_FORMAT_OLDER); las dos dan ErrFormatVersion y el directorio queda como estaba (TestOpenFormatVersion).
 // Un archivo sin la magia de su formato no es «otra versión» sino daño, y lo informa quien lo lee. La versión de las
@@ -936,6 +938,17 @@
 //     wal.Options.StopLSN) y deja en largo 0 los segmentos siguientes (un registro viejo nunca confirmado no puede
 //     pasar por válido después). Un registro inválido en un segmento sellado es corrupción: Open falla (la marca de
 //     sellado de cada segmento dice hasta dónde llegan sus registros; ver wal/doc.go, «Marca de sellado»).
+//     Tras un cierre limpio no corta (tarea 109): con el control en StateShutdown, sin marcador de respaldo, sin
+//     objetivo y fuera de una réplica, el motor pasa wal.Options.CleanEnd = CheckpointLSN + 1 (el WAL termina en el
+//     checkpoint de Close) y, si el recorrido termina justo ahí, wal.Open no trunca el activo ni los repuestos, que
+//     siguen preasignados (ahorra un truncado + fsync por segmento al abrir y volver a llenar de ceros el resto del
+//     activo y cada repuesto: hasta 128 MB + fsync cada uno). Es seguro porque tras un Close no hay en ningún segmento
+//     un registro con lsn ≥ el final (Close espera toda reserva; lo que queda después son ceros o registros viejos
+//     de lsn menor, que el recorrido descarta como siempre, y los repuestos tienen el encabezado de otro número). Para
+//     que siga siéndolo, recover anota el control en StateInProduction (markInProduction, con fsync) antes de escribir
+//     nada en el WAL: si un corte deja registros nuevos, el control ya no dice cerrado bien y el próximo Open corta.
+//     Si el final no coincide (un corte entre el WAL y el control) o un segmento mide más que WAL_SEGMENT_SIZE (otro
+//     tamaño), se corta como siempre.
 //  6. loadSlots lee el archivo slots y pone sus retenciones (una cuyo lsn ya no está en el WAL queda invalidada). Con
 //     WAL_ARCHIVE=on (no en una réplica), startArchive lee archive_status, retiene desde lo no archivado y sella el segmento en que el
 //     WAL quedó (ver «Archivo continuo del WAL y recuperación a un punto en el tiempo»).
@@ -1605,14 +1618,24 @@
 //     partición toca tres páginas) y un DDL rehecho cambia el catálogo y los *Store abiertos (syncHandles: uno borrado
 //     da ErrStoreDropped, uno vaciado espera su KindInitStore) sin lecturas en curso. Un DDL espera antes el fsync del
 //     WAL local: el catálogo y los archivos nunca se adelantan a él.
-//   - Snapshots estables: un snapshot de la réplica ve lo confirmado al tomarlo. Antes de rehacer un registro que
-//     cambiaría lo que ve (una confirmación —KindCommit o una escritura suelta—, una limpieza, una liberación de
-//     páginas o un DDL) el aplicador cierra la entrada de snapshots nuevos (txGate) y espera a que se cierren los
-//     abiertos, hasta replicaConflictDelay (30 s); los que queden se cancelan con ErrRecoveryConflict
-//     (Stats.RecoveryConflicts). Se eligió esperar y no llevar la lista de transacciones en curso del primario (las
-//     KnownAssignedXids de PostgreSQL): los xid sin escrituras no aparecen en el WAL y esa lista crecería sin tope.
-//     El costo: con snapshots largos en la réplica el aplicador se atrasa (lo acota el plazo) y ApplyWal por tandas
-//     espera una vez por tanda.
+//   - Snapshots estables: un snapshot de la réplica ve lo confirmado al tomarlo: sin transacciones en curso
+//     (InProgress vacío), con Xmax = el siguiente xid visto en el WAL aplicado, así un xid confirmado lo ve si es
+//     menor que su Xmax. Si una tanda trae un registro que puede cambiar lo que ve un snapshot (snapshotConflict:
+//     una confirmación —KindCommit o una escritura suelta—, una limpieza de hoja, una liberación o un reciclado de
+//     páginas, un DDL) el aplicador cierra la entrada de snapshots nuevos (txGate; un snapshot se toma y se anota con
+//     txGate en lectura, así ninguno queda a medio tomar) y, antes de cada registro así, mira a quiénes afecta
+//     (conflictOf, tarea 125): una confirmación, a los que verían su xid (xid < Xmax: uno tomado antes de que llegara
+//     el primer registro del xid no lo ve ni antes ni después); un KindLeafVacuum (la limpieza o la poda antes de
+//     partir de la tarea 108), leyendo la hoja antes de rehacerlo (btree.LeafVacuumConflict, como el latestRemovedXid
+//     que PostgreSQL calcula en el standby), a los que ven una versión que quita o marca «liberándose» sin ver una más
+//     nueva del mismo id en la hoja, o no veían una que congela (una congelada la ven todos); una liberación o un
+//     reciclado de páginas y un DDL, a todos (también si la hoja no se puede leer). Espera a que se cierren los
+//     afectados, hasta replicaConflictDelay (30 s, desde la primera espera de la tanda), y cancela los que queden con
+//     ErrRecoveryConflict (Stats.RecoveryConflicts); los demás siguen abiertos. Se eligió esperar y no llevar la
+//     lista de transacciones en curso del primario (las KnownAssignedXids de PostgreSQL): los xid sin escrituras no
+//     aparecen en el WAL y esa lista crecería sin tope. El costo: con un snapshot largo que ve lo que cambia el
+//     aplicador se atrasa (lo acota el plazo); la limpieza de fondo congela (FREEZE_MIN_AGE = 0) versiones recientes
+//     que un snapshot largo no ve, así que lo sigue afectando.
 //   - Durabilidad: ApplyWal no hace fsync; WaitDurable en la réplica hace durable lo aplicado (también el escritor de
 //     fondo del WAL). Lo que se confirma en la ranura del primario es ReplayLSN después de WaitDurable.
 //

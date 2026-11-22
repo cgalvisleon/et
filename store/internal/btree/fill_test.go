@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand"
 	"testing"
+	"time"
 
 	"github.com/cgalvisleon/et/store/internal/buffer"
 	"github.com/cgalvisleon/et/store/internal/crashfs"
@@ -224,4 +225,61 @@ func TestPruneRedoIdentical(t *testing.T) {
 		t.Fatal(err)
 	}
 	same(tr2)
+}
+
+// TestPruneHorizonUnlocked: la poda antes de partir lee el horizonte (Config.Horizon, que en el motor toma el mutex de
+// xact) con la hoja suelta: mientras se calcula, otro puede leer cualquier hoja del árbol.
+func TestPruneHorizonUnlocked(t *testing.T) {
+	e := openEnv(t, crashfs.New(), wal.Start, 256)
+	cfg := e.config()
+	xid := page.XID(10)
+	var tr *BTree
+	calls, locked := 0, 0
+	cfg.Horizon = func() page.XID {
+		calls++
+		if locked > 0 {
+			return xid + 1
+		}
+		done := make(chan error, 1)
+		go func() { done <- readAllLeaves(tr) }()
+		select {
+		case err := <-done:
+			if err != nil {
+				t.Error(err)
+			}
+		case <-time.After(500 * time.Millisecond):
+			locked++ // una hoja sigue bloqueada en exclusivo
+		}
+		return xid + 1
+	}
+	var err error
+	if tr, err = Create(cfg); err != nil {
+		t.Fatal(err)
+	}
+	m := updateLoop(t, tr, rand.New(rand.NewSource(5)), 100, 1_500, &xid)
+	if calls == 0 || tr.Pruned() == 0 {
+		t.Fatalf("%d lecturas del horizonte, %d versiones podadas: se esperaba alguna de cada una", calls, tr.Pruned())
+	}
+	if locked > 0 {
+		t.Fatalf("%d de %d lecturas del horizonte con una hoja bloqueada", locked, calls)
+	}
+	checkTree(t, tr, m)
+}
+
+/**
+* readAllLeaves recorre las hojas de izquierda a derecha, cada una bloqueada en compartido.
+* @param tr *BTree
+* @return error
+**/
+func readAllLeaves(tr *BTree) error {
+	h, n, _, err := tr.descend(minusInf, 0, buffer.Share, false)
+	for err == nil {
+		next := n.o.Next
+		h.Release()
+		if next == 0 {
+			return nil
+		}
+		h, n, err = tr.lockNode(next, buffer.Share)
+	}
+	return err
 }

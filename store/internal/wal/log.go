@@ -116,8 +116,14 @@ func Open(fsys vfs.FS, dir string, opts Options, redo Position, fn func(rec *Rec
 			return nil, end, err
 		}
 	}
-	if err := cutTail(fsys, walDir, end, nums); err != nil {
+	clean, err := cleanEnd(fsys, walDir, opts, end, nums)
+	if err != nil {
 		return nil, end, err
+	}
+	if !clean {
+		if err := cutTail(fsys, walDir, end, nums); err != nil {
+			return nil, end, err
+		}
 	}
 	file, err := fsys.OpenFile(segmentPath(walDir, end.Segment), os.O_RDWR)
 	if err != nil {
@@ -132,6 +138,12 @@ func Open(fsys vfs.FS, dir string, opts Options, redo Position, fn func(rec *Rec
 	allocated := opts.SegmentSize // sin preasignación nunca se rellena con ceros
 	if opts.Preallocate {
 		allocated = end.Offset // el resto lo preasigna Room (o la primera reserva que lo necesite)
+		if clean {             // sin cortar, lo que el archivo ya mide sigue escrito (ceros o registros viejos)
+			if allocated, err = file.Size(); err != nil {
+				file.Close()
+				return nil, end, err
+			}
+		}
 	}
 	w := &WAL{
 		fs:      fsys,
@@ -156,6 +168,8 @@ func Open(fsys vfs.FS, dir string, opts Options, redo Position, fn func(rec *Rec
 * ensureHeader escribe (con fsync) el encabezado del segmento activo de Open si todavía no tiene registros y el
 * encabezado falta: un segmento recién creado (el primero de un motor nuevo) o uno cortado antes de que su
 * encabezado fuera durable. Uno con registros ya pasó por checkStartHeader o por el paso de un segmento al siguiente.
+* El error de escritura vuelve crudo, como el de spaceError: el motor traduce un disco lleno de Open a ErrDiskFull
+* (vfs.IsNoSpace en Engine.open).
 * @param file vfs.File, end Position: el final válido, en este segmento
 * @return error
 **/
@@ -171,6 +185,29 @@ func ensureHeader(file vfs.File, end Position) error {
 		return err
 	}
 	return file.Sync()
+}
+
+/**
+* cleanEnd dice si Open puede no cortar la cola (Options.CleanEnd, tarea 109): el recorrido terminó justo en el final
+* de un cierre limpio, sin objetivo de recuperación, y ningún segmento desde el final mide más que SegmentSize (con
+* otro WAL_SEGMENT_SIZE la marca de sellado no caería al final del archivo: se corta como siempre).
+* @param fsys vfs.FS, dir string, opts Options, end Position: el final válido, nums []uint64: los segmentos
+* @return bool, error: de lectura
+**/
+func cleanEnd(fsys vfs.FS, dir string, opts Options, end Position, nums []uint64) (bool, error) {
+	if opts.CleanEnd == 0 || opts.StopLSN != 0 || end.LSN != opts.CleanEnd {
+		return false, nil
+	}
+	for _, num := range nums {
+		if num < end.Segment {
+			continue
+		}
+		size, err := segmentSize(fsys, dir, num)
+		if err != nil || size > opts.SegmentSize {
+			return false, err
+		}
+	}
+	return true, nil
 }
 
 // cutTail corta lo que sigue al final válido: el segmento de end en su desplazamiento y los siguientes enteros.
@@ -376,8 +413,9 @@ func (w *WAL) allocate(size int64) (*segment, int64, error) {
 	return seg, offset, nil
 }
 
-// rotate sella el segmento activo (sus escrituras terminadas y fsync, y después su marca de sellado) y pasa al siguiente: un repuesto reciclado si
-// lo hay, o uno nuevo. Con preasignación, antes de sellar deja el siguiente preasignado: si el disco está lleno
+// rotate sella el segmento activo y pasa al siguiente (un repuesto reciclado si lo hay, o uno nuevo), en este orden:
+// fsync del activo (sus escrituras terminadas), encabezado del siguiente con fsync y recién entonces la marca de
+// sellado del activo. Con preasignación, antes de sellar deja el siguiente preasignado: si el disco está lleno
 // devuelve ese error sin tocar nada. Un fsync o una apertura fallidos dejan el WAL inutilizable. Con writeMu tomado.
 func (w *WAL) rotate() error {
 	if w.opts.Preallocate {
@@ -679,7 +717,9 @@ func (w *WAL) Written() int64 {
 	return w.written.Load()
 }
 
-// SizeSince es cuántos bytes de WAL hay escritos o reservados desde from hasta el final.
+// SizeSince es cuántos bytes de WAL hay escritos o reservados desde from hasta el final. Cuenta lo que ocupa en
+// disco: también los SegmentHeaderSize (32 B) del encabezado de cada segmento posterior al de from (para el disparo
+// del checkpoint por MAX_WAL_SIZE es despreciable).
 func (w *WAL) SizeSince(from Position) int64 {
 	w.writeMu.Lock()
 	defer w.writeMu.Unlock()

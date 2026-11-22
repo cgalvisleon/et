@@ -14,6 +14,7 @@ import (
 
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/response"
+	"github.com/go-chi/chi/v5"
 )
 
 /**
@@ -221,6 +222,24 @@ func queryValues(schema et.Json, r *http.Request) et.Json {
 }
 
 /**
+* paramValues: The path params a schema declares, converted to their type like the query; an empty one is left out so
+* the validation reports it as missing
+* @param schema et.Json, r *http.Request
+* @return et.Json
+**/
+func paramValues(schema et.Json, r *http.Request) et.Json {
+	result := et.Json{}
+	for key, value := range schemaJson(schema["properties"]) {
+		text := chi.URLParam(r, key)
+		if text == "" {
+			continue
+		}
+		result[key] = queryValue(strings.Join(schemaTypes(schemaJson(value)), ""), text)
+	}
+	return result
+}
+
+/**
 * queryValue: A query value converted to its type
 * @param tp, text string
 * @return any
@@ -240,13 +259,18 @@ func queryValue(tp, text string) any {
 }
 
 /**
-* validateRequest: The errors of the query and the body of a request against the schemas of doc; it leaves the body to
-* be read again
+* validateRequest: The errors of the path params, the query and the body of a request against the schemas of doc (an
+* empty path param counts as missing); it leaves the body to be read again
 * @param doc *Doc, r *http.Request
 * @return []string, error
 **/
 func validateRequest(doc *Doc, r *http.Request) ([]string, error) {
 	errs := []string{}
+	if len(doc.Params) > 0 {
+		params := paramValues(doc.Params, r)
+		errs = append(errs, ValidateSchema(doc.Params, map[string]any(params), "params")...)
+	}
+
 	if len(doc.Query) > 0 {
 		query := queryValues(doc.Query, r)
 		errs = append(errs, ValidateSchema(doc.Query, map[string]any(query), "query")...)
@@ -278,7 +302,8 @@ func validateRequest(doc *Doc, r *http.Request) ([]string, error) {
 }
 
 /**
-* validateMiddleware: Responds 400 with {message, errors} when the query or the body do not follow the schemas of doc
+* validateMiddleware: Responds 400 with {message, errors} when the path params, the query or the body do not follow the
+* schemas of doc
 * @param doc *Doc
 * @return func(http.Handler) http.Handler
 **/

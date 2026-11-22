@@ -288,6 +288,16 @@
 //     lo rehace byte a byte con applyLeafVacuum y no hace falta un Kind nuevo. Una hoja con page.FlagAllVisible no se
 //     mira (no tiene nada muerto). No pone marcas de visibilidad (statusOf sin hints: la regla 49 no se toca) ni
 //     recicla páginas (opGuard no cambia). Pruned cuenta lo quitado.
+//     El horizonte se lee con la hoja suelta (writeLeaf la suelta, lee Config.Horizon y vuelve a bajar: una bajada de
+//     más por hoja llena, nada por escritura): OldestActive toma el mutex de xact y recorre transacciones y snapshots,
+//     y con la hoja más caliente bloqueada en exclusivo frenaba a todos los que la esperan. Un horizonte ya viejo al
+//     podar solo poda menos (TestPruneHorizonUnlocked; tarea 129).
+//   - Lado de la entrada nueva al partir en el punto de inserción: con grupos (v01|… y v02|…) el separador del corte
+//     sale truncado («v02») y la entrada nueva, menor, cae a la izquierda y queda la última ahí, como «partir después
+//     del ítem nuevo» de _bt_afternewitemoff; las siguientes del grupo también van a la izquierda hasta que se llena y
+//     se parte al final al 90 %. No es una partición de más: exigir que la entrada nueva caiga a la derecha (si no,
+//     mitad y mitad) bajó los índices de TestIndexHeaderShare del 83 al 65 % y TestSplitAscendingGroups del 86 al 55 %
+//     con 5 grupos (tarea 129).
 //
 // # Borrado de páginas (tarea 70)
 //

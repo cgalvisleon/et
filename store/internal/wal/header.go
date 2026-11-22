@@ -214,11 +214,16 @@ func checkStartHeader(fsys vfs.FS, dir string, from Position) error {
 /**
 * OtherVersion busca, sin escribir nada, un segmento del WAL del motor de dir con el encabezado de otra versión del
 * formato (lo usa checkFormat del motor antes de abrir). Solo mira la magia y la versión: un encabezado roto lo
-* informa después la recuperación.
+* informa después la recuperación. Mira solo lo que Open va a leer: los segmentos desde from (el del punto de rehacer:
+* los que recorre la recuperación, más los repuestos) y, si keep > 0, los anteriores hacia atrás hasta el primero cuyo
+* encabezado empieza en keep o antes (lo que lee SegmentOf al poner la retención de una ranura). Así no lee un
+* encabezado por cada segmento retenido solo para el archivo continuo; esos los revisa quien los lee (checkStartHeader
+* y el paso al siguiente de scan, SegmentInfo).
 * @param fsys vfs.FS, dir string: el directorio del motor
+* @param from uint64: el primer segmento que se mira entero (0 = todos), keep page.LSN: el menor lsn que retiene una ranura (0 = ninguno)
 * @return string: el nombre del segmento (wal/<n>.seg), uint32: su versión, bool: si hay uno, error
 **/
-func OtherVersion(fsys vfs.FS, dir string) (string, uint32, bool, error) {
+func OtherVersion(fsys vfs.FS, dir string, from uint64, keep page.LSN) (string, uint32, bool, error) {
 	walDir := filepath.Join(dir, Dir)
 	names, err := fsys.ReadDir(dir)
 	if err != nil {
@@ -231,16 +236,42 @@ func OtherVersion(fsys vfs.FS, dir string) (string, uint32, bool, error) {
 	if err != nil {
 		return "", 0, false, err
 	}
-	for _, num := range nums {
-		version, other, err := segmentVersion(fsys, walDir, num)
+	below := 0 // nums[:below] son anteriores a from
+	for below < len(nums) && nums[below] < from {
+		below++
+	}
+	for _, num := range nums[below:] {
+		if name, version, found, err := otherVersionOf(fsys, walDir, num); err != nil || found {
+			return name, version, found, err
+		}
+	}
+	for i := below - 1; i >= 0 && keep > 0; i-- {
+		num := nums[i]
+		if name, version, found, err := otherVersionOf(fsys, walDir, num); err != nil || found {
+			return name, version, found, err
+		}
+		h, state, err := readHeaderOf(fsys, walDir, num)
 		if err != nil {
 			return "", 0, false, err
 		}
-		if other {
-			return filepath.Join(Dir, segmentName(num)), version, true, nil
+		if state == headerValid && h.Num == num && h.First <= keep {
+			break // SegmentOf se detiene aquí
 		}
 	}
 	return "", 0, false, nil
+}
+
+/**
+* otherVersionOf es segmentVersion con el resultado de OtherVersion.
+* @param fsys vfs.FS, walDir string, num uint64
+* @return string, uint32, bool, error: ver OtherVersion
+**/
+func otherVersionOf(fsys vfs.FS, walDir string, num uint64) (string, uint32, bool, error) {
+	version, other, err := segmentVersion(fsys, walDir, num)
+	if err != nil || !other {
+		return "", 0, false, err
+	}
+	return filepath.Join(Dir, segmentName(num)), version, true, nil
 }
 
 // legacyVersion es la versión que se informa para un segmento sin encabezado (escrito antes de la pregunta 76): sus

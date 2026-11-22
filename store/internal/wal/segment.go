@@ -84,6 +84,16 @@ func (w *WAL) seal(s *segment) error {
 	return s.file.Sync()
 }
 
+// segmentSize es el largo del archivo del segmento num.
+func segmentSize(fsys vfs.FS, dir string, num uint64) (int64, error) {
+	file, err := fsys.OpenFile(segmentPath(dir, num), os.O_RDONLY)
+	if err != nil {
+		return 0, err
+	}
+	defer file.Close()
+	return file.Size()
+}
+
 // truncateSegment corta el segmento num en size y hace fsync: lo que seguía nunca se confirmó.
 func truncateSegment(fsys vfs.FS, dir string, num uint64, size int64) error {
 	file, err := fsys.OpenFile(segmentPath(dir, num), os.O_RDWR)

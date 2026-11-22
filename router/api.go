@@ -297,7 +297,7 @@ func (s *Api) ListRpcs(r *http.Request, body et.Json) (et.Items, error) {
 **/
 func (s *Api) Public(group, method, path, name string, handler http.HandlerFunc, docs ...Doc) {
 	path = s.getPath(path)
-	doc := docOf(docs)
+	doc := docWithParams(docOf(docs), path)
 	s.registerRoute(Endpoint{PackageName: s.Name, Group: group, Method: method, Path: path, Name: name, Access: AccessPublic, Doc: doc})
 	middlewares := make([]func(http.Handler) http.Handler, 0)
 	middlewares = append(middlewares, s.rateLimitMiddleware)
@@ -321,7 +321,7 @@ func (s *Api) Public(group, method, path, name string, handler http.HandlerFunc,
 **/
 func (s *Api) Session(group, method, path, name string, handler http.HandlerFunc, docs ...Doc) {
 	path = s.getPath(path)
-	doc := docOf(docs)
+	doc := docWithParams(docOf(docs), path)
 	s.registerRoute(Endpoint{PackageName: s.Name, Group: group, Method: method, Path: path, Name: name, Access: AccessSession, Doc: doc})
 	middlewares := make([]func(http.Handler) http.Handler, 0)
 	middlewares = append(middlewares, s.rateLimitMiddleware)
@@ -349,7 +349,7 @@ func (s *Api) Session(group, method, path, name string, handler http.HandlerFunc
 **/
 func (s *Api) Protected(group, method, path, name string, handler http.HandlerFunc, docs ...Doc) {
 	path = s.getPath(path)
-	doc := docOf(docs)
+	doc := docWithParams(docOf(docs), path)
 	s.registerRoute(Endpoint{PackageName: s.Name, Group: group, Method: method, Path: path, Name: name, Access: AccessProtected, Doc: doc})
 	middlewares := make([]func(http.Handler) http.Handler, 0)
 	middlewares = append(middlewares, s.rateLimitMiddleware)

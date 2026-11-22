@@ -66,7 +66,7 @@ func (e *Engine) newBatch() *Batch {
 		return b
 	}
 	defer e.leave()
-	e.openTxn(&e.metrics.openBatches)
+	e.openTxn(&e.metrics.openBatches, nil)
 	b.xid = e.txs.Begin()
 	b.snap = e.txs.Snapshot(b.xid)
 	if e.cfg.txTimeout > 0 {

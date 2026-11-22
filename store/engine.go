@@ -212,7 +212,9 @@ func open(base vfs.FS, dir string, cfg config) (*Engine, error) {
 * @return error
 **/
 func (e *Engine) close() error {
-	e.ckptHurry.Add(1) // antes de closeMu: un Checkpoint() con closeMu en lectura puede esperar al de fondo
+	// Antes de closeMu: un Checkpoint() con closeMu en lectura puede esperar al de fondo. No se baja nunca: el motor
+	// cerrado no vuelve a repartir checkpoints (y el final tampoco se reparte).
+	e.ckptHurry.Add(1)
 	e.closeMu.Lock()
 	if e.closed {
 		e.closeMu.Unlock()
@@ -428,12 +430,17 @@ func (e *Engine) logTxRecord(xid page.XID, kind wal.Kind, main []byte) (page.LSN
 }
 
 /**
-* openTxn anota un lote o snapshot abierto (Empty no corre mientras haya alguno). Con closeMu en lectura.
-* @param kind *atomic.Int64: el contador de Stats (metrics.openBatches o metrics.openSnapshots)
+* openTxn anota un lote o snapshot abierto (Empty no corre mientras haya alguno). Con closeMu en lectura. register,
+* si no es nil, corre con txGate en lectura: el snapshot de una réplica se toma y se anota ahí, así el aplicador, con
+* txGate en escritura, ve todos los snapshots abiertos con su Xmax (ninguno a medio tomar).
+* @param kind *atomic.Int64: el contador de Stats (metrics.openBatches o metrics.openSnapshots), register func()
 **/
-func (e *Engine) openTxn(kind *atomic.Int64) {
+func (e *Engine) openTxn(kind *atomic.Int64, register func()) {
 	e.txGate.RLock()
 	e.openTx.Add(1)
+	if register != nil {
+		register()
+	}
 	e.txGate.RUnlock()
 	kind.Add(1)
 }

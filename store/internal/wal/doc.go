@@ -50,7 +50,10 @@
 // el byte 32) y en cada paso al siguiente (sin encabezado, roto o reciclado = el final del WAL; first mayor = hueco,
 // ErrCorrupted; otra versión = ErrFormatVersion); checkSealed (un final justo en el fin de un segmento sellado cuyo
 // siguiente existe es ErrCorrupted: su encabezado era durable); Locate, SegmentOf y SegmentInfo (el archivo
-// continuo); y OtherVersion, que checkFormat del motor llama antes de tocar nada (ErrFormatVersion del motor).
+// continuo); y OtherVersion, que checkFormat del motor llama antes de tocar nada (ErrFormatVersion del motor) con los
+// segmentos que Open va a leer: desde el del punto de rehacer del control (los que lee la recuperación, más los
+// repuestos) y hacia atrás hasta el lsn más viejo que retiene una ranura (lo que lee SegmentOf); los que retiene solo
+// el archivo continuo atrasado los valida quien los lee.
 // ParseSegmentHeader lo lee desde fuera del paquete.
 //
 // # Marca de sellado (tarea 90)
@@ -132,7 +135,17 @@
 // segmento sellado (ver «Marca de sellado»), corta la cola (el resto del último segmento válido y los segmentos
 // siguientes enteros: un registro viejo nunca confirmado podría quedar justo donde termina uno nuevo) y deja el WAL
 // listo para escribir a continuación. NewReader da un Reader para recorrer sin
-// escribir. Options.Spares es cuántos segmentos reciclados se guardan; Recycle borra el resto. MakeImage y
+// escribir.
+//
+// Tras un cierre limpio no corta (Options.CleanEnd, tarea 109): el motor pasa el lsn siguiente a su checkpoint de
+// Close y, si el recorrido termina justo ahí (sin StopLSN) y ningún segmento desde el final mide más que SegmentSize,
+// Open no trunca el activo ni los siguientes y toma allocated del largo del activo. Así el activo y los repuestos
+// siguen preasignados: sin un truncado + fsync por segmento al abrir ni volver a llenarlos de ceros. Lo que queda
+// después del final son ceros o registros viejos de lsn menor (Close esperó toda reserva; un corte anterior ya se
+// cortó al abrir), que el recorrido descarta igual que en un repuesto reciclado, y un repuesto tiene el encabezado y la
+// marca de sellado de otro número. Quien lo pasa garantiza que nada se escribió después del Close: el motor anota su
+// control en StateInProduction antes de escribir (store/doc.go, «Recuperación»). Si el final no coincide, se corta como
+// siempre. Options.Spares es cuántos segmentos reciclados se guardan; Recycle borra el resto. MakeImage y
 // RestoreImage (o BlockRef.SetImage y BlockRef.RestoreImage) arman y restauran las imágenes de página entera.
 //
 // # Preasignación
@@ -140,7 +153,8 @@
 // Con Options.Preallocate (el motor la usa siempre) cada segmento se escribe entero con ceros y fsync antes de
 // recibir registros, como wal_init_zero de PostgreSQL: así escribir un registro reservado sobrescribe bloques que ya
 // existen y no pide lugar nuevo, y el disco lleno sale antes de empezar una operación. segment.allocated es hasta
-// dónde está escrito el activo (Open lo deja en el final válido: el resto se rellena después) y nextReady dice si el
+// dónde está escrito el activo (Open lo deja en el final válido, o en el largo del archivo tras un cierre limpio con
+// CleanEnd: el resto se rellena después) y nextReady dice si el
 // siguiente ya existe entero. Room, que el motor llama al entrar cada escritura, exige medio segmento preasignado
 // entre el resto del activo y el siguiente: si falta, rellena el activo y prepara el siguiente (un repuesto reciclado
 // o uno nuevo, creado con O_EXCL y fsync del directorio) bajo writeMu. Si no hay lugar devuelve ErrNoRoom (con el

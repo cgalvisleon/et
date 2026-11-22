@@ -79,12 +79,21 @@ func (e *Engine) recover() error {
 		replica: e.cfg.replica, sample: ctl.FrozenXID}
 	opts := e.cfg.wal
 	opts.StopLSN = e.cfg.stopLSN
+	clean := !fresh && !restoring && !e.cfg.replica && e.cfg.stopLSN == 0 && ctl.State == control.StateShutdown
+	if clean {
+		opts.CleanEnd = ctl.CheckpointLSN + 1 // el WAL termina en el checkpoint de Close (tarea 109)
+	}
 	log, end, err := wal.Open(e.fs, e.dir, opts, redo, r.apply)
 	if err != nil {
 		return err
 	}
 	e.log = log
 	e.proxy.connect(log)
+	if clean {
+		if err := e.markInProduction(ctl); err != nil {
+			return err
+		}
+	}
 	if !fresh && !r.sawCheckpoint {
 		return fmt.Errorf(MSG_NO_CHECKPOINT, ErrCorrupt, ctl.CheckpointLSN)
 	}
@@ -103,6 +112,19 @@ func (e *Engine) recover() error {
 		return e.removeBackupLabel() // la copia ya es un motor más: su checkpoint pasó el fin del respaldo
 	}
 	return nil
+}
+
+/**
+* markInProduction anota en el control, con fsync, que el motor está abierto antes de escribir nada en el WAL: tras un
+* cierre limpio wal.Open no corta la cola (Options.CleanEnd), y si un corte dejara registros nuevos después del final
+* con el control todavía en StateShutdown, el próximo Open tampoco la cortaría (un registro sin confirmar podría quedar
+* justo donde termina uno nuevo). Así el control vuelve a StateShutdown solo con el checkpoint de un Close.
+* @param ctl control.Control: el leído al abrir
+* @return error
+**/
+func (e *Engine) markInProduction(ctl control.Control) error {
+	ctl.State = control.StateInProduction
+	return e.ctl.Write(ctl)
 }
 
 /**

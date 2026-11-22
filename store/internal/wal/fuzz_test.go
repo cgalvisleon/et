@@ -252,7 +252,7 @@ func forgesRecord(junk []byte) bool {
 
 // FuzzRecoverSegment: con un segmento dañado (pisado, cortado, en ceros o con basura al final), Open devuelve un
 // prefijo exacto de la historia con todo lo anterior al daño, o falla con ErrCorrupted si el daño está en un
-// segmento sellado o en el encabezado de cualquier segmento (es durable antes de sellar el anterior); y tras recuperar se sigue escribiendo y reabriendo bien. Corre sobre crashfs: en memoria, sin
+// segmento sellado o en el encabezado de cualquier segmento (es durable antes de sellar el anterior); y tras recuperar se sigue escribiendo y reabriendo bien (también sin cortar, con CleanEnd). Corre sobre crashfs: en memoria, sin
 // fsync real.
 func FuzzRecoverSegment(f *testing.F) {
 	const template, dir = "/template", "/db"
@@ -318,13 +318,28 @@ func FuzzRecoverSegment(f *testing.F) {
 			t.Fatal(err)
 		}
 		w.Close()
+		// Tras el cierre limpio, Open con CleanEnd (tarea 109) no corta: se sigue escribiendo y reabriendo bien.
+		clean := smallOptions(0)
+		clean.CleanEnd = page.LSN(len(recs) + 2)
 		n := 0
-		w, _, err = Open(fsys, dir, smallOptions(0), Start, func(rec *Record) error {
+		w, _, err = Open(fsys, dir, clean, Start, func(rec *Record) error {
 			n++
 			return nil
 		})
 		if err != nil || n != len(recs)+1 {
 			t.Fatalf("tras seguir escribiendo: %d registros, %v", n, err)
+		}
+		if _, err := appendOne(w, testRecord(fuzzRecords+8)); err != nil {
+			t.Fatal(err)
+		}
+		w.Close()
+		n = 0
+		w, _, err = Open(fsys, dir, smallOptions(0), Start, func(rec *Record) error {
+			n++
+			return nil
+		})
+		if err != nil || n != len(recs)+2 {
+			t.Fatalf("tras reabrir sin cortar: %d registros, %v", n, err)
 		}
 		w.Close()
 	})

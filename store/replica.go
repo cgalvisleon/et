@@ -3,11 +3,13 @@ package store
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/cgalvisleon/et/store/internal/btree"
+	"github.com/cgalvisleon/et/store/internal/buffer"
 	"github.com/cgalvisleon/et/store/internal/control"
 	"github.com/cgalvisleon/et/store/internal/fsm"
 	"github.com/cgalvisleon/et/store/internal/overflow"
@@ -43,7 +45,8 @@ type ckptMark struct {
 //
 // Locks: applyMu → txGate (escritura, para los registros que cambian lo que ve un snapshot) → replayMu (escritura) →
 // ddlMu → Store.mu. Las lecturas de páginas toman replayMu en lectura dentro de Store.begin (closeMu → replayMu →
-// Store.mu). Verify y el restartpoint toman applyMu para ver un estado quieto.
+// Store.mu). Verify y el restartpoint toman applyMu para ver un estado quieto. Tomar un snapshot: txGate (lectura) →
+// xact → snapMu (openTxn); snapMu es una hoja.
 type replicaState struct {
 	applyMu  sync.Mutex   // un aplicador a la vez
 	replayMu sync.RWMutex // aplicar un registro (escritura) contra las lecturas de páginas (lectura)
@@ -114,14 +117,59 @@ func (r *replicaState) untrack(v *Snapshot) {
 	r.snapMu.Unlock()
 }
 
+// conflict dice si rehacer un registro cambia lo que ve un snapshot de la réplica (nil: no cambia nada para nadie).
+type conflict func(snap *xact.Snapshot) bool
+
+// everyone es el conflicto con todos los snapshots abiertos.
+func everyone(*xact.Snapshot) bool { return true }
+
 /**
-* cancelSnapshots cierra con ErrRecoveryConflict los snapshots abiertos de la réplica.
+* sees es el conflicto de una confirmación: la notan los snapshots que verían el xid confirmado (xid < Xmax). Uno
+* tomado antes de que llegara el primer registro del xid no lo ve ni antes ni después.
+* @param xid page.XID
+* @return conflict
 **/
-func (r *replicaState) cancelSnapshots() {
+func sees(xid page.XID) conflict {
+	return func(snap *xact.Snapshot) bool { return snap.Visible(xid, xact.StatusCommitted) }
+}
+
+/**
+* open dice si la réplica tiene snapshots abiertos.
+* @return bool
+**/
+func (r *replicaState) open() bool {
 	r.snapMu.Lock()
-	list := make([]*Snapshot, 0, len(r.snaps))
+	defer r.snapMu.Unlock()
+	return len(r.snaps) > 0
+}
+
+/**
+* affected dice si algún snapshot abierto de la réplica nota c.
+* @param c conflict
+* @return bool
+**/
+func (r *replicaState) affected(c conflict) bool {
+	r.snapMu.Lock()
+	defer r.snapMu.Unlock()
 	for v := range r.snaps {
-		list = append(list, v)
+		if c(&v.snap) {
+			return true
+		}
+	}
+	return false
+}
+
+/**
+* cancel cierra con ErrRecoveryConflict los snapshots abiertos de la réplica que notan c.
+* @param c conflict
+**/
+func (r *replicaState) cancel(c conflict) {
+	r.snapMu.Lock()
+	var list []*Snapshot
+	for v := range r.snaps {
+		if c(&v.snap) {
+			list = append(list, v)
+		}
 	}
 	r.snapMu.Unlock()
 	for _, v := range list {
@@ -161,9 +209,10 @@ func (e *Engine) replayLSN() uint64 {
 /**
 * applyWal aplica en la réplica los registros del WAL del primario, en orden: los ya aplicados (lsn ≤ ReplayLSN) se
 * saltan, y el primero que no sigue da ErrWalGap sin aplicar nada de ahí en adelante. Cada uno se escribe en el WAL
-* local en su posición y se rehace como en la recuperación. Antes de un registro que cambia lo que ve un snapshot
-* (una confirmación, una limpieza, un DDL) espera a que se cierren los snapshots abiertos de la réplica, hasta
-* replicaConflictDelay, y cancela los que queden. No espera el fsync: WaitDurable (o el escritor de fondo del WAL) lo
+* local en su posición y se rehace como en la recuperación. Si la tanda trae algo que puede cambiar lo que ve un
+* snapshot (snapshotConflict) cierra la entrada de snapshots nuevos (txGate) y, antes de cada registro así, espera a
+* que se cierren los snapshots abiertos que lo notarían (conflictOf, tarea 125), hasta replicaConflictDelay, y cancela
+* los que queden; los demás siguen abiertos. No espera el fsync: WaitDurable (o el escritor de fondo del WAL) lo
 * hace, y es lo que hay que esperar antes de confirmar la ranura en el primario.
 * @param entries []WalEntry
 * @return error: ErrNotReplica, ErrWalGap, ErrCorrupt (un registro inválido), ErrClosed, ErrFailed
@@ -187,15 +236,22 @@ func (e *Engine) applyWal(entries []WalEntry) error {
 	if err != nil || len(todo) == 0 {
 		return err
 	}
-	for _, rec := range recs {
-		if snapshotConflict(rec) {
-			defer e.quiesceSnapshots()()
-			break
-		}
+	gate := slices.ContainsFunc(recs, snapshotConflict)
+	if gate { // ningún snapshot nuevo mientras se aplica algo que cambia lo que ven
+		e.txGate.Lock()
+		defer e.txGate.Unlock()
 	}
+	var deadline time.Time
 	rs.replayMu.Lock()
-	defer rs.replayMu.Unlock()
+	defer func() { rs.replayMu.Unlock() }()
 	for i := range todo {
+		if gate && rs.open() { // sin snapshots abiertos no hace falta mirar las páginas
+			if c := e.conflictOf(recs[i]); c != nil && rs.affected(c) {
+				rs.replayMu.Unlock() // las lecturas en curso de esos snapshots tienen que poder terminar
+				deadline = e.waitConflict(c, deadline)
+				rs.replayMu.Lock()
+			}
+		}
 		if err := e.applyEntry(todo[i], recs[i]); err != nil {
 			if errors.Is(err, wal.ErrOutOfOrder) {
 				return fmt.Errorf(MSG_WAL_GAP, ErrWalGap, todo[i].LSN, rs.applied.Load()+1)
@@ -232,10 +288,10 @@ func (e *Engine) pendingEntries(entries []WalEntry) ([]WalEntry, []*wal.Record, 
 }
 
 /**
-* snapshotConflict dice si rehacer rec cambia lo que ve un snapshot abierto: una confirmación (que hace visibles
-* versiones), una limpieza o una liberación de páginas (que quitan versiones que el snapshot podría ver), el reciclado
-* de una página borrada del árbol (un recorrido abierto puede tener todavía su enlace: como el safexid de
-* XLOG_BTREE_REUSE_PAGE en PostgreSQL) o un DDL.
+* snapshotConflict dice si rehacer rec puede cambiar lo que ve un snapshot abierto (sin mirar páginas): una
+* confirmación (que hace visibles versiones), una limpieza o una liberación de páginas (que quitan versiones que el
+* snapshot podría ver), el reciclado de una página borrada del árbol (un recorrido abierto puede tener todavía su
+* enlace: como el safexid de XLOG_BTREE_REUSE_PAGE en PostgreSQL) o un DDL. A quiénes afecta lo dice conflictOf.
 * @param rec *wal.Record
 * @return bool
 **/
@@ -251,21 +307,94 @@ func snapshotConflict(rec *wal.Record) bool {
 }
 
 /**
-* quiesceSnapshots deja la réplica sin snapshots abiertos: cierra la entrada de nuevos (txGate) y espera a los
-* abiertos hasta replicaConflictDelay; después cancela los que queden (ErrRecoveryConflict). Con applyMu.
-* @return func(): reabre la entrada de snapshots
+* conflictOf dice a qué snapshots abiertos afecta rehacer rec, con la página todavía como antes del registro (tarea
+* 125): una confirmación, a los que verían su xid; una limpieza de hoja, a los que ven una versión que quita sin ver
+* una más nueva del mismo id, o no veían una que congela (btree.LeafVacuumConflict); una liberación o un reciclado de
+* páginas y un DDL, a todos. Con applyMu, txGate en escritura y replayMu en escritura.
+* @param rec *wal.Record
+* @return conflict: nil si a ninguno
 **/
-func (e *Engine) quiesceSnapshots() func() {
-	e.txGate.Lock()
-	deadline := time.Now().Add(e.cfg.conflictDelay)
-	for e.openTx.Load() > 0 {
+func (e *Engine) conflictOf(rec *wal.Record) conflict {
+	switch rec.Kind {
+	case wal.KindCommit:
+		if isDDL(rec) {
+			return everyone
+		}
+		return sees(rec.XID)
+	case wal.KindLeafWrite:
+		if rec.Flags&wal.FlagCommit == 0 {
+			return nil
+		}
+		if rec.XID == 0 { // nace visible para todos
+			return everyone
+		}
+		return sees(rec.XID)
+	case wal.KindLeafVacuum:
+		return e.vacuumConflict(rec)
+	}
+	if snapshotConflict(rec) {
+		return everyone
+	}
+	return nil
+}
+
+/**
+* vacuumConflict lee la hoja de un KindLeafVacuum antes de rehacerlo y dice a quiénes afecta. Si el store ya no está
+* el registro no se rehace (nil); si la hoja no se puede leer, a todos.
+* @param rec *wal.Record: de btree, con la hoja en el bloque 0
+* @return conflict
+**/
+func (e *Engine) vacuumConflict(rec *wal.Record) conflict {
+	if len(rec.Blocks) == 0 {
+		return everyone
+	}
+	b := rec.Blocks[0]
+	if _, ok := e.cat.ByFile(b.File); !ok {
+		return nil
+	}
+	h, err := e.pool.Pin(buffer.Tag{File: b.File, Fork: b.Fork, Block: b.Block}, buffer.Normal)
+	if err != nil {
+		return everyone
+	}
+	defer h.Release()
+	h.Lock(buffer.Share)
+	defer h.Unlock()
+	c, err := btree.LeafVacuumConflict(h.Page(), b.Delta, e.xidStatus)
+	if err != nil {
+		return everyone
+	}
+	return c.Affects
+}
+
+/**
+* xidStatus es el estado de xid en el archivo de estados.
+* @param xid page.XID
+* @return xact.Status, error
+**/
+func (e *Engine) xidStatus(xid page.XID) (xact.Status, error) {
+	st, _, err := e.status.Status(xid)
+	return st, err
+}
+
+/**
+* waitConflict espera a que se cierren los snapshots que notan c y, pasado el plazo, los cancela
+* (ErrRecoveryConflict). El plazo (replicaConflictDelay) corre desde la primera espera de un mismo applyWal. Con
+* applyMu y txGate en escritura, sin replayMu.
+* @param c conflict, deadline time.Time: el plazo ya corriendo (cero = empieza ahora)
+* @return time.Time: el plazo
+**/
+func (e *Engine) waitConflict(c conflict, deadline time.Time) time.Time {
+	if deadline.IsZero() {
+		deadline = time.Now().Add(e.cfg.conflictDelay)
+	}
+	for e.replica.affected(c) {
 		if time.Now().After(deadline) {
-			e.replica.cancelSnapshots()
+			e.replica.cancel(c)
 			continue
 		}
 		time.Sleep(time.Millisecond)
 	}
-	return e.txGate.Unlock
+	return deadline
 }
 
 /**
@@ -276,6 +405,7 @@ func (e *Engine) quiesceSnapshots() func() {
 **/
 func (e *Engine) applyEntry(en WalEntry, rec *wal.Record) error {
 	rs := e.replica
+
 	at := wal.Position{Segment: en.Segment, Offset: en.Offset, LSN: rec.LSN}
 	if err := e.log.Append(at, en.Data); err != nil {
 		return err

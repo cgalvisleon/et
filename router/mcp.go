@@ -108,7 +108,7 @@ func (s *Api) MountMCP(config ...MCPConfig) {
 	cfg.Origins = s.mcpOrigins(cfg.Origins)
 	s.mcp = &cfg
 	name := cmp.Or(cfg.Name, "MCP server")
-	s.Session("mcp", POST, "/mcp", name, s.handleMCP)
+	s.Session("mcp", POST, "/mcp", name, s.handleMCP, mcpDoc)
 }
 
 /**
@@ -441,19 +441,24 @@ func (s *Api) mcpToolName(endpoint Endpoint) string {
 }
 
 /**
-* inputSchema: The arguments of a tool: its path params (required strings), its query params and the properties of its
+* inputSchema: The arguments of a tool: its path params (required, with the schemas of Doc.Params), its query params and the properties of its
 * body, in one object; a body without properties (an array, any value) goes in the argument body
 * @return et.Json
 **/
 func (s *mcpTool) inputSchema() et.Json {
 	properties := et.Json{}
 	required := []string{}
+	doc := s.endpoint.Doc
+	described := schemaJson(doc.Params["properties"])
 	for _, param := range s.params {
-		properties[param] = String("path param")
+		schema := schemaJson(described[param])
+		if len(schema) == 0 {
+			schema = String(fmt.Sprintf(MSG_PATH_PARAM, param))
+		}
+		properties[param] = schema
 		required = append(required, param)
 	}
 
-	doc := s.endpoint.Doc
 	schemas := []et.Json{doc.Query}
 	if !s.wrapped {
 		schemas = append(schemas, doc.Body)
@@ -686,4 +691,20 @@ func writeMCP(w http.ResponseWriter, status int, value any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	w.Write(data)
+}
+
+// mcpDoc: el contrato de POST /mcp para el catálogo de endpoints (no es una herramienta: no lleva MCP)
+var mcpDoc = Doc{
+	Description: "Servidor MCP (JSON-RPC 2.0 sobre HTTP): initialize, ping, tools/list y tools/call con las rutas marcadas del servicio; un mensaje o un lote",
+	Header: Object(et.Json{
+		"Authorization": String("Bearer <token>: el mismo de las rutas; cada herramienta pasa por su autorización"),
+		"Origin":        String("Si viene, debe estar en la lista permitida (MCPConfig.Origins o MCP_ORIGINS); si no, 403"),
+	}, "Authorization"),
+	Body: Object(et.Json{
+		"jsonrpc": Enum("La versión del protocolo", "2.0"),
+		"id":      Any("El id de la petición; sin id es una notificación (responde 202)"),
+		"method":  Enum("El método", "initialize", "ping", "tools/list", "tools/call", "notifications/initialized"),
+		"params":  Describe(Object(et.Json{"name": String("tools/call: la herramienta"), "arguments": Any("tools/call: sus argumentos")}), "Los parámetros del método"),
+	}, "jsonrpc", "method"),
+	Response: Describe(Object(et.Json{"jsonrpc": String(), "id": Any(), "result": Any("La respuesta del método"), "error": Any("{code, message} si falló")}), "La respuesta JSON-RPC (o un arreglo para un lote)"),
 }

@@ -46,7 +46,10 @@ dos motores abran el mismo directorio.
    punto de rehacer del último checkpoint terminado. `MAX_WAL_SIZE` acota ese volumen. La caché empieza vacía.
 
 Medido con 100 millones de claves (`RESULTADOS.md`, VM Linux): el heap vivo quedó en 6–7 MB a cualquier escala, y
-`Open` tras `Close` tardó entre 64 y 97 ms.
+`Open` tras `Close` tardó entre 64 y 97 ms. Desde la tarea 109, tras un `Close` limpio `Open` no corta el WAL: el
+segmento activo y los repuestos siguen preasignados, sin un truncado + fsync por segmento ni volver a escribir sus
+128 MB de ceros (medido en el WAL solo: el primer registro durable tras abrir pasó de 109–157 ms a 4–7 ms). Tras una
+caída sí corta, como siempre.
 
 ### Cuándo usarlo
 
@@ -188,7 +191,9 @@ Además del store, cuenta con lo siguiente:
   cada intervalo si hubo al menos ese número de escrituras desde la última vuelta. También corre cada medio archivo
   de estados de xids asignados (67 millones). Los valores están **a confirmar** (ver la decisión 56).
 - **`LOCK_TIMEOUT`** (5 s): cuánto espera una escritura a otra transacción sobre el mismo id (`ErrConflict`), y cuánto
-  espera un escritor frenado (`ErrThrottled`). También es lo que espera `Store(name)` a un lote que crea ese store.
+  espera un escritor frenado (`ErrThrottled`). También es lo que espera `Store(name)` a un lote que crea ese store, y
+  `DropStore`/`DropStoreIn` a los lotes abiertos que escribieron en el store (`ErrBusy`). Con 0 esas esperas no tienen
+  límite: un lote olvidado deja colgado el `DropStore` hasta su `TRANSACTION_TIMEOUT`.
 - **`TRANSACTION_TIMEOUT`** (600 s; 0 sin tope): la duración máxima de un lote o de un `Snapshot()`. Al vencer, el lote
   se aborta (`ErrTimeout`) aunque nadie lo use. Para copias largas, usa `SnapshotFor(0)` (sin tope) y ciérralo.
 - **`WAL_WRITER_DELAY`** (200 ms; 0 lo apaga): cada cuánto el escritor de fondo hace durable lo confirmado de forma
@@ -446,7 +451,10 @@ En la práctica:
 
 - Cierra siempre los snapshots con `defer v.Close()`. Los recorridos sueltos (`ForEach`, `Keys`…) cierran el suyo solos.
 - Para copias largas, usa `SnapshotFor(0)` y vigila `OpenSnapshots` y `NextXID − OldestXID`.
-- En una réplica, un snapshot largo atrasa al aplicador hasta 30 s y después se cancela (`ErrRecoveryConflict`).
+- En una réplica, un snapshot largo que vería lo que el aplicador cambia (una confirmación de un xid que ya conoce, la
+  limpieza de versiones que ve o el congelado de versiones que no ve, una página liberada, un DDL) lo atrasa hasta 30 s
+  y después se cancela (`ErrRecoveryConflict`). Las confirmaciones de lo escrito después de tomarlo y la poda antes de
+  partir de lo que no ve ya no lo afectan.
 
 ---
 
@@ -760,8 +768,11 @@ Reglas del bucle:
   hace fsync.
 - Confirma en la ranura el `ReplayLSN` **después** de `WaitDurable` en la réplica.
 - Las lecturas, los recorridos, los snapshots, `Verify` y `Checkpoint` (un *restartpoint*) andan en la réplica.
-- Un snapshot de la réplica ve lo confirmado al tomarlo. Si el aplicador necesita rehacer algo que ese snapshot no debe
-  ver, lo espera hasta 30 s y después lo cancela con `ErrRecoveryConflict`. Mantén cortos los snapshots de la réplica.
+- Un snapshot de la réplica ve lo confirmado al tomarlo. Si el aplicador necesita rehacer algo que ese snapshot notaría
+  (lo confirma un xid que ya ve, quita una versión que ve o congela una que no ve, libera páginas o hace un DDL), lo
+  espera hasta 30 s y después lo cancela con `ErrRecoveryConflict`; a los demás snapshots no los toca. La limpieza de
+  fondo congela versiones recientes: un snapshot largo de la réplica igual choca con ella. Mantén cortos los
+  snapshots de la réplica.
 - Un corte de la réplica se recupera reabriéndola con `OpenReplica`: sigue desde lo durable.
 
 ### Promover: `Promote`

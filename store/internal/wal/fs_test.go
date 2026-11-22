@@ -10,10 +10,12 @@ import (
 // real). Lo único que queda de un adaptador propio es syncCountFS: crashfs no cuenta los fsync.
 
 // syncCountFS envuelve un vfs.FS y cuenta los Sync de archivos (para el group commit y para ver que un fsync fallido
-// no se reintenta).
+// no se reintenta), los Truncate y los bytes escritos (lo que ahorra Options.CleanEnd, tarea 109).
 type syncCountFS struct {
 	vfs.FS
-	syncs atomic.Int64
+	syncs     atomic.Int64
+	truncates atomic.Int64
+	written   atomic.Int64
 }
 
 type syncCountFile struct {
@@ -32,4 +34,22 @@ func (c *syncCountFS) OpenFile(name string, flag int) (vfs.File, error) {
 func (f syncCountFile) Sync() error {
 	f.fs.syncs.Add(1)
 	return f.File.Sync()
+}
+
+func (f syncCountFile) Truncate(size int64) error {
+	f.fs.truncates.Add(1)
+	return f.File.Truncate(size)
+}
+
+func (f syncCountFile) WriteAt(p []byte, off int64) (int, error) {
+	n, err := f.File.WriteAt(p, off)
+	f.fs.written.Add(int64(n))
+	return n, err
+}
+
+// reset pone los contadores en cero.
+func (c *syncCountFS) reset() {
+	c.syncs.Store(0)
+	c.truncates.Store(0)
+	c.written.Store(0)
 }

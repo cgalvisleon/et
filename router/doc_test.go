@@ -184,3 +184,43 @@ func TestRpcDoc(t *testing.T) {
 		t.Fatalf("rpc doc not published: %v", items.Result)
 	}
 }
+
+func TestDocParams(t *testing.T) {
+	api := NewApi("test", "/api/test", "localhost", 0, 0, 1)
+	described := Doc{Params: Object(et.Json{"id": Integer("The id of the user")}), Validate: true}
+	api.Protected("users", GET, "/users/{tenantId}/{id}", "Get a user", api.Item(http.StatusOK, echo), described)
+	api.Protected("users", DELETE, "/users/{id}", "Delete a user", api.Item(http.StatusOK, echo))
+	api.Public("version", GET, "/version", "Version", api.Item(http.StatusOK, echo))
+
+	items, _ := api.ListEndpoints(nil, nil)
+	get := items.Result[0].Json("doc")
+	if get.ValStr("", "params", "properties", "id", "description") != "The id of the user" || get.ValStr("", "params", "properties", "id", "type") != "integer" {
+		t.Fatalf("described param: %v", get.Json("params"))
+	}
+	if get.ValStr("", "params", "properties", "tenantId", "type") != "string" || get.ValStr("", "params", "properties", "tenantId", "description") == "" {
+		t.Fatalf("completed param: %v", get.Json("params"))
+	}
+	if strings.Join(get.ArrayStr("params", "required"), ",") != "tenantId,id" {
+		t.Fatalf("required: %v", get.ArrayStr("params", "required"))
+	}
+	if len(described.Params["properties"].(et.Json)) != 1 {
+		t.Fatalf("the caller's doc was changed: %v", described.Params)
+	}
+
+	// A route with params and without doc gets one with its params
+	del := items.Result[1].Json("doc")
+	if del.ValStr("", "params", "properties", "id", "type") != "string" || strings.Join(del.ArrayStr("params", "required"), ",") != "id" {
+		t.Fatalf("doc without params: %v", del)
+	}
+	if _, ok := items.Result[2]["doc"]; ok {
+		t.Fatalf("version without params got a doc: %v", items.Result[2])
+	}
+
+	// Validate converts the params by their type
+	if rec := call(api, GET, "/api/test/users/t1/7", "", nil); rec.Code != http.StatusOK {
+		t.Fatalf("valid params: %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := call(api, GET, "/api/test/users/t1/abc", "", nil); rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "params.id") {
+		t.Fatalf("typed param: %d %s", rec.Code, rec.Body.String())
+	}
+}

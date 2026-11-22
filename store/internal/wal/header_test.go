@@ -94,12 +94,25 @@ func TestHeaderOtherVersion(t *testing.T) {
 		if _, err := openErr(dir, smallOptions(0)); !errors.Is(err, ErrFormatVersion) {
 			t.Fatalf("segmento %d de otra versión: %v", num, err)
 		}
-		name, version, found, err := OtherVersion(fsys, dir)
+		name, version, found, err := OtherVersion(fsys, dir, 0, 0)
 		if err != nil || !found || version != FormatVersion+1 || name != filepath.Join(Dir, segmentName(num)) {
 			t.Fatalf("OtherVersion: %s %d %v %v", name, version, found, err)
 		}
 	}
-	if _, _, found, err := OtherVersion(vfs.OS(), t.TempDir()); found || err != nil {
+	// Desde un segmento posterior (el punto de rehacer del control) no se mira el anterior.
+	dir, fsys := t.TempDir(), vfs.OS()
+	w, _, _ := openTest(t, fsys, dir, smallOptions(0), Start)
+	writeHistory(t, w, 200)
+	mustClose(t, w)
+	setVersion(t, dir, 1, FormatVersion+1)
+	if _, _, found, err := OtherVersion(fsys, dir, 2, 0); found || err != nil {
+		t.Fatalf("desde el segmento 2: %v %v", found, err)
+	}
+	// Una ranura que retiene un lsn del segmento 1 hace mirarlo (SegmentOf lo lee al abrir).
+	if _, _, found, err := OtherVersion(fsys, dir, 2, 1); !found || err != nil {
+		t.Fatalf("desde el segmento 2 con una ranura en el lsn 1: %v %v", found, err)
+	}
+	if _, _, found, err := OtherVersion(vfs.OS(), t.TempDir(), 0, 0); found || err != nil {
 		t.Fatalf("sin WAL: %v %v", found, err)
 	}
 }
@@ -229,7 +242,7 @@ func TestLegacySegmentIsOlderVersion(t *testing.T) {
 	if err := os.WriteFile(segPath(dir, 1), legacy, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	name, version, found, err := OtherVersion(fsys, dir)
+	name, version, found, err := OtherVersion(fsys, dir, 0, 0)
 	if err != nil || !found || version != legacyVersion || name != filepath.Join(Dir, segmentName(1)) {
 		t.Fatalf("OtherVersion: %s %d %v %v", name, version, found, err)
 	}

@@ -219,6 +219,12 @@ func splitKey(leaf bool, last, first key) key {
 * inserción al final de una hoja que no es la de más a la derecha deja un 10 % a la derecha, como el usemult de
 * _bt_findsplitloc) y solo si deja la izquierda al menos a la mitad (si no, mitad y mitad: partir antes de la mitad
 * dejaría la izquierda medio vacía para siempre). Si no, mitad y mitad.
+* Con grupos (v01|… seguido de v02|…) el separador del corte en pos sale truncado («v02») y la entrada nueva, menor,
+* cae a la izquierda: queda la última de la izquierda, como «partir después del ítem nuevo» de _bt_afternewitemoff, y
+* las siguientes del grupo también van ahí hasta que la izquierda se llena y se parte al final (al 90 %). No es una
+* partición de más: exigir que la entrada nueva caiga a la derecha (si no, mitad y mitad) bajó el llenado de los
+* índices de josefina del 83 al 65 % (TestIndexHeaderShare) y el de TestSplitAscendingGroups del 86 al 55 % con 5
+* grupos (revisión de la tarea 129 de F-23).
 * @param n node, pos page.OffsetNumber, items [][]byte, keys []key: los ítems de datos, total int: sus bytes
 * @return int
 **/

@@ -113,9 +113,16 @@ func (t *BTree) writeLeaf(h buffer.Handle, n node, k key, item []byte, w Write, 
 		return Result{}, true, nil
 	}
 	if !fits(n.p, len(item)) {
+		if prep.prune && !prep.horizonRead {
+			// El horizonte (xact OldestActive en el motor) toma el mutex de las transacciones y las recorre: se lee
+			// con la hoja suelta y se vuelve a bajar. Uno ya viejo al podar solo poda menos (tarea 129 de F-23)
+			h.Release()
+			prep.horizon, prep.horizonRead = t.horizon(), true
+			return Result{}, false, nil
+		}
 		if prep.prune {
 			prep.prune = false
-			removed, err := t.pruneLeaf(h, n)
+			removed, err := t.pruneLeaf(h, n, prep.horizon)
 			if err != nil {
 				h.Release()
 				return Result{}, true, err
@@ -159,9 +166,12 @@ func (t *BTree) writeLeaf(h buffer.Handle, n node, k key, item []byte, w Write, 
 }
 
 // beforeSplit es lo que una escritura que no cabe intenta antes de partir la hoja, una vez cada cosa: podar sus
-// versiones muertas (pruneLeaf) y extender el archivo con la hoja suelta (fsm.Grower).
+// versiones muertas (pruneLeaf, con el horizonte leído antes con la hoja suelta) y extender el archivo con la hoja
+// suelta (fsm.Grower).
 type beforeSplit struct {
 	prune, grow bool
+	horizonRead bool     // si ya se leyó el horizonte de la poda (con la hoja suelta)
+	horizon     page.XID // el horizonte leído
 }
 
 /**
@@ -174,14 +184,17 @@ type beforeSplit struct {
 * versiones de un id que vienen de la hoja izquierda no heredan su versión de referencia (no se mira esa hoja): poda
 * menos que la limpieza, nunca más; tampoco se mira la hermana derecha (la limpieza puede estar desenganchando hojas
 * ahí): si el último id de la hoja puede seguir a la derecha, su lápida se queda.
+* El horizonte se lee antes de bloquear la hoja (writeLeaf): calcularlo con la hoja bloqueada frenaba a todos los que
+* la esperan mientras se tomaba el mutex de las transacciones.
 * @param h buffer.Handle, n node: la hoja, bloqueada en exclusivo; sigue bloqueada al volver
+* @param horizon page.XID: Config.Horizon leído con la hoja suelta (uno más viejo solo poda menos)
 * @return int: cuántas versiones quitó, error
 **/
-func (t *BTree) pruneLeaf(h buffer.Handle, n node) (int, error) {
+func (t *BTree) pruneLeaf(h buffer.Handle, n node, horizon page.XID) (int, error) {
 	if n.p.Flags()&page.FlagAllVisible != 0 {
 		return 0, nil
 	}
-	plan, err := t.planLeaf(n, VacuumOptions{Horizon: t.horizon()}, &vacuumGroup{}, false)
+	plan, err := t.planLeaf(n, VacuumOptions{Horizon: horizon}, &vacuumGroup{}, false)
 	if err != nil || len(plan.remove) == 0 {
 		return 0, err
 	}

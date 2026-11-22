@@ -35,9 +35,10 @@ func (e *Engine) snapshotFor(timeout time.Duration) *Snapshot {
 		return v
 	}
 	defer e.leave()
-	e.openTxn(&e.metrics.openSnapshots)
-	v.snap, v.id = e.txs.TakeSnapshot()
-	e.replica.track(v)
+	e.openTxn(&e.metrics.openSnapshots, func() {
+		v.snap, v.id = e.txs.TakeSnapshot()
+		e.replica.track(v)
+	})
 	if timeout > 0 {
 		v.mu.Lock() // el temporizador puede disparar antes de que se guarde
 		v.timer = e.timers.after(timeout, func() { v.release(ErrTimeout) })

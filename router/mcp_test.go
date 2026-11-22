@@ -52,7 +52,7 @@ func mcpApi(config MCPConfig) *Api {
 	api.Protected("users", POST, "/users/query", "Query users", api.Item(http.StatusOK, echo), usersQuery)
 	api.Protected("users", GET, "/users/{id}", "Get a user", api.Item(http.StatusOK, func(r *http.Request, body et.Json) (et.Item, error) {
 		return et.Item{Ok: true, Result: et.Json{"id": chi.URLParam(r, "id"), "limit": r.URL.Query().Get("limit")}}, nil
-	}), Doc{MCP: true, Query: Object(et.Json{"limit": Integer()})})
+	}), Doc{MCP: true, Params: Object(et.Json{"id": String("The id of the user")}), Query: Object(et.Json{"limit": Integer()})})
 	api.Protected("users", PUT, "/users/{id}/tags", "Set the tags", rawEcho, Doc{MCP: true, Body: Array(String())})
 	api.Protected("users", DELETE, "/users/{id}", "Delete a user", api.Item(http.StatusOK, echo), Doc{MCP: true})
 	api.Protected("users", POST, "/users", "Create a user", api.Item(http.StatusOK, echo))
@@ -148,7 +148,7 @@ func TestMCPToolsList(t *testing.T) {
 		t.Fatalf("query tool: %v", query)
 	}
 	get := tools[1]
-	if !slices.Contains(get.ArrayStr("inputSchema", "required"), "id") {
+	if !slices.Contains(get.ArrayStr("inputSchema", "required"), "id") || get.ValStr("", "inputSchema", "properties", "id", "description") != "The id of the user" {
 		t.Fatalf("get inputSchema: %v", get.Json("inputSchema"))
 	}
 	tags := tools[2]

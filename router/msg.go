@@ -14,6 +14,7 @@ var (
 	MSG_MCP_TOOL_NOT_FOUND = "tool not found: %s"
 	MSG_MCP_TOOL_PARAMS    = "invalid tool arguments: %s"
 	MSG_MCP_ORIGIN         = "origin not allowed: %s"
+	MSG_PATH_PARAM         = "Path param %s"
 )
 
 func init() {
@@ -30,5 +31,6 @@ func init() {
 		MSG_MCP_TOOL_NOT_FOUND = "herramienta no encontrada: %s"
 		MSG_MCP_TOOL_PARAMS = "argumentos inválidos de la herramienta: %s"
 		MSG_MCP_ORIGIN = "origen no permitido: %s"
+		MSG_PATH_PARAM = "Parámetro de ruta %s"
 	}
 }

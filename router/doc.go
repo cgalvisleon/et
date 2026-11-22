@@ -1,8 +1,10 @@
 package router
 
 import (
+	"fmt"
 	"maps"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/cgalvisleon/et/et"
@@ -15,14 +17,17 @@ const (
 )
 
 /**
-* Doc: The contract of a route, given as the optional last argument of Public, Session and Protected. Query, Header, Body
-* and Response are JSON Schema (the subset type, properties, required, description, enum, items). GET /endpoints
+* Doc: The contract of a route, given as the optional last argument of Public, Session and Protected. Params, Query,
+* Header, Body and Response are JSON Schema (the subset type, properties, required, description, enum, items). GET /endpoints
 * publishes it with the route; MCP offers the route as a tool (MountMCP), Destructive keeps it out unless the MCP server
 * allows destructive tools, and Validate checks the query and the body against their schemas before the handler (400).
-* Tool and Description override the tool name (<group>_<action>) and add to the route name in the MCP server.
+* Tool and Description override the tool name (<group>_<action>) and add to the route name in the MCP server. Params
+* (the {params} of the path, an object with one property each) is completed when the route is mounted: a {param} missing
+* in it becomes a required string with a generic description, so give it only to describe or type a param.
 **/
 type Doc struct {
 	Description string  `json:"description,omitempty"`
+	Params      et.Json `json:"params,omitempty"`
 	Query       et.Json `json:"query,omitempty"`
 	Header      et.Json `json:"header,omitempty"`
 	Body        et.Json `json:"body,omitempty"`
@@ -40,7 +45,7 @@ type Doc struct {
 **/
 func (s *Doc) ToJson() et.Json {
 	result := et.Json{}
-	schemas := map[string]et.Json{"query": s.Query, "header": s.Header, "body": s.Body, "response": s.Response}
+	schemas := map[string]et.Json{"params": s.Params, "query": s.Query, "header": s.Header, "body": s.Body, "response": s.Response}
 	for key, schema := range schemas {
 		if len(schema) > 0 {
 			result[key] = schema
@@ -73,6 +78,42 @@ func docOf(docs []Doc) *Doc {
 
 	doc := docs[0]
 	return &doc
+}
+
+/**
+* docWithParams: The doc of a route with its path params completed: each {param} of path missing in Params becomes a
+* required string with a generic description and every one is required; a route with params and no doc gets one
+* @param doc *Doc, path string
+* @return *Doc
+**/
+func docWithParams(doc *Doc, path string) *Doc {
+	params := PathParams(path)
+	if len(params) == 0 {
+		return doc
+	}
+	if doc == nil {
+		doc = &Doc{}
+	}
+
+	properties := et.Json{}
+	maps.Copy(properties, schemaJson(doc.Params["properties"]))
+	required := slices.Clone(schemaList(doc.Params["required"]))
+	for _, param := range params {
+		if _, ok := properties[param]; !ok {
+			properties[param] = String(fmt.Sprintf(MSG_PATH_PARAM, param))
+		}
+		if !slices.Contains(required, param) {
+			required = append(required, param)
+		}
+	}
+
+	result := et.Json{}
+	maps.Copy(result, doc.Params)
+	result["type"] = "object"
+	result["properties"] = properties
+	result["required"] = required
+	doc.Params = result
+	return doc
 }
 
 // ---------- Schemas (JSON Schema subset) ----------

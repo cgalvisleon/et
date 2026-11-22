@@ -27,6 +27,13 @@ type Options struct {
 	// StopLSN, si no es 0, es el objetivo de la recuperación de Open (recovery_target_lsn de PostgreSQL): el
 	// recorrido termina tras el registro de ese lsn y lo que sigue se corta como una cola inválida.
 	StopLSN page.LSN
+
+	// CleanEnd, si no es 0, es el lsn siguiente al último registro según un cierre limpio (el motor lo pone con el
+	// control en StateShutdown: el WAL termina en su checkpoint final). Si el recorrido termina justo ahí y ningún
+	// segmento desde el final mide más que SegmentSize, Open no corta la cola: tras un cierre limpio no hay registros
+	// con lsn ≥ CleanEnd en ningún segmento, así que la preasignación del activo y de los repuestos sigue valiendo
+	// (tarea 109). Con StopLSN no se usa.
+	CleanEnd page.LSN
 }
 
 // EnvOptions lee las opciones de WAL_SEGMENT_SIZE (MB, mínimo 1) y MAX_WAL_SIZE (MB): se guardan como repuesto los

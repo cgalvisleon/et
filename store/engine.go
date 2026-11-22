@@ -205,9 +205,9 @@ func open(base vfs.FS, dir string, cfg config) (*Engine, error) {
 }
 
 /**
-* close apura el checkpoint repartido en curso, detiene las operaciones nuevas, espera a las que están en curso
-* (también la limpieza de un store), detiene el checkpointer, el escritor del WAL y la limpieza de fondo, hace el
-* checkpoint final (state = cerrado bien) y cierra todo. Si el motor quedó inutilizable no escribe nada y devuelve ese fallo.
+* close apura el checkpoint repartido en curso, limpia si hace falta (closeVacuum), detiene las operaciones nuevas,
+* espera a las que están en curso (también la limpieza de un store), detiene el checkpointer, el escritor del WAL y la
+* limpieza de fondo, hace el checkpoint final (state = cerrado bien) y cierra todo. Si el motor quedó inutilizable no escribe nada y devuelve ese fallo.
 * Cerrar dos veces no hace nada.
 * @return error
 **/
@@ -215,6 +215,7 @@ func (e *Engine) close() error {
 	// Antes de closeMu: un Checkpoint() con closeMu en lectura puede esperar al de fondo. No se baja nunca: el motor
 	// cerrado no vuelve a repartir checkpoints (y el final tampoco se reparte).
 	e.ckptHurry.Add(1)
+	vacErr := e.closeVacuum()
 	e.closeMu.Lock()
 	if e.closed {
 		e.closeMu.Unlock()
@@ -227,7 +228,7 @@ func (e *Engine) close() error {
 	close(e.stop)
 	e.bg.Wait()
 	err := e.checkpoint(control.StateShutdown, false)
-	return errors.Join(err, e.closeResources())
+	return errors.Join(vacErr, err, e.closeResources())
 }
 
 /**

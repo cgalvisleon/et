@@ -131,3 +131,23 @@ func (e *Engine) vacuumer() {
 		}
 	}
 }
+
+/**
+* closeVacuum es la limpieza de Close: con la limpieza de fondo encendida (VACUUM_INTERVAL > 0) y al menos
+* VACUUM_THRESHOLD escrituras desde la última limpieza, limpia todos los stores antes del checkpoint final, así un
+* proceso que se reinicia más seguido que VACUUM_INTERVAL también limpia. Corre antes de marcar el motor cerrado y con
+* los trabajos de fondo vivos (el checkpointer sigue soltando a los escritores frenados). Una réplica, un motor
+* cerrado o inutilizable y un disco lleno limpio no limpian ni cortan el cierre.
+* @return error: solo un error de la limpieza que no sea de esos (p. ej. una página dañada)
+**/
+func (e *Engine) closeVacuum() error {
+	if e.cfg.vacuumEvery <= 0 || e.isReplica() ||
+		e.writes.Load()-e.metrics.vacuumWrites.Load() < e.cfg.vacuumWrites {
+		return nil
+	}
+	err := e.vacuum()
+	if errors.Is(err, ErrClosed) || errors.Is(err, ErrReadOnly) || errors.Is(err, ErrFailed) || errors.Is(err, ErrDiskFull) {
+		return nil
+	}
+	return err
+}

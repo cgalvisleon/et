@@ -8,7 +8,8 @@ La integración continua del motor corre en el equipo **IA** (macOS arm64) y en 
 | `ci.sh` | Mac (o IA) | verificación de un cambio, ~10 min: sube la copia, VM: `go test -p 1 ./store/...`, `-race`, `powercut-lazyfs.sh ROUNDS=5`, `powercut-flakey.sh DROP_ROUNDS=3 ERROR_ROUNDS=2`; detiene la VM; macOS: `go test -p 1 ./store/...` |
 | `nightly.sh` | IA (LaunchAgent 03:00) o Mac | benchmarks contra la línea base, fuzzers de `store/` y la suite completa de cortes |
 | `fuzzlong.sh` | Mac (o IA) | corrida larga de los fuzzers (tarea 73): cada `func Fuzz` de `store/` `FUZZTIME` (48m: 10 × 48 min = 8 h), uno a la vez, con `nohup` bajo el candado |
-| `status.sh` | Mac | muestra el último `ci.sh`, el último nocturno, la corrida larga de fuzzers (o la en curso) y qué corre ahora |
+| `soak.sh` | Mac (o IA) | prueba de resistencia (tarea 51): `test/soak` 72 h (`SOAK_DURATION`) en macOS de IA con `nohup`, `nice -n 15` y un vigilante de memoria, bajo el candado |
+| `status.sh` | Mac | muestra el último `ci.sh`, el último nocturno, la corrida larga de fuzzers, el soak (o los en curso) y qué corre ahora |
 | `install-nightly.sh` / `uninstall-nightly.sh` | Mac | pone o quita el LaunchAgent `com.cgalvisleon.etstore-nightly` en IA |
 | `lib.sh` | — | funciones comunes (candado, memoria, pasos, resumen, `fuzz_one`/`fuzz_all`) |
 
@@ -94,6 +95,41 @@ No hay que detenerla: si se apura, el candado queda tomado hasta que termine.
 `~/etstore-ci/skip-nightly-<AAAAMMDD>` y `nightly.sh` salta esa noche (lo anota en `~/etstore-ci/nightly-skipped.txt` y
 borra la marca). La misma marca, puesta a mano (`ssh ia 'echo motivo > ~/etstore-ci/skip-nightly-20261121'`), salta
 cualquier noche. Sin marca, el nocturno espera el candado hasta 3 h.
+
+## Prueba de resistencia (`soak.sh`, tarea 51)
+
+```bash
+./test/ci/soak.sh                     # compila, sube la copia, instala test/ci en IA y lanza 72 h con nohup
+SOAK_DURATION=10m SOAK_ARGS='-check 1m -reopen 3m -warmup 2m' ./test/ci/soak.sh   # una corta para probar
+./test/ci/status.sh soak              # en curso: resumen parcial (cada verificación) y vigilante; si no, el último
+ssh ia tail -f ~/etstore-ci/soak-<fecha>/soak.log
+ssh ia "pkill -TERM -f 'etstore-ci/soak-.*/soak '"   # detenerla antes: el resumen queda como INTERRUMPIDA
+```
+
+`test/soak` (solo la API pública) corre una carga mixta continua con un **modelo exacto** (cada clave tiene un dueño;
+el valor se deriva de su generación): 4 stores × 50.000 claves con Put/Put diferido/Insert/Update/Delete/Remove,
+lecturas, `GetVersion`/`Exists`, `ForEachRange`, `KeysPrefix`, lotes confirmados y deshechos, snapshots que no deben
+ver lo posterior; un banco de 32 cuentas con transferencias en lotes que chocan (`ErrSerialization`/`ErrConflict`, se
+deshacen) y un auditor que suma en un snapshot cada 2 s y cada 5 min mantiene uno 10 s (retiene la limpieza); un
+ciclo de DDL cada 20 s (`Store`+`Empty`+`DropStore`, `StoreIn`+`DropStoreIn`, `StoreIn`+`Rollback`). Vacuum y
+checkpoints son los automáticos. Cada 10 min detiene la carga: `Count` y recorrido completo contra el modelo, suma del
+banco, `Stores()` exacto, `Verify` limpio, GC y una medición; cada 30 min además `Close` + `Open`.
+
+**Falla si** hay un error inesperado, un dato distinto al modelo, `Verify` sucio, `ReadOnly`, `FrozenAge` > 134.217.728,
+`data/` ÷ datos vivos > 3 (`-max-ratio`, tras el calentamiento) o **crecimiento sostenido**: tras el calentamiento
+(1/6 de la duración, hasta 6 h) la mediana del último tercio de las verificaciones contra la del primero sube más de
+20 % (`-grow`) **y** más que un piso: RSS 64 MB, heap de Go 16 MB, `data/`÷vivos 0,10, `wal/` `MAX_WAL_SIZE` (el WAL oscila hasta ahí entre checkpoints), `xact/` 16 MB.
+
+En IA: `nice -n 15`, 2.000 op/s (`SOAK_RATE`), caché 64 MB (`SOAK_CACHE`; los ~130 MB vivos no caben: hay reemplazo),
+`MIN_FREE` antes de arrancar y un vigilante cada minuto: RSS > `SOAK_MAX_RSS_MB` (2048) → SIGTERM; memoria libre de IA
+< 10 % → SIGSTOP hasta volver a `MIN_FREE` (`vigilante.log`). **Corre en macOS de IA, no en la VM**: busca fugas y
+crecimiento (memoria, disco, horizonte), que no dependen del sistema de archivos; los fallos de disco de Linux ya los
+cubren los cortes de la VM, y 72 h de VM tendrían ocupados 3 CPU y 4 GiB de IA al lado de Ollama. Resultado en
+`~/etstore-ci/soak-<fecha>/` (`run.txt`, `summary.md`, `soak.log`, `metrics.tsv` cada minuto, `checks.tsv` cada
+verificación, `vigilante.log`; `db/` se borra si pasa), copia en `~/etstore-ci/last-soak.txt`; se guardan las últimas 10.
+
+**Ocupa el candado toda la corrida**: un `ci.sh` espera 1 h y desiste, y el nocturno se salta (marcas
+`skip-nightly-<AAAAMMDD>` de cada 03:00 hasta el fin previsto; si termina antes, borra las de noches que no llegaron).
 
 ## Línea base
 

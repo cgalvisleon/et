@@ -27,7 +27,9 @@ import (
 * router with the Authorization (and the other headers) of the MCP request, so it passes through the same
 * authentication, authorization and validation as an HTTP call. There is no SSE stream, no session and no progress:
 * a stream route gives its whole response. A request with an Origin header that is not in the allowed origins gets 403
-* (against DNS rebinding); without Origin (a client that is not a browser) it passes, with its token.
+* (against DNS rebinding); without Origin (a client that is not a browser) it passes, with its token. MountMCPWith serves
+* the same protocol with the tools of an MCPSource (routes of other services, as an aggregating MCP) instead of the local
+* routes.
 **/
 
 // MCPProtocolVersion: the newest version of the MCP protocol this server speaks
@@ -42,6 +44,7 @@ const (
 	mcpInvalidRequest = -32600
 	mcpMethodNotFound = -32601
 	mcpInvalidParams  = -32602
+	mcpInternalError  = -32603
 	mcpForbidden      = -32000
 )
 
@@ -96,6 +99,36 @@ type mcpError struct {
 }
 
 /**
+* MCPToolDef: A tool of an MCPSource: the route that serves it (Method, Path with its {params}, Name and Doc: the input
+* schema, the annotations and how the arguments go to path, query and body come from it) and its Name (empty:
+* MCPToolName of the route without a base). Like a local route, it needs Doc.MCP and, if destructive, MCPConfig.Destructive
+**/
+type MCPToolDef struct {
+	Name     string   `json:"name"`
+	Endpoint Endpoint `json:"endpoint"`
+}
+
+/**
+* MCPSource: Where an MCP server mounted with MountMCPWith takes its tools and runs them: MCPTools gives the tools the
+* request can use (tools/list and tools/call look only there) and MCPCall runs the HTTP request of a call (its Path is
+* the one of the route, with the params, the query, the JSON body and the headers of the MCP request) and gives the status
+* and the body of the answer; an error of MCPCall is a result with isError
+**/
+type MCPSource interface {
+	MCPTools(r *http.Request) ([]MCPToolDef, error)
+	MCPCall(req *http.Request) (int, []byte, error)
+}
+
+/**
+* mcpServer: An MCP server of an Api: its config and its source (nil: the routes of the Api)
+**/
+type mcpServer struct {
+	api    *Api
+	config MCPConfig
+	source MCPSource
+}
+
+/**
 * MountMCP: Mounts the MCP server of the Api at POST <path>/mcp (Session: with token if the Api uses authentication;
 * each tool keeps the access of its route)
 * @param config ...MCPConfig
@@ -107,8 +140,22 @@ func (s *Api) MountMCP(config ...MCPConfig) {
 	}
 	cfg.Origins = s.mcpOrigins(cfg.Origins)
 	s.mcp = &cfg
+	server := &mcpServer{api: s, config: cfg}
 	name := cmp.Or(cfg.Name, "MCP server")
-	s.Session("mcp", POST, "/mcp", name, s.handleMCP, mcpDoc)
+	s.Session("mcp", POST, "/mcp", name, server.handle, mcpDoc)
+}
+
+/**
+* MountMCPWith: Mounts at POST <path of the Api><path> an MCP server whose tools come from source instead of the routes of
+* the Api (Session: with token if the Api uses authentication); the protocol, the origins and the answers are the ones of
+* MountMCP
+* @param path string, config MCPConfig, source MCPSource
+**/
+func (s *Api) MountMCPWith(path string, config MCPConfig, source MCPSource) {
+	config.Origins = s.mcpOrigins(config.Origins)
+	server := &mcpServer{api: s, config: config, source: source}
+	name := cmp.Or(config.Name, "MCP server")
+	s.Session("mcp", POST, path, name, server.handle, mcpSourceDoc)
 }
 
 /**
@@ -139,17 +186,6 @@ func (s *Api) mcpOrigins(origins []string) []string {
 		result = append(result, host)
 	}
 	return result
-}
-
-/**
-* mcpAllowedOrigins: The origins of the MCP server (the defaults if it was not mounted with MountMCP)
-* @return []string
-**/
-func (s *Api) mcpAllowedOrigins() []string {
-	if s.mcp == nil {
-		return s.mcpOrigins(nil)
-	}
-	return s.mcp.Origins
 }
 
 /**
@@ -184,11 +220,11 @@ func mcpOriginAllowed(origins []string, origin string) bool {
 }
 
 /**
-* handleMCP: One JSON-RPC message or a batch; notifications and responses get 202 without body
+* handle: One JSON-RPC message or a batch; notifications and responses get 202 without body
 * @param w http.ResponseWriter, r *http.Request
 **/
-func (s *Api) handleMCP(w http.ResponseWriter, r *http.Request) {
-	if origin := r.Header.Get("Origin"); origin != "" && !mcpOriginAllowed(s.mcpAllowedOrigins(), origin) {
+func (s *mcpServer) handle(w http.ResponseWriter, r *http.Request) {
+	if origin := r.Header.Get("Origin"); origin != "" && !mcpOriginAllowed(s.config.Origins, origin) {
 		writeMCP(w, http.StatusForbidden, mcpFail(nil, mcpForbidden, fmt.Sprintf(MSG_MCP_ORIGIN, origin)))
 		return
 	}
@@ -216,7 +252,7 @@ func (s *Api) handleMCP(w http.ResponseWriter, r *http.Request) {
 
 	responses := []et.Json{}
 	for _, message := range messages {
-		if response := s.mcpMessage(r, message); response != nil {
+		if response := s.message(r, message); response != nil {
 			responses = append(responses, response)
 		}
 	}
@@ -232,11 +268,11 @@ func (s *Api) handleMCP(w http.ResponseWriter, r *http.Request) {
 }
 
 /**
-* mcpMessage: The response to a message; nil for a notification or a response of the client
+* message: The response to a message; nil for a notification or a response of the client
 * @param r *http.Request, message mcpMessage
 * @return et.Json
 **/
-func (s *Api) mcpMessage(r *http.Request, message mcpMessage) et.Json {
+func (s *mcpServer) message(r *http.Request, message mcpMessage) et.Json {
 	if len(message.ID) == 0 {
 		return nil
 	}
@@ -254,13 +290,17 @@ func (s *Api) mcpMessage(r *http.Request, message mcpMessage) et.Json {
 
 	switch message.Method {
 	case "initialize":
-		return mcpResult(message.ID, s.mcpInitialize(params))
+		return mcpResult(message.ID, s.initialize(params))
 	case "ping":
 		return mcpResult(message.ID, et.Json{})
 	case "tools/list":
-		return mcpResult(message.ID, et.Json{"tools": s.mcpToolsList(r)})
+		tools, err := s.toolsList(r)
+		if err != nil {
+			return mcpFail(message.ID, mcpInternalError, err.Error())
+		}
+		return mcpResult(message.ID, et.Json{"tools": tools})
 	case "tools/call":
-		result, err := s.mcpCall(r, params)
+		result, err := s.call(r, params)
 		if err != nil {
 			return err.response(message.ID)
 		}
@@ -271,29 +311,66 @@ func (s *Api) mcpMessage(r *http.Request, message mcpMessage) et.Json {
 }
 
 /**
-* mcpInitialize: The protocol version (the client's if it is supported), the capabilities and the server info
+* initialize: The protocol version (the client's if it is supported), the capabilities and the server info
 * @param params et.Json
 * @return et.Json
 **/
-func (s *Api) mcpInitialize(params et.Json) et.Json {
+func (s *mcpServer) initialize(params et.Json) et.Json {
 	version := params.Str("protocolVersion")
 	if !slices.Contains(mcpVersions, version) {
 		version = MCPProtocolVersion
 	}
 
-	info := et.Json{"name": s.Name, "version": strconv.Itoa(s.Version)}
-	if s.mcp != nil && s.mcp.Title != "" {
-		info["title"] = s.mcp.Title
+	info := et.Json{"name": s.api.Name, "version": strconv.Itoa(s.api.Version)}
+	if s.config.Title != "" {
+		info["title"] = s.config.Title
 	}
 	result := et.Json{
 		"protocolVersion": version,
 		"capabilities":    et.Json{"tools": et.Json{"listChanged": false}},
 		"serverInfo":      info,
 	}
-	if s.mcp != nil && s.mcp.Instructions != "" {
-		result["instructions"] = s.mcp.Instructions
+	if s.config.Instructions != "" {
+		result["instructions"] = s.config.Instructions
 	}
 	return result
+}
+
+/**
+* tools: The tools of the server: the source's or, without it, the routes of the Api
+* @param r *http.Request
+* @return []mcpTool, error
+**/
+func (s *mcpServer) tools(r *http.Request) ([]mcpTool, error) {
+	if s.source == nil {
+		return s.api.mcpTools(), nil
+	}
+
+	defs, err := s.source.MCPTools(r)
+	if err != nil {
+		return nil, err
+	}
+	return mcpToolsOf(defs, s.config.Destructive), nil
+}
+
+/**
+* toolsList: The tools the request can use (the local ones, those whose route authorization passes a probe)
+* @param r *http.Request
+* @return []et.Json, error
+**/
+func (s *mcpServer) toolsList(r *http.Request) ([]et.Json, error) {
+	tools, err := s.tools(r)
+	if err != nil {
+		return nil, err
+	}
+
+	result := []et.Json{}
+	for _, tool := range tools {
+		if s.source != nil || s.api.mcpAllowed(r, tool.endpoint) {
+			result = append(result, tool.toJson())
+		}
+	}
+	return result, nil
 }
 
 /**
@@ -304,21 +381,6 @@ func (s *Api) MCPTools() []et.Json {
 	result := []et.Json{}
 	for _, tool := range s.mcpTools() {
 		result = append(result, tool.toJson())
-	}
-	return result
-}
-
-/**
-* mcpToolsList: The tools the role of the request can use
-* @param r *http.Request
-* @return []et.Json
-**/
-func (s *Api) mcpToolsList(r *http.Request) []et.Json {
-	result := []et.Json{}
-	for _, tool := range s.mcpTools() {
-		if s.mcpAllowed(r, tool.endpoint) {
-			result = append(result, tool.toJson())
-		}
 	}
 	return result
 }
@@ -355,14 +417,31 @@ func mcpDestructive(endpoint Endpoint) bool {
 
 /**
 * mcpTools: The routes with Doc.MCP as tools, in the order they were mounted; the destructive ones only if the server
-* allows them. A repeated name takes the method as suffix
+* allows them
 * @return []mcpTool
 **/
 func (s *Api) mcpTools() []mcpTool {
 	destructive := s.mcp != nil && s.mcp.Destructive
+	defs := []MCPToolDef{}
+	for _, endpoint := range s.endpoints {
+		if endpoint.Doc != nil && endpoint.Doc.MCP {
+			defs = append(defs, MCPToolDef{Name: MCPToolName(endpoint, s.Path), Endpoint: endpoint})
+		}
+	}
+	return mcpToolsOf(defs, destructive)
+}
+
+/**
+* mcpToolsOf: The tools of a list of definitions: only the ones with Doc.MCP and, if destructive is false, without the
+* destructive ones; a name is cut to the characters of MCP (up to 64) and a repeated one takes the method as suffix
+* @param defs []MCPToolDef, destructive bool
+* @return []mcpTool
+**/
+func mcpToolsOf(defs []MCPToolDef, destructive bool) []mcpTool {
 	names := map[string]bool{}
 	result := []mcpTool{}
-	for _, endpoint := range s.endpoints {
+	for _, def := range defs {
+		endpoint := def.Endpoint
 		if endpoint.Doc == nil || !endpoint.Doc.MCP {
 			continue
 		}
@@ -370,7 +449,10 @@ func (s *Api) mcpTools() []mcpTool {
 			continue
 		}
 
-		name := s.mcpToolName(endpoint)
+		name := toolName.ReplaceAllString(cmp.Or(def.Name, MCPToolName(endpoint, "")), "_")
+		if len(name) > 64 {
+			name = name[:64]
+		}
 		if names[name] {
 			name = name + "_" + strings.ToLower(endpoint.Method)
 		}
@@ -387,17 +469,18 @@ func (s *Api) mcpTools() []mcpTool {
 }
 
 /**
-* mcpToolName: Doc.Tool or <group>_<action>: the action is the fixed segments of the path after the group or, without
-* them, get (GET with params), list (GET), new (POST), update (PUT, PATCH) or delete (DELETE)
-* @param endpoint Endpoint
+* MCPToolName: The name of the tool of a route: Doc.Tool or <group>_<action>, where the action is the fixed segments of
+* the path after base (the path of its Api) and the group or, without them, get (GET with params), list (GET), new
+* (POST), update (PUT, PATCH) or delete (DELETE); only letters, digits, _ and -, up to 64
+* @param endpoint Endpoint, base string
 * @return string
 **/
-func (s *Api) mcpToolName(endpoint Endpoint) string {
-	if endpoint.Doc.Tool != "" {
+func MCPToolName(endpoint Endpoint, base string) string {
+	if endpoint.Doc != nil && endpoint.Doc.Tool != "" {
 		return toolName.ReplaceAllString(endpoint.Doc.Tool, "_")
 	}
 
-	rel := strings.TrimPrefix(endpoint.Path, strings.TrimSuffix(s.Path, "/"))
+	rel := strings.TrimPrefix(endpoint.Path, strings.TrimSuffix(base, "/"))
 	segments := []string{}
 	params := false
 	for _, segment := range strings.Split(rel, "/") {
@@ -536,14 +619,18 @@ func (s *mcpCallError) response(id json.RawMessage) et.Json {
 }
 
 /**
-* mcpCall: Runs the route of a tool in the chi router with the headers of the request: its response as text and, if it
-* is a JSON object, as structuredContent; isError if the route answered 400 or more
+* call: Runs the route of a tool (in the chi router of the Api or with MCPCall of the source) with the headers of the
+* request
 * @param r *http.Request, params et.Json
 * @return et.Json, *mcpCallError
 **/
-func (s *Api) mcpCall(r *http.Request, params et.Json) (et.Json, *mcpCallError) {
+func (s *mcpServer) call(r *http.Request, params et.Json) (et.Json, *mcpCallError) {
+	tools, err := s.tools(r)
+	if err != nil {
+		return nil, &mcpCallError{mcpInternalError, err.Error()}
+	}
+
 	name := params.Str("name")
-	tools := s.mcpTools()
 	idx := slices.IndexFunc(tools, func(tool mcpTool) bool { return tool.name == name })
 	if idx < 0 {
 		return nil, &mcpCallError{mcpInvalidParams, fmt.Sprintf(MSG_MCP_TOOL_NOT_FOUND, name)}
@@ -556,18 +643,35 @@ func (s *Api) mcpCall(r *http.Request, params et.Json) (et.Json, *mcpCallError) 
 		return nil, &mcpCallError{mcpInvalidParams, fmt.Sprintf(MSG_MCP_TOOL_PARAMS, err.Error())}
 	}
 
-	rec := httptest.NewRecorder()
-	s.Router.ServeHTTP(rec, req)
-	text := rec.Body.String()
+	if s.source == nil {
+		rec := httptest.NewRecorder()
+		s.api.Router.ServeHTTP(rec, req)
+		return mcpToolResult(rec.Code, rec.Body.Bytes()), nil
+	}
+
+	status, body, err := s.source.MCPCall(req)
+	if err != nil {
+		return et.Json{"content": []et.Json{{"type": "text", "text": err.Error()}}, "isError": true}, nil
+	}
+	return mcpToolResult(status, body), nil
+}
+
+/**
+* mcpToolResult: The answer of a route as the result of a tools/call: as text and, if it is a JSON object, as
+* structuredContent; isError if the status is 400 or more
+* @param status int, body []byte
+* @return et.Json
+**/
+func mcpToolResult(status int, body []byte) et.Json {
 	result := et.Json{
-		"content": []et.Json{{"type": "text", "text": text}},
-		"isError": rec.Code >= http.StatusBadRequest,
+		"content": []et.Json{{"type": "text", "text": string(body)}},
+		"isError": status >= http.StatusBadRequest,
 	}
 	structured := et.Json{}
-	if json.Unmarshal(rec.Body.Bytes(), &structured) == nil {
+	if json.Unmarshal(body, &structured) == nil {
 		result["structuredContent"] = structured
 	}
-	return result, nil
+	return result
 }
 
 /**
@@ -693,18 +797,30 @@ func writeMCP(w http.ResponseWriter, status int, value any) {
 	w.Write(data)
 }
 
+// mcpSourceDoc: el contrato de un MCP montado con MountMCPWith (las herramientas vienen de su fuente)
+var mcpSourceDoc = mcpDocWith("Servidor MCP (JSON-RPC 2.0 sobre HTTP): initialize, ping, tools/list y tools/call con las herramientas de su fuente; un mensaje o un lote")
+
 // mcpDoc: el contrato de POST /mcp para el catálogo de endpoints (no es una herramienta: no lleva MCP)
-var mcpDoc = Doc{
-	Description: "Servidor MCP (JSON-RPC 2.0 sobre HTTP): initialize, ping, tools/list y tools/call con las rutas marcadas del servicio; un mensaje o un lote",
-	Header: Object(et.Json{
-		"Authorization": String("Bearer <token>: el mismo de las rutas; cada herramienta pasa por su autorización"),
-		"Origin":        String("Si viene, debe estar en la lista permitida (MCPConfig.Origins o MCP_ORIGINS); si no, 403"),
-	}, "Authorization"),
-	Body: Object(et.Json{
-		"jsonrpc": Enum("La versión del protocolo", "2.0"),
-		"id":      Any("El id de la petición; sin id es una notificación (responde 202)"),
-		"method":  Enum("El método", "initialize", "ping", "tools/list", "tools/call", "notifications/initialized"),
-		"params":  Describe(Object(et.Json{"name": String("tools/call: la herramienta"), "arguments": Any("tools/call: sus argumentos")}), "Los parámetros del método"),
-	}, "jsonrpc", "method"),
-	Response: Describe(Object(et.Json{"jsonrpc": String(), "id": Any(), "result": Any("La respuesta del método"), "error": Any("{code, message} si falló")}), "La respuesta JSON-RPC (o un arreglo para un lote)"),
+var mcpDoc = mcpDocWith("Servidor MCP (JSON-RPC 2.0 sobre HTTP): initialize, ping, tools/list y tools/call con las rutas marcadas del servicio; un mensaje o un lote")
+
+/**
+* mcpDocWith: El contrato de un servidor MCP con su descripción
+* @param description string
+* @return Doc
+**/
+func mcpDocWith(description string) Doc {
+	return Doc{
+		Description: description,
+		Header: Object(et.Json{
+			"Authorization": String("Bearer <token>: el mismo de las rutas; cada herramienta pasa por su autorización"),
+			"Origin":        String("Si viene, debe estar en la lista permitida (MCPConfig.Origins o MCP_ORIGINS); si no, 403"),
+		}, "Authorization"),
+		Body: Object(et.Json{
+			"jsonrpc": Enum("La versión del protocolo", "2.0"),
+			"id":      Any("El id de la petición; sin id es una notificación (responde 202)"),
+			"method":  Enum("El método", "initialize", "ping", "tools/list", "tools/call", "notifications/initialized"),
+			"params":  Describe(Object(et.Json{"name": String("tools/call: la herramienta"), "arguments": Any("tools/call: sus argumentos")}), "Los parámetros del método"),
+		}, "jsonrpc", "method"),
+		Response: Describe(Object(et.Json{"jsonrpc": String(), "id": Any(), "result": Any("La respuesta del método"), "error": Any("{code, message} si falló")}), "La respuesta JSON-RPC (o un arreglo para un lote)"),
+	}
 }

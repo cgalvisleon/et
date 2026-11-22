@@ -304,3 +304,91 @@ func TestVacuumBackground(t *testing.T) {
 		t.Fatalf("Vacuum after Close = %v", err)
 	}
 }
+
+// TestVacuumOnClose: un proceso que se reinicia más seguido que VACUUM_INTERVAL. Cada sesión reemplaza los mismos ids
+// (más que VACUUM_THRESHOLD escrituras) y cierra: con la limpieza encendida Close limpia y el store deja de crecer;
+// con VACUUM_INTERVAL = 0 Close no limpia y el store crece en cada sesión.
+func TestVacuumOnClose(t *testing.T) {
+	for _, every := range []time.Duration{time.Hour, 0} {
+		t.Run(fmt.Sprintf("interval=%v", every), func(t *testing.T) {
+			cfg := testConfig()
+			cfg.vacuumEvery, cfg.vacuumWrites = every, 10
+			fsys := crashfs.New()
+			var blocks []int
+			for round := range 10 {
+				e := openTest(t, fsys, cfg)
+				s := mustStore(t, e, "a")
+				a := auditStore(t, s)
+				if every > 0 && round > 0 && a.entries != a.versions {
+					t.Fatalf("round %d: Close left dead versions: %+v", round, a)
+				}
+				blocks = append(blocks, a.blocks)
+				for i := range 40 {
+					mustOK(t, s.Put(fmt.Sprintf("id-%02d", i), sized([]int{10, 300, 5000, 20000}[i%4], round)))
+				}
+				mustOK(t, e.Close())
+			}
+			grew := blocks[len(blocks)-1] > blocks[3]
+			if grew == (every > 0) {
+				t.Fatalf("blocks per session %v", blocks)
+			}
+			t.Logf("blocks per session %v", blocks)
+		})
+	}
+}
+
+// TestVacuumOnCloseBelowThreshold: con menos de VACUUM_THRESHOLD escrituras desde la última limpieza, Close no limpia
+// (las versiones muertas siguen al reabrir).
+func TestVacuumOnCloseBelowThreshold(t *testing.T) {
+	cfg := testConfig()
+	cfg.vacuumEvery, cfg.vacuumWrites = time.Hour, 100
+	fsys := crashfs.New()
+	e := openTest(t, fsys, cfg)
+	s := mustStore(t, e, "a")
+	for round := range 3 {
+		for i := range 10 {
+			mustOK(t, s.Put(fmt.Sprintf("id-%02d", i), sized(10, round)))
+		}
+	}
+	if n := e.metrics.vacuums.Load(); n != 0 {
+		t.Fatalf("%d vacuums before Close", n)
+	}
+	mustOK(t, e.Close())
+	if n := e.metrics.vacuums.Load(); n != 0 {
+		t.Fatalf("Close ran %d vacuums with 30 of 100 writes", n)
+	}
+	e = openTest(t, fsys, cfg)
+	defer e.Close()
+	if a := auditStore(t, mustStore(t, e, "a")); a.entries == a.versions {
+		t.Fatalf("the dead versions are gone: %+v", a)
+	}
+}
+
+// TestVacuumOnCloseDiskFull: con el disco lleno la limpieza de Close no corta el cierre (Close no se cuelga) y al
+// reabrir con lugar está todo lo confirmado.
+func TestVacuumOnCloseDiskFull(t *testing.T) {
+	cfg := testConfig()
+	cfg.vacuumEvery, cfg.vacuumWrites = time.Hour, 10
+	fsys := crashfs.New()
+	e := openTest(t, fsys, cfg)
+	s := mustStore(t, e, "a")
+	for round := range 3 {
+		for i := range 40 {
+			mustOK(t, s.Put(fmt.Sprintf("id-%02d", i), sized(3000, round)))
+		}
+	}
+	fsys.SetCapacity(fsys.Used())
+	closeWithin(t, e, 10*time.Second)
+
+	fsys.SetCapacity(0)
+	e = openTest(t, fsys, cfg)
+	defer e.Close()
+	s = mustStore(t, e, "a")
+	for i := range 40 {
+		got, found, err := s.Read(fmt.Sprintf("id-%02d", i))
+		if err != nil || !found || !bytes.Equal(got, sized(3000, 2)) {
+			t.Fatalf("id-%02d: %v %v (%d B)", i, found, err, len(got))
+		}
+	}
+	mustVerifyClean(t, e)
+}

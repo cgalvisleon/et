@@ -189,7 +189,14 @@ Además del store, cuenta con lo siguiente:
   que fija `MAX_WAL_SIZE`.
 - **`VACUUM_INTERVAL`** (60 s; 0 la apaga) y **`VACUUM_THRESHOLD`** (1.000 escrituras): la limpieza de fondo corre
   cada intervalo si hubo al menos ese número de escrituras desde la última vuelta. También corre cada medio archivo
-  de estados de xids asignados (67 millones). Los valores están **a confirmar** (ver la decisión 56).
+  de estados de xids asignados (67 millones). Los valores están **a confirmar** (ver la decisión 56). El intervalo
+  cuenta desde `Open`, así que `Close` también limpia: si la limpieza de fondo está encendida y hubo al menos
+  `VACUUM_THRESHOLD` escrituras desde la última limpieza, corre `Vacuum()` antes del checkpoint final. Un proceso que
+  se reinicia más seguido que `VACUUM_INTERVAL` ya no deja crecer el disco con cada reemplazo (antes `test/soak`, con
+  reaperturas cada 60 s, vio `data/` ÷ vivos subir de 1,3 a 3,3 en 2 min). Con `VACUUM_INTERVAL=0` `Close` no limpia.
+  El contador empieza en 0 en cada `Open`: un proceso que en cada sesión escribe menos de `VACUUM_THRESHOLD` sigue sin
+  limpiar (llama a `Vacuum()` o baja el umbral). Un `Close` con mucho por limpiar tarda más; una réplica, un motor de
+  solo lectura y un disco lleno no limpian al cerrar y el cierre sigue igual.
 - **`LOCK_TIMEOUT`** (5 s): cuánto espera una escritura a otra transacción sobre el mismo id (`ErrConflict`), y cuánto
   espera un escritor frenado (`ErrThrottled`). También es lo que espera `Store(name)` a un lote que crea ese store, y
   `DropStore`/`DropStoreIn` a los lotes abiertos que escribieron en el store (`ErrBusy`). Con 0 esas esperas no tienen
@@ -437,7 +444,8 @@ deja margen para el `Close`.
 
 La limpieza quita las versiones que ningún lote ni snapshot abierto puede ver, libera sus cadenas de desborde, devuelve
 a la lista de libres las hojas vacías y los padres sin hijos, congela lo confirmado y pone el mapa de visibilidad. Corre
-de fondo (`VACUUM_INTERVAL`/`VACUUM_THRESHOLD`), y `Engine.Vacuum()` la fuerza. Puede correr con lecturas y escrituras.
+de fondo (`VACUUM_INTERVAL`/`VACUUM_THRESHOLD`), también en `Close` (con al menos `VACUUM_THRESHOLD` escrituras
+sin limpiar), y `Engine.Vacuum()` la fuerza. Puede correr con lecturas y escrituras.
 
 El **horizonte** es el xid en curso más viejo, o el `Xmin` del lote o snapshot abierto más viejo. Un lote o snapshot
 que sigue abierto (también un `SnapshotFor(0)` olvidado o un recorrido detenido a medias) hace lo siguiente:
@@ -1177,7 +1185,8 @@ Las corridas largas (`-count` ≥ 20) van de a un binario por vez, midiendo la m
 | `./test/ci/ci.sh` | Verificación de un cambio (~10 min). En la VM Linux: `go test -p 1 ./store/...`, `-race`, cortes con LazyFS (5 rondas) y con dm-flakey (3 + 2). En macOS: `go test -p 1 ./store/...`. Sale con 0 si todo está bien. Córrelo antes de un `git backup`. |
 | `./test/ci/nightly.sh` | Cada noche a las 03:00, por LaunchAgent: benchmarks contra la línea base (FALLA si una métrica empeora más del 10 %), los 10 fuzzers de `store/` y la suite completa de cortes y de disco lleno. |
 | `./test/ci/fuzzlong.sh` | Corrida larga de fuzzers: 10 × 48 min = 8 h (tarea 73). |
-| `./test/ci/status.sh [ci\|nightly\|fuzzlong]` | El último resultado. |
+| `./test/ci/soak.sh` | Prueba de resistencia de 72 h (`test/soak`, tarea 51) en macOS de IA: carga mixta contra un modelo exacto, `Verify` y reapertura periódicos, y prueba de crecimiento de memoria y disco. |
+| `./test/ci/status.sh [ci\|nightly\|fuzzlong\|soak]` | El último resultado. |
 
 ### `test/linuxvm` y `test/powercut` (fallos de disco reales)
 
@@ -1196,6 +1205,20 @@ Las corridas largas (`-count` ≥ 20) van de a un binario por vez, midiendo la m
 - `Verify` sale limpio tras `Repair`.
 
 Usa esta misma herramienta para validar el disco de producción (no está probado sobre un NVMe real).
+
+### `test/soak` (resistencia: horas o días de carga)
+
+```bash
+go build -o soak ./test/soak
+./soak -dir /datos/soak/db -out /datos/soak -duration 72h -cache 512 -rate 2000   # con tu caché y tu tasa
+```
+
+Corre a la vez escrituras sueltas y diferidas, lecturas, recorridos, lotes confirmados y deshechos, snapshots, un
+banco de cuentas con lotes que chocan, DDL y la limpieza automática, y cada `-check` (10 min) detiene la carga para
+comparar todo con un modelo exacto y pasar `Verify`; cada `-reopen` (30 min) además cierra y abre. Falla con un error
+inesperado, un dato distinto, `Verify` sucio o **crecimiento sostenido** tras el calentamiento (RSS, heap de Go,
+`data/` ÷ datos vivos, `wal/`, `xact/`; criterio en `test/ci/README.md`). `summary.md` y `checks.tsv` son lo que hay que
+mirar. Sirve para validar una configuración (`STORE_CACHE_SIZE`, `MAX_WAL_SIZE`, `VACUUM_*`) antes de producción.
 
 ### `test/storebench` (dimensionar con tu hardware)
 
@@ -1224,6 +1247,7 @@ CHECKPOINT_TIMEOUT=3600 ./storebench -crashwal 1024 -dir /datos/c   # carga hast
 - [ ] `storebench` en el hardware de producción: Put/s durable, `Open` tras `-crashwal` con tu `MAX_WAL_SIZE`, y RSS
       con tu caché.
 - [ ] `powercut` sobre el disco y el sistema de archivos de producción.
+- [ ] `soak.sh` de 72 h en verde (tarea 51), y un `soak` con la configuración de producción.
 - [ ] Un respaldo restaurado y verificado (sección 5), y un PITR de prueba si usas el archivo continuo.
 - [ ] Alertas de la sección 4 conectadas.
 - [ ] La versión de `et` fijada con un tag (sección 10).

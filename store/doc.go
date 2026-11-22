@@ -317,7 +317,7 @@
 //	func OpenWith(dir string, o Options) (*Engine, error)      // Open con opciones propias (tarea 84; cero = la variable)
 //	func OpenAt(dir string, lsn uint64) (*Engine, error)       // restaura una copia de Backup hasta lsn (PITR)
 //	func OpenAtTime(dir string, t time.Time) (*Engine, error)  // hasta el último registro antes del primero con hora > t
-//	func (e *Engine) Close() error                             // checkpoint final
+//	func (e *Engine) Close() error                             // limpieza si hace falta (closeVacuum) + checkpoint final
 //	func (e *Engine) Store(name string) (*Store, error)        // abre el store, o lo crea si no existe
 //	func (e *Engine) DropStore(name string) error
 //	func (e *Engine) Stores() []string
@@ -886,7 +886,7 @@
 //
 // Un corte entre 3 y 5 deja el control con el punto de rehacer anterior y el catálogo con el nuevo: la recuperación
 // suma a los contadores solo las confirmaciones con lsn ≥ countLSN, así que no cuenta dos veces. Close hace un
-// checkpoint final con state = cerrado bien.
+// checkpoint final con state = cerrado bien (antes, si hace falta, la limpieza al cerrar: ver «Limpieza»).
 //
 // Entre los pasos 1 y 2 el checkpoint espera a las operaciones que reservaron su registro antes del punto de rehacer
 // y todavía no anotaron su estado en el archivo de estados (commitMu, como delayChkpt de PostgreSQL): si no, su
@@ -988,6 +988,15 @@
 // también con transacciones que no escriben), y si es así corre Vacuum. Close marca el motor cerrado (espera a la
 // limpieza del store en curso; la siguiente ve ErrClosed), detiene la de fondo y recién después hace el checkpoint
 // final; si el motor quedó inutilizable, la de fondo termina sola.
+//
+// Limpieza al cerrar (closeVacuum, tarea 124, 2026-11-22): el intervalo cuenta desde Open, así que un proceso que se
+// reinicia más seguido que VACUUM_INTERVAL nunca limpiaba y data/ crecía (test/soak: 1,3 → 3,3 × los vivos en 2 min).
+// Ahora Close, antes de marcar el motor cerrado (con el checkpointer y el escritor del WAL vivos, así un escritor
+// frenado se suelta), corre Vacuum si la limpieza de fondo está encendida (VACUUM_INTERVAL > 0) y hubo al menos
+// VACUUM_THRESHOLD escrituras desde la última limpieza: el mismo contador del motor (Engine.writes, que empieza en 0
+// en cada Open) que mira la de fondo; el criterio por xids no se mira al cerrar. Una réplica no limpia; un motor
+// cerrado, inutilizable (ErrFailed) o un disco lleno limpio (ErrDiskFull) no limpian y el cierre sigue igual; otro
+// error de la limpieza (una página dañada) se suma al de Close. No toca el formato en disco.
 //
 // A confirmar (ola 5C): los valores de VACUUM_INTERVAL y VACUUM_THRESHOLD y el criterio por cantidad de escrituras
 // (PostgreSQL usa la fracción de tuplas muertas por tabla); una cadena de desborde escrita antes de un corte sin que

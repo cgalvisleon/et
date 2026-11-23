@@ -328,6 +328,7 @@ func (s *Store) writeIn(b *Batch, id string, c change) (bool, error) {
 	if err := checkWrite(id, c.data); err != nil {
 		return false, err
 	}
+	c = s.e.compressed(c)
 	if err := s.e.throttle(); err != nil {
 		return false, err
 	}

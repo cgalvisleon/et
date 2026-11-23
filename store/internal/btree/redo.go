@@ -52,6 +52,7 @@ var shapes = map[wal.Kind][]blockRule{
 	wal.KindSetHints:     {{}},
 	wal.KindSetFrozen:    {{meta: true}},
 	wal.KindMarkHalfDead: {{}, {}},
+	wal.KindLeafRewrite:  {{}},
 }
 
 // optionalLast son los Kind cuyo último bloque de shapes puede faltar.

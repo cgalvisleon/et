@@ -291,7 +291,7 @@ func (m *Manager) readPage(file smgr.FileNo, block page.BlockNumber, seq int, to
 	p := h.Page()
 	o, err := p.Opaque()
 	switch {
-	case p.IsNew() || err != nil || o.Flags != page.OpaqueOverflow:
+	case p.IsNew() || err != nil || o.Flags != page.OpaqueOverflow || p.LayoutVersion() != page.LayoutVersion:
 		return 0, badChain(file, block, seq, "not an overflow page")
 	case o.Level != uint32(seq):
 		return 0, badChain(file, block, seq, fmt.Sprintf("page says it is number %d", o.Level))

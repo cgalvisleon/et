@@ -135,16 +135,26 @@ func (c *Cursor) nextForward() error {
 	c.batch, c.arena = c.batch[:0], c.arena[:0]
 	var hs hints
 	hs.at(h)
+	caughtUp := false // ya apareció un id ≥ cur: los siguientes de la hoja también lo son (están en orden)
 	for ; off <= n.maxOff() && err == nil; off++ {
 		var e entry
 		if e, err = n.entryAt(off); err != nil {
 			break
 		}
-		if c.cur != nil && bytes.Compare(e.id(), c.cur) < 0 {
-			continue // ya pasó: una hoja borrada le dejó su espacio de claves a esta (doc.go, «Borrado de páginas»)
-		}
-		if c.cur == nil || !bytes.Equal(e.id(), c.cur) {
-			c.cur, c.decided = append(c.cur[:0], e.id()...), false
+		if !caughtUp {
+			cmp := 1
+			if c.cur != nil {
+				cmp = e.compareID(c.cur)
+			}
+			if cmp < 0 {
+				continue // ya pasó: una hoja borrada le dejó su espacio de claves a esta (doc.go, «Borrado de páginas»)
+			}
+			caughtUp = true
+			if cmp > 0 {
+				c.cur, c.decided = e.appendID(c.cur[:0]), false
+			}
+		} else if !e.idEqual(c.cur) {
+			c.cur, c.decided = e.appendID(c.cur[:0]), false
 		}
 		if c.decided {
 			continue
@@ -341,8 +351,8 @@ func (c *Cursor) pageGroups(n node, last page.OffsetNumber, hs *hints) ([]group,
 		if err != nil {
 			return nil, err
 		}
-		if len(groups) == 0 || !bytes.Equal(groups[len(groups)-1].id, e.id()) {
-			groups = append(groups, group{id: bytes.Clone(e.id())})
+		if len(groups) == 0 || !e.idEqual(groups[len(groups)-1].id) {
+			groups = append(groups, group{id: e.appendID(nil)})
 		}
 		g := &groups[len(groups)-1]
 		if g.found {

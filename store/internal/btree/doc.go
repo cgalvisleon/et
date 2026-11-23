@@ -17,24 +17,79 @@
 // primero (preguntas 24, 25 y 39). Pueden repartirse en dos hojas vecinas: una lectura sigue a la derecha mientras la
 // clave siga siendo el mismo id.
 //
-// # Entrada de hoja (EntryHeaderSize = 28 + id + valor o referencia; little-endian)
+// # Entrada de hoja de la forma 1 (EntryHeaderSize = 28 + id + valor o referencia; little-endian)
+//
+// La de las hojas con LayoutVersion 1: las del formato 1, que este binario lee y reescribe en la forma 2 (ver «Hojas
+// de la forma 2»); ya no escribe ninguna.
 //
 //	off tam campo
 //	  0   4 flags     EntryTombstone, EntryOverflow, las marcas de visibilidad EntryXidCommitted, EntryXidAborted
 //	                  (se ponen con OR atómico, ver buffer), EntryFrozen (congelada: confirmada y visible para todo
 //	                  snapshot sin consultar el archivo de estados; la pone la limpieza con KindLeafVacuum) y
-//	                  EntryFreeing (versión muerta cuya cadena de desborde se está liberando: solo con EntryOverflow)
+//	                  EntryFreeing (versión muerta cuya cadena de desborde se está liberando: solo con EntryOverflow) y
+//	                  EntryCompressed (formato 2, tarea 132: el valor guardado, en línea o en desborde, lo comprimió
+//	                  el motor; nunca en una lápida; btree no lo mira: lo pone Write.Compressed)
 //	  4   2 idLen     1 a MaxIDLen
 //	  6   2 reservado
 //	  8   8 lsn       lsn del registro que escribió la versión (parte de la clave)
 //	 16   8 xid       transacción que la escribió
-//	 24   4 valueLen  largo del valor (en línea, o total si está en desborde; 0 en una lápida)
+//	 24   4 valueLen  largo del valor guardado (en línea, o total si está en desborde; con EntryCompressed, el
+//	                  comprimido con su encabezado; 0 en una lápida)
 //	 28   … id, después el valor en línea, o la referencia a desborde: primer bloque (4)
 //
-// Una versión va en línea si EntryHeaderSize + idLen + valueLen ≤ MaxEntrySize; si no, a desborde (preguntas 22 y
-// 37). MaxEntrySize = 2.032 garantiza que tres entradas máximas y una clave alta máxima entren en una hoja, como el
-// tercio de página de PostgreSQL. Un borrado es una lápida (EntryTombstone, sin valor); el reemplazo no toca la
+// Una versión va en línea si EntryHeaderSize + idLen + valueLen ≤ MaxEntrySize, en las dos formas (la regla no depende
+// de la hoja donde cae); si no, a desborde (preguntas 22 y 37). MaxEntrySize = 2.032 garantiza que tres entradas máximas y una clave alta máxima entren en una hoja, como el
+// tercio de página de PostgreSQL. Con EntryCompressed, valueLen es el del valor comprimido: el motor comprime antes
+// de decidir (store/doc.go, «Formato 2»). VerifyWith entrega con su valor las versiones comprimidas en línea (el
+// motor comprueba que se descomprimen); las demás, sin él. Un borrado es una lápida (EntryTombstone, sin valor); el reemplazo no toca la
 // versión anterior (pregunta 38). Remove de un id sin versión viva no escribe nada.
+//
+// # Hojas de la forma 2 (formato 2, tarea 134 de F-23; leaf2.go)
+//
+// Una hoja de la forma 2 lleva LayoutVersion 2 en pd_pagesize_version (las demás clases de página siguen en 1, y solo
+// una hoja viva puede ser de la 2: pageNode lo rechaza en cualquier otra). Sus ítems:
+//
+//	ítem           qué guarda
+//	1              clave alta (pivote, como en la forma 1; no está en la de más a la derecha)
+//	2 (o 1)        ítem de prefijo: un pivote sin enlace ni lsn (flags 0, downlink 0) cuya clave es el prefijo de la
+//	               hoja, de 0 a MaxPrefixLen = 255 B
+//	resto          entradas de la forma 2, en orden (id, lsn descendente): firstData es uno más que en la forma 1
+//
+// Entrada de la forma 2 (little-endian):
+//
+//	off tam campo
+//	  0   4 word0     marcas (bits 0–7: las de la forma 1; el OR atómico de las marcas de visibilidad sigue sobre este
+//	                  uint32) | largo del sufijo (bits 8–19) | largo en línea (bits 20–31; 0 en lápidas y desborde).
+//	                  Los bits altos no cambian nunca después de escribir la entrada
+//	  4   8 lsn       parte de la clave
+//	 12   8 xid       solo sin (EntryFrozen y no EntryOverflow): una congelada en línea no lo guarda (es visible para
+//	                  todos; Version.XID da 0); una con desborde lo conserva (FreeTail lo compara con pd_prune_xid)
+//	  …   … sufijo    el id sin el prefijo de la hoja (puede ser vacío: todas las versiones de un mismo id)
+//	  …   … valor     en línea, o first(4) len(4) en desborde
+//
+// 20 B por versión viva (28 en la forma 1) y 12 B congelada en línea. Invariante: el id de toda entrada empieza con el
+// prefijo de su hoja; nada más (el prefijo no tiene que ser común a las cotas). El prefijo se elige al armar la hoja
+// (choosePrefix): el común de su primera y su última entrada, acotado a 255 B; vacío sin entradas. Así una hoja que
+// solo recibe ids crecientes (la de más a la derecha, la cola de un grupo de un índice) ya está recortada cuando se
+// parte. Una escritura cuyo id no tiene el prefijo reescribe la hoja antes con un prefijo más corto (needsRewrite,
+// rewriteLeaf: el común con ese id); si así no cabe, se parte y vuelve a bajar. Una escritura que no cabe intenta,
+// antes de partir y después de podar, recortar las entradas con un prefijo más largo si las entradas lo comparten
+// (longerPrefix). Acotar el prefijo a 255 B deja que la partición cuente el ítem de prefijo de cada mitad con su largo
+// máximo y las entradas con su largo de antes (al recortarlas solo se achican: el prefijo de cada mitad es igual o
+// más largo que el de la hoja), y siempre encuentre un corte.
+//
+// Lectura: entryAt/keyAt leen las dos formas (parseEntry, parseEntry2); la clave de una entrada de la forma 2 trae el
+// prefijo aparte (key.pre) y compareKeys compara los ids enteros sin armarlos. La búsqueda en una hoja recorta la
+// clave de búsqueda una vez (node.trim): si su id no tiene el prefijo cae antes o después de toda la hoja; si lo tiene,
+// la búsqueda binaria compara solo sufijos. Version.ID es el id entero (una sola asignación).
+//
+// Diseño corregido al implementar (2026-11-22; store/doc.go «Formato 2: hojas de la forma 2 (b y c)»): el diseño
+// sacaba el prefijo de las cotas, con la clave baja como segundo ítem. No sirve tal cual: (1) el borrado de una hoja
+// (tarea 70) pasa su espacio de claves a la hermana derecha, que recibe ids menores que su clave baja y sin su
+// prefijo, y (2) la izquierda de una partición conservaba su prefijo, así que con ids crecientes (la hoja de más a la
+// derecha, sin cota alta, prefijo vacío) ninguna hoja tenía prefijo. Por eso el prefijo sale de las entradas, la
+// hoja se reescribe cuando llega un id sin él, cada mitad de una partición elige el suyo, y la clave baja no se guarda.
+// El largo va en el ítem de prefijo, no en pd_flags.
 //
 // # Pivote (páginas internas y claves altas; PivotHeaderSize = 16 + clave)
 //
@@ -66,7 +121,9 @@
 //	                  cero: una meta anterior se lee con la pila vacía)
 //	32   8 frozenXID  ninguna versión con xid menor queda sin congelar (fase 2, pregunta 44): nace con
 //	                  Config.FrozenXID y solo sube (KindSetFrozen)
-//	40   8 reservado
+//	40   4 flags      formato 2 (en una meta del 1, en cero): bit 0 MetaLeavesForm2 = todas las hojas del store son de
+//	                  la forma 2 (la pone Create y la limpieza al terminar de reescribir las del formato 1)
+//	44   4 reservado
 //
 // Su espacio especial lleva flags = page.OpaqueMeta. Un store nuevo nace con KindInitStore: la meta y una hoja raíz
 // vacía en el bloque 1. Una hoja lleva page.FlagAllVisible en su encabezado mientras su bit del mapa de visibilidad
@@ -82,18 +139,26 @@
 // que rehace (applyBlock) → pd_lsn y MarkDirty → soltar → Write. Todos los bloques son del fork principal de un store.
 //
 //	Kind             bloques                                   delta
-//	KindInitStore    0: meta (bloque 0), BlockWillInit         root(4) = 1 + frozenXID(8) (sin él, formato
-//	                                                           anterior: frozenXID 0)
-//	                 1: hoja raíz (bloque 1), BlockWillInit     vacío (hoja vacía con OpaqueLeaf|OpaqueRoot)
+//	KindInitStore    0: meta (bloque 0), BlockWillInit         root(4) = 1 + frozenXID(8) + flags(4) (formato 2;
+//	                                                           sin flags, formato 1; sin frozenXID, anterior: 0)
+//	                 1: hoja raíz (bloque 1), BlockWillInit     layout(2) = 2: hoja vacía de la forma 2 con su ítem
+//	                                                           de prefijo vacío (formato 2); vacío: de la forma 1
 //	KindLeafWrite    0: la hoja                                off(2) + la entrada con lsn 0 (el lsn del registro se
 //	                                                           pone al aplicar); FlagCommit, FlagCountAdd/Sub; apaga
-//	                                                           page.FlagAllVisible
+//	                                                           page.FlagAllVisible. Bit 15 de off (formato 2): la
+//	                                                           entrada es de la forma 2 con el id entero como sufijo
+//	                                                           (el flujo lógico la lee sin la página) y solo marcas
+//	                                                           de escritura; va en una hoja de la forma 2 sin su
+//	                                                           prefijo. Sin el bit, de la forma 1 en una hoja de la 1
 //	KindSplit        0: la izquierda                           right(4) keep(2) + clave alta nueva (pivote sin enlace):
 //	                                                           conserva sus primeros keep ítems de datos, enlaza a right
-//	                                                           y se marca OpaqueIncompleteSplit
+//	                                                           y se marca OpaqueIncompleteSplit; una hoja de la forma 2
+//	                                                           se arma con choosePrefix de las que conserva (igual o
+//	                                                           más largo: sus entradas se recortan), sin marcas de página
 //	                 1: la derecha nueva, BlockWillInit         prev(4) next(4) level(4) flags(2) count(2) + count ×
 //	                                                           [len(2) ítem]: su clave alta (la vieja de la izquierda, si
-//	                                                           tenía) y sus ítems de datos
+//	                                                           tenía) y sus ítems de datos; bit 15 de count (formato 2):
+//	                                                           hoja de la forma 2 (sus ítems traen el de prefijo)
 //	                 2: la antigua hermana derecha (si había)   prev(4) = la derecha nueva
 //	KindInsertPivot  0: el padre                               off(2) + pivote (clave alta de la hija → su hermana nueva)
 //	                 1: la hija (la izquierda de la partición)  vacío: apaga OpaqueIncompleteSplit
@@ -107,7 +172,9 @@
 //	KindLeafVacuum   0: la hoja                                nMark(2) nRemove(2) + nMark × off(2) + nRemove ×
 //	                                                           off(2) [+ nFreeze(2) pageFlags(2) + nFreeze × off(2)]:
 //	                                                           marca EntryFreeing en las versiones con desborde de la
-//	                                                           primera lista, EntryFrozen en las de la tercera y, con
+//	                                                           primera lista, EntryFrozen en las de la tercera (en una
+//	                                                           hoja de la forma 2 las achica: sin xid si no tienen
+//	                                                           desborde, reemplazadas en su lugar) y, con
 //	                                                           pageFlags bit 0, page.FlagAllVisible; quita las de la
 //	                                                           segunda (los números son de antes de quitar; cada lista
 //	                                                           ascendente, sin números comunes) y compacta con
@@ -115,7 +182,14 @@
 //	                                                           congelado es el formato de la fase 1B
 //	KindSetHints     0: la hoja (con su imagen: va solo como   count(2) + count × [off(2) flags(4)]: OR de
 //	                    primera marca tras un checkpoint)      EntryXidCommitted / EntryXidAborted; xid 0
-//	KindSetFrozen    0: meta                                   frozenXID(8): solo sube; xid 0
+//	KindSetFrozen    0: meta                                   frozenXID(8): solo sube [+ flags(4), formato 2: se suman
+//	                                                           a las de la meta]; xid 0
+//	KindLeafRewrite  0: la hoja                                prefixLen(2) ≤ 255 (formato 2): arma de nuevo la hoja, de
+//	                                                           cualquier forma, en la forma 2 con un prefijo de
+//	                                                           prefixLen bytes (el comienzo del id de su primera
+//	                                                           entrada; todas lo tienen), con su clave alta, enlaces,
+//	                                                           marcas de página (también FlagAllVisible) y pd_prune_xid.
+//	                                                           xid 0
 //	KindMarkHalfDead 0: la hoja                                top(4): la cima del subárbol (0 = la hoja); la hoja
 //	                                                           tiene que estar vacía (solo su clave alta), sin ser la
 //	                                                           de más a la derecha ni la raíz, ni partida a medias;
@@ -355,8 +429,10 @@
 // recorridos en los dos sentidos con -race mientras se borra y recicla), TestPageDeleteRedoRejects,
 // TestReadDeletedPages; semillas nuevas en FuzzApplyDelta y FuzzReadNode.
 //
-// Toda página del árbol que se bloquea pasa por page.CheckItems (la caché solo verifica la suma; a confirmar: un
-// gancho de la caché al cargar del disco evitaría repetirlo en cada acceso).
+// Toda página del árbol que se bloquea pasa por page.CheckItems la primera vez desde que la caché la cargó (la caché
+// solo verifica la suma; buffer.ItemsChecker recuerda que ya pasó, y se borra cuando el búfer recibe otra página).
+// Antes (hasta la tarea 134) se repetía en cada acceso: con las hojas de la forma 2, que tienen más entradas, era un
+// tercio de un Lookup. Los cambios en memoria los hacen funciones que validan lo que tocan.
 //
 // Bloqueos: como nbtree, la partición, terminar una partición y la raíz nueva fijan páginas con otra bloqueada (la
 // página nueva de fsm, la antigua hermana derecha, la meta, el padre); el borrado también (la hermana derecha y el
@@ -367,6 +443,20 @@
 // bloqueado.
 //
 // Réplica (tarea 46): Config.NoHints apaga las marcas de visibilidad de las lecturas (la réplica no escribe registros
-// propios); DecodeLeafWrite lee de un KindLeafWrite la versión que escribe (el cambio lógico que entrega el flujo de
-// cambios del motor).
+// propios); DecodeLeafWrite lee de un KindLeafWrite de las dos formas la versión que escribe con el id entero (el
+// cambio lógico que entrega el flujo de cambios del motor).
+//
+// # Migración perezosa desde el formato 1 (tarea 134)
+//
+// Un store del formato 1 tiene hojas de la forma 1 y su meta sin MetaLeavesForm2. Ninguna hoja de la forma 1 se
+// cambia: una escritura que llega a una la reescribe antes en la forma 2 (KindLeafRewrite, con el prefijo de
+// rewritePrefix; con prefijo vacío siempre cabe: cada entrada se achica 8 B y el ítem de prefijo mide 16), y una
+// partición solo encuentra hojas de la forma 2. La limpieza de un store sin la marca no salta hojas por el mapa,
+// reescribe cada hoja de la forma 1 que visita (VacuumStats.Rewritten) antes de limpiarla y, si la pasada termina sin
+// error, anota MetaLeavesForm2 con un KindSetFrozen con flags (VacuumStats.LeavesForm2); desde ahí vuelve a saltar
+// hojas. Las hojas medio muertas o borradas no se reescriben (terminan borradas). Las marcas de visibilidad y las
+// lecturas no reescriben nada: una hoja de la forma 1 se lee igual. Verify cuenta las de la forma 1
+// (VerifyStats.LeavesForm1, LeafInfo.Form1) y da daño si la meta dice MetaLeavesForm2 y queda alguna; LeavesForm2 lee
+// la marca. Un KindLeafWrite de la forma 1 (de un WAL del formato 1) solo se rehace sobre una hoja de la forma 1; uno
+// de la 2, sobre una de la 2.
 package btree

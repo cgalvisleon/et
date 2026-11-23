@@ -146,6 +146,7 @@ func (p *pool) PinZero(tag Tag) (Handle, error) {
 	h := &handle{pool: p, d: d}
 	h.Lock(Exclusive)
 	clear(d.data)
+	d.checked.Store(false)
 	return h, nil
 }
 
@@ -347,6 +348,7 @@ func (p *pool) load(tag Tag, strategy Strategy, fresh bool) (*desc, bool, error)
 * @return error: con el tag
 **/
 func (p *pool) read(d *desc, tag Tag, fresh bool) error {
+	d.checked.Store(false)
 	if fresh {
 		clear(d.data)
 		return nil

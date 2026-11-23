@@ -63,7 +63,7 @@ func (m *Manager) Allocate(file smgr.FileNo, xid page.XID) (buffer.Handle, error
 		return nil, err
 	}
 	o, err := taken.Page().Opaque()
-	if err != nil || o.Flags&page.OpaqueFree == 0 {
+	if err != nil || o.Flags&page.OpaqueFree == 0 || taken.Page().LayoutVersion() != page.LayoutVersion {
 		release(taken)
 		release(meta)
 		return nil, blockErr(ErrNotFree, file, head)

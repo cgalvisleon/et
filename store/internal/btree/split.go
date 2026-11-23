@@ -96,7 +96,7 @@ func (t *BTree) split(h buffer.Handle, n node, pos page.OffsetNumber, xid page.X
 	}
 	refs := []wal.BlockRef{
 		{Delta: splitLeftDelta(rightBlk, plan.keep, plan.highKey)},
-		{Flags: wal.BlockWillInit, Delta: splitRightDelta(rightOpaque, plan.right)},
+		{Flags: wal.BlockWillInit, Delta: splitRightDelta(rightOpaque, plan.right, n.v2)},
 	}
 	hs := []buffer.Handle{h, newH}
 	if oldRight != nil {
@@ -139,13 +139,19 @@ func planSplit(n node, pos page.OffsetNumber) (splitPlan, error) {
 		items[i] = it
 		total += page.SpaceFor(len(it))
 	}
-	rightBase := 0
+	rightBase, prefixItem := 0, 0
+	if n.v2 {
+		// El ítem de prefijo de cada mitad, en su largo máximo: las entradas se cuentan con su largo de hoy, que al
+		// recortarlas con el prefijo nuevo (igual o más largo) solo se achica
+		prefixItem = page.SpaceFor(PivotHeaderSize + MaxPrefixLen)
+		rightBase = prefixItem
+	}
 	if !n.rightmost() {
 		hk, err := n.highKey()
 		if err != nil {
 			return splitPlan{}, err
 		}
-		rightBase = page.SpaceFor(len(hk))
+		rightBase += page.SpaceFor(len(hk))
 	}
 
 	target := splitTarget(n, pos, items, keys, total)
@@ -157,7 +163,7 @@ func planSplit(n node, pos page.OffsetNumber) (splitPlan, error) {
 			right += page.SpaceFor(PivotHeaderSize) - page.SpaceFor(len(items[s]))
 		}
 		hk := splitKey(n.leaf(), keys[s-1], keys[s])
-		if left+page.SpaceFor(PivotHeaderSize+len(hk.id)) > capacity || right > capacity {
+		if left+prefixItem+page.SpaceFor(PivotHeaderSize+len(hk.id)) > capacity || right > capacity {
 			continue
 		}
 		if diff := abs(left - target); best < 0 || diff < bestDiff {
@@ -177,13 +183,17 @@ func planSplit(n node, pos page.OffsetNumber) (splitPlan, error) {
 * @return splitPlan, error
 **/
 func buildPlan(n node, items [][]byte, keys []key, s int) (splitPlan, error) {
-	plan := splitPlan{keep: s, highKey: encodePivot(splitKey(n.leaf(), keys[s-1], keys[s]), 0)}
+	sep := splitKey(n.leaf(), keys[s-1], keys[s])
+	plan := splitPlan{keep: s, highKey: encodePivot(sep, 0)}
 	if !n.rightmost() {
 		hk, err := n.highKey()
 		if err != nil {
 			return splitPlan{}, err
 		}
 		plan.right = append(plan.right, bytes.Clone(hk))
+	}
+	if n.v2 {
+		return buildRight2(n, plan, keys, s)
 	}
 	for i := s; i < len(items); i++ {
 		it := bytes.Clone(items[i])
@@ -195,6 +205,34 @@ func buildPlan(n node, items [][]byte, keys []key, s int) (splitPlan, error) {
 			it = encodePivot(minusInf, v.downlink())
 		}
 		plan.right = append(plan.right, it)
+	}
+	return plan, nil
+}
+
+/**
+* buildRight2 arma los ítems de la derecha nueva de una hoja de la forma 2 (después de su clave alta, si tiene): su
+* ítem de prefijo (choosePrefix de sus entradas: igual o más largo que el de la hoja) y sus entradas recortadas con él.
+* @param n node, plan splitPlan: con la clave alta de la derecha ya puesta, keys []key: las de los ítems de datos, s
+* int: el primero de la derecha
+* @return splitPlan, error
+**/
+func buildRight2(n node, plan splitPlan, keys []key, s int) (splitPlan, error) {
+	prefixLen := choosePrefix(&keys[s], &keys[len(keys)-1])
+	first, err := n.entryAt(n.firstData() + page.OffsetNumber(s))
+	if err != nil {
+		return splitPlan{}, err
+	}
+	prefix := first.appendID(nil)[:prefixLen]
+	plan.right = append(plan.right, encodePrefixItem(prefix))
+	buf := make([]byte, 0, page.Size) // un solo búfer para las entradas de la derecha (caben en una página)
+	for off := n.firstData() + page.OffsetNumber(s); off <= n.maxOff(); off++ {
+		e, err := n.entryAt(off)
+		if err != nil {
+			return splitPlan{}, err
+		}
+		start := len(buf)
+		buf = e.appendReencode(buf, prefixLen, false)
+		plan.right = append(plan.right, buf[start:len(buf):len(buf)])
 	}
 	return plan, nil
 }

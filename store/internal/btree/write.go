@@ -1,7 +1,6 @@
 package btree
 
 import (
-	"bytes"
 	"errors"
 
 	"github.com/cgalvisleon/et/store/internal/buffer"
@@ -24,12 +23,12 @@ func (t *BTree) Write(id string, w Write) (Result, error) {
 	if err := checkWrite(id, w); err != nil {
 		return Result{}, err
 	}
-	item := encodeEntry([]byte(id), w)
+	item := encodeEntry2([]byte(id), w) // la forma 2 con el id entero: el delta de KindLeafWrite
 	k := searchKey([]byte(id))
 	defer t.guard.leave(t.guard.enter())
 	var hs hints
 	defer t.flushHints(&hs)
-	prep := beforeSplit{prune: t.horizon != nil, grow: t.grower != nil}
+	prep := beforeSplit{prune: t.horizon != nil, grow: t.grower != nil, recode: true}
 	for {
 		h, n, rootLevel, err := t.leafForWrite(k, len(item))
 		var fe *finishError
@@ -112,7 +111,24 @@ func (t *BTree) writeLeaf(h buffer.Handle, n node, k key, item []byte, w Write, 
 		h.Release()
 		return Result{}, true, nil
 	}
-	if !fits(n.p, len(item)) {
+	if needsRewrite(n, k.id) {
+		// Una hoja del formato 1 pasa a la forma 2 antes de cambiarla (migración perezosa), y una de la forma 2 cuyo
+		// prefijo no tiene el id lo acorta; si así no cabe, se parte y se vuelve a bajar
+		nn, ok, err := t.rewriteLeaf(h, n, k.id)
+		if err != nil {
+			h.Release()
+			return Result{}, true, err
+		}
+		if !ok {
+			return Result{}, false, t.splitAndFinish(h, n, pos, w.XID)
+		}
+		n = nn
+		if pos, err = n.lowerBound(k); err != nil {
+			h.Release()
+			return Result{}, true, err
+		}
+	}
+	if !fits(n.p, len(item)-len(n.pre)) {
 		if prep.prune && !prep.horizonRead {
 			// El horizonte (xact OldestActive en el motor) toma el mutex de las transacciones y las recorre: se lee
 			// con la hoja suelta y se vuelve a bajar. Uno ya viejo al podar solo poda menos (tarea 129 de F-23)
@@ -123,12 +139,30 @@ func (t *BTree) writeLeaf(h buffer.Handle, n node, k key, item []byte, w Write, 
 		if prep.prune {
 			prep.prune = false
 			removed, err := t.pruneLeaf(h, n, prep.horizon)
+			if err == nil && removed > 0 {
+				n, err = readNode(n.blk, h.Page()) // la poda compactó la hoja: sus vistas cambiaron
+			}
 			if err != nil {
 				h.Release()
 				return Result{}, true, err
 			}
 			if removed > 0 { // la hoja cambió: se vuelve a buscar la posición y la última versión
 				return t.writeLeaf(h, n, k, item, w, rootLevel, hs, prep)
+			}
+		}
+		if prep.recode && n.v2 {
+			// Si las entradas comparten hoy un prefijo más largo que el de la hoja (se acortó por un id que ya no
+			// está, o una limpieza quitó las de los bordes), recortarlas puede hacer lugar sin partir
+			prep.recode = false
+			if longerPrefix(n, k.id) {
+				nn, ok, err := t.rewriteLeaf(h, n, k.id)
+				if err != nil {
+					h.Release()
+					return Result{}, true, err
+				}
+				if ok {
+					return t.writeLeaf(h, nn, k, item, w, rootLevel, hs, prep)
+				}
 			}
 		}
 		if prep.grow {
@@ -149,7 +183,7 @@ func (t *BTree) writeLeaf(h buffer.Handle, n node, k key, item []byte, w Write, 
 	if w.Commit {
 		flags |= wal.FlagCommit
 	}
-	refs := []wal.BlockRef{{Delta: itemDelta(pos, item)}}
+	refs := []wal.BlockRef{{Delta: leafWriteDelta(pos, item)}}
 	res, err := t.logChange(wal.KindLeafWrite, w.XID, flags, refs, []buffer.Handle{h}, underLockOf(w, delta))
 	h.Release()
 	if err != nil {
@@ -166,10 +200,11 @@ func (t *BTree) writeLeaf(h buffer.Handle, n node, k key, item []byte, w Write, 
 }
 
 // beforeSplit es lo que una escritura que no cabe intenta antes de partir la hoja, una vez cada cosa: podar sus
-// versiones muertas (pruneLeaf, con el horizonte leído antes con la hoja suelta) y extender el archivo con la hoja
-// suelta (fsm.Grower).
+// versiones muertas (pruneLeaf, con el horizonte leído antes con la hoja suelta), recortar sus entradas con un prefijo
+// más largo (longerPrefix) y extender el archivo con la hoja suelta (fsm.Grower).
 type beforeSplit struct {
 	prune, grow bool
+	recode      bool
 	horizonRead bool     // si ya se leyó el horizonte de la poda (con la hoja suelta)
 	horizon     page.XID // el horizonte leído
 }
@@ -194,7 +229,7 @@ func (t *BTree) pruneLeaf(h buffer.Handle, n node, horizon page.XID) (int, error
 	if n.p.Flags()&page.FlagAllVisible != 0 {
 		return 0, nil
 	}
-	plan, err := t.planLeaf(n, VacuumOptions{Horizon: horizon}, &vacuumGroup{}, false)
+	plan, err := t.planLeaf(n, VacuumOptions{Horizon: horizon}, nil, false)
 	if err != nil || len(plan.remove) == 0 {
 		return 0, err
 	}
@@ -203,6 +238,28 @@ func (t *BTree) pruneLeaf(h buffer.Handle, n node, horizon page.XID) (int, error
 	}
 	t.pruned.Add(uint64(len(plan.remove)))
 	return len(plan.remove), nil
+}
+
+/**
+* longerPrefix dice si las entradas de una hoja de la forma 2 y el id que llega comparten un prefijo más largo que el
+* de la hoja (el que elegiría rewriteLeaf).
+* @param n node: una hoja de la forma 2 con el id dentro de su prefijo, id []byte
+* @return bool
+**/
+func longerPrefix(n node, id []byte) bool {
+	if n.dataCount() == 0 || len(n.pre) >= MaxPrefixLen {
+		return false
+	}
+	first, err := n.entryAt(n.firstData())
+	if err != nil {
+		return false
+	}
+	last, err := n.entryAt(n.maxOff())
+	if err != nil {
+		return false
+	}
+	shared := min(commonPrefixKeys(first.key(), last.key()), commonPrefixKeys(first.key(), key{id: id}))
+	return min(shared, MaxPrefixLen) > len(n.pre)
 }
 
 /**
@@ -293,7 +350,7 @@ func (t *BTree) latest(n node, pos page.OffsetNumber, id []byte, w Write, hs *hi
 			continue
 		}
 		e, err := cur.entryAt(off)
-		if err != nil || !bytes.Equal(e.id(), id) {
+		if err != nil || !e.idEqual(id) {
 			return Latest{}, err
 		}
 		if l, done, err := t.counts(e, w, hs); done || err != nil {

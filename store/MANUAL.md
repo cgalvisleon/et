@@ -163,6 +163,13 @@ Antes de la tarea 108 (2026-11-21) eran 2,5 × y 2,9 × y el store de documentos
 poda las versiones muertas de la hoja antes de partirla y el final de un grupo de duplicados se parte en el punto de
 inserción. Para dimensionar, cuenta ~2,2 × los ids de los índices.
 
+**Compresión de valores (formato 2, `STORE_COMPRESSION`).** El motor comprime cada valor de 256 B o más que achique
+al menos un octavo, antes de decidir si va en línea o a desborde: un JSON de 2 a 5 KB vuelve a la hoja. Con documentos
+tipo josefina (la mezcla de tamaños de la base josephine; `TestCompressDisk`, `STORE_BENCH=1`) el disco del store
+de documentos es 1,64 × el JSON sin comprimir, 1,10 × con S2 (por omisión) y 0,94 × con zstd; el WAL baja igual. La
+CPU de leer: con S2 casi igual (Read +8 %, recorrido +10 %); con zstd Read +60 % y un recorrido 5 veces más lento. Los
+índices (claves sin valor) no cambian.
+
 Además del store, cuenta con lo siguiente:
 
 - **`wal/`**: los segmentos se preasignan enteros con ceros, y hay repuestos. Mientras rige el freno, el WAL sin
@@ -263,6 +270,8 @@ Josefina abre dos motores por nodo:
 | `WAL_ARCHIVE` | off (`on`, `true`, `1` o `yes` lo encienden) | `Archive` (`*bool`) | Enciéndela para PITR. Se fija al abrir. |
 | `WAL_ARCHIVE_MAX_SIZE` | 0 (MB; 0 = sin tope: frena a los escritores) | `ArchiveMaxMB` (< 0 = sin tope) | Ponle tope si prefieres perder continuidad del archivo antes que frenar las escrituras. |
 | `MAX_SLOT_WAL_KEEP_SIZE` | 4096 (MB; 0 = sin tope: frena) | `SlotKeepMB` (< 0 = sin tope) | Según el disco que aceptas dar a una réplica caída antes de invalidar su ranura. |
+| `STORE_COMPRESSION` | s2 (`zstd`, `auto` = S2 bajo 2 KB y zstd desde 2 KB, `off`) | `Compression` (`""` = la variable) | `zstd` si el disco pesa más que la CPU de leer (−15 % de disco frente a S2, recorridos 5 veces más lentos). Solo elige al escribir: cambiarla no pide migración. |
+| `STORE_COMPRESSION_MIN` | 256 (bytes) | `CompressionMin` | Casi nunca: por debajo de ~512 B un JSON casi no achica. |
 
 Constantes sin variable:
 
@@ -954,6 +963,7 @@ echo $?   # 0 = nada pendiente, 1 = hallazgos sin arreglar, 2 = no pudo revisar
 | `no-meta`: store sin página meta | no | `Store(name)` lo crea vacío al abrirlo. Si tenía datos, restaura. |
 | `tree`: el árbol no pasa la verificación o una página no se lee | no | El resto del store no es confiable. Restaura el respaldo (o PITR). |
 | `chain`: cadena de desborde viva rota | no | Ese valor se perdió: `Read` del id da error. Restaura, o reescribe el id si tienes el valor en otro lado. |
+| `value`: un valor comprimido en línea que no se descomprime (formato 2) | no | Igual que `chain`: ese valor se perdió (`Read` da `ErrCorrupt`). Restaura, o reescribe el id. |
 | `double-page`: página con dos dueños | no | Restaura. |
 | `free-list`: la lista de libres apunta a una página no libre o tiene un bucle | no | Restaura. |
 | `frozen`: versión sin congelar por debajo del frozenXID | no | Restaura. |
@@ -987,7 +997,7 @@ Compara siempre con `errors.Is`. Los errores pueden venir envueltos: un disco ll
 | `ErrFailed` + `ErrDiskFull` | disco lleno donde ya no se podía volver atrás: **solo lectura** (`Stats.ReadOnly`) | no (las lecturas siguen) | Libera disco (sección 9). | **sí** |
 | `ErrDiskFull` (solo) | sin lugar; la operación no hizo nada; un lote queda abortado | sí, con lugar | Libera disco. Las escrituras vuelven solas, sin reabrir. | no |
 | `ErrThrottled` | el WAL sin reciclar (o sin archivar, o retenido por una ranura sin tope) pasa de 2 × `MAX_WAL_SIZE` desde hace `LOCK_TIMEOUT`; no hizo nada | sí, con espera | Mira `PressureCause`: disco lento (`wal`), archivador caído (`archive`) o réplica caída (`slot`). | no |
-| `ErrCorrupt` | el WAL, el control o el catálogo no son coherentes (falta el registro del checkpoint, un registro mal formado, un segmento sellado del WAL dañado, `archive_status` o `slots` dañados) | no | Guarda el directorio; restaura el respaldo. El daño en un segmento sellado también cumple `errors.Is(err, ErrCorrupt)` (desde la tarea 101; el mensaje trae además el detalle de `wal`). | `Open` falla |
+| `ErrCorrupt` | el WAL, el control o el catálogo no son coherentes (falta el registro del checkpoint, un registro mal formado, un segmento sellado del WAL dañado, `archive_status` o `slots` dañados; o un valor comprimido que no se descomprime al leerlo: «compressed value», hallazgo `value` de `Verify`, no reparable) | no | Guarda el directorio; restaura el respaldo. El daño en un segmento sellado también cumple `errors.Is(err, ErrCorrupt)` (desde la tarea 101; el mensaje trae además el detalle de `wal`). | `Open` falla |
 | `ErrFormatVersion` | el directorio es de otra versión del formato en disco: más nueva que la que lee el binario, o anterior y sin migración (el mensaje dice cuál archivo y qué versión) | no | `Open` no tocó nada. Con una más nueva, abre con la versión de `et` que lo escribió (o una posterior); con una anterior, migra (sección 10). | `Open` falla |
 | `ErrBackupIncomplete` | `Open` de una copia que no terminó o cuyo WAL no llega a su fin | no | La copia no sirve; la copia no se tocó. Usa otro respaldo o completa `wal/`. | — |
 | `ErrBackupDir` | el destino de `Backup` no está vacío | no | Usa un directorio nuevo. | no |
@@ -1118,6 +1128,34 @@ Nada crece en el heap de Go cuando el disco tarda:
 
 ## 10. Actualizar de versión
 
+**Formato 2 (2026-11-22, tareas 132 y 134).** Este binario escribe el formato 2 y lee el 1 y el 2. Lo nuevo en disco:
+la compresión de valores (`STORE_COMPRESSION`, sección 2) y las hojas de la forma 2 (prefijo de clave compartido por
+hoja y cabecera de versión de 20 B, 12 B congelada; antes 28 B). Qué pasa al abrir un directorio del 1:
+
+- `Open` lo migra solo, sin herramienta y sin recorrer los datos: rehace el WAL del 1, deja atrás el segmento activo
+  (lo sella y sigue en uno nuevo con encabezado del 2) y escribe el control y el catálogo en 2 antes de aceptar
+  escrituras. Tarda lo mismo que un `Open` normal.
+- **No hay vuelta atrás**: un binario del formato 1 no abre el directorio migrado (`ErrFormatVersion` en el control).
+  Haz un `Backup` con el binario viejo antes del primer `Open` con el nuevo.
+- Los valores ya escritos quedan sin comprimir hasta que se reescriben; los nuevos se comprimen.
+- **Las hojas se migran de a poco** (migración perezosa, pregunta 79): `Open` no toca las páginas. Una hoja de la
+  forma 1 pasa a la 2 cuando una escritura la cambia, y la limpieza termina las que quedan: mientras un store no está
+  migrado, su limpieza recorre todas sus hojas (no salta las todo-visibles), reescribe las de la forma 1 y, al terminar
+  la pasada sin error, lo anota en la meta del store; desde ahí vuelve a saltar hojas. La limpieza de fondo corre
+  aunque no haya escrituras mientras quede algo por migrar después de abrir un directorio del 1.
+- **Cuánto falta**: `Stats.LeafForm1Stores` (stores abiertos con hojas de la forma 1; se pone al día con cada
+  limpieza) y `Stats.LeafRewrites` (hojas que reescribió la limpieza desde `Open`); el número exacto de hojas lo da
+  `Verify` en `Report.LeavesForm1` (y `cmd/storecheck`, «leaves of form 1 N»). Terminada la migración los dos dan 0.
+- **Cómo forzarla**: `Engine.Vacuum()` (recorre todos los stores). Mientras recorre un store del 1 escribe un WAL del
+  orden del tamaño de sus hojas (la imagen de cada hoja la primera vez que se toca tras un checkpoint): con `WAL_ARCHIVE`
+  o ranuras, cuenta con ese volumen extra. Se puede cortar (`Close`, un DDL): la pasada siguiente sigue. No hay
+  herramienta aparte. Una réplica no limpia: sus hojas se reescriben con los registros del primario.
+- Réplicas: actualiza primero las réplicas (leen 1 y 2) y después el primario. Una réplica con el binario del 1
+  frente a un primario migrado falla con `ErrFormatVersion` en el primer segmento del 2.
+- Los segmentos sellados del 1, `slots` y `archive_status` siguen en 1 hasta reciclarse o reescribirse: se leen igual.
+- **El formato 2 está congelado desde el 2026-11-22** (tarea 134): `store/testdata/format-v2` lo abre
+  `TestFormatV2Reference` en cada corrida, como `format-v1` al 1. Un cambio en disco desde ahora es un formato 3.
+
 **El formato en disco 1 está congelado desde el 2026-11-21** (tarea 54). El directorio de referencia
 `store/testdata/format-v1` (un motor y su copia de `Backup`) lo abre `TestFormatV1Reference` en cada corrida de las
 pruebas: un cambio que lo rompa no pasa. Desde ahora, **todo cambio en disco sube la versión** y lleva migración,
@@ -1131,7 +1169,7 @@ migra (paso 4 de abajo) con el binario de `et` con que se escribió.
 Lo que hay:
 
 - **Una sola versión de formato.** El control (cada copia), el catálogo, el encabezado de cada segmento del WAL,
-  `backup_label`, `archive_status` y `slots` llevan `FormatVersion = 1`; las páginas, la suya en `pd_pagesize_version`,
+  `backup_label`, `archive_status` y `slots` llevan `FormatVersion` (2 al escribir; se lee de 1 a 2); las páginas, la suya en `pd_pagesize_version`,
   y la meta de cada store, la suya. El archivo de estados no lleva versión propia: lo cubre la del control. La tabla
   completa está en `store/doc.go` («Versiones del formato»).
 - **Un segmento del WAL suelto dice su versión.** Uno archivado, en una copia o recibido por una réplica empieza con

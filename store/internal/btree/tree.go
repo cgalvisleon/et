@@ -85,6 +85,9 @@ type BTree struct {
 	// pruned cuenta las versiones que quitaron las escrituras antes de partir (pruneLeaf): Pruned.
 	pruned atomic.Uint64
 
+	// rewritten cuenta las hojas reescritas en la forma 2 (KindLeafRewrite): Rewritten.
+	rewritten atomic.Uint64
+
 	// guard cuenta las operaciones en vuelo: el reciclado de páginas borradas las espera (guard.go).
 	guard opGuard
 
@@ -151,8 +154,8 @@ func Create(cfg Config) (*BTree, error) {
 		return nil, corrupt("new store got blocks %d and %d", metaH.Tag().Block, rootH.Tag().Block)
 	}
 	refs := []wal.BlockRef{
-		{Flags: wal.BlockWillInit, Delta: initMetaDelta(rootBlock, cfg.FrozenXID)},
-		{Flags: wal.BlockWillInit},
+		{Flags: wal.BlockWillInit, Delta: initMetaDelta(rootBlock, cfg.FrozenXID, MetaLeavesForm2)},
+		{Flags: wal.BlockWillInit, Delta: layoutDelta(page.LayoutVersion2)},
 	}
 	res, err := t.logChange(wal.KindInitStore, 0, 0, refs, []buffer.Handle{metaH, rootH}, nil)
 	metaH.Release()
@@ -198,10 +201,14 @@ func (t *BTree) lockNodeWith(blk page.BlockNumber, mode buffer.LockMode, strateg
 		return nil, node{}, err
 	}
 	h.Lock(mode)
-	n, err := readNode(blk, h.Page())
+	ck, _ := h.(buffer.ItemsChecker)
+	n, err := readNodeWith(blk, h.Page(), ck == nil || !ck.ItemsChecked())
 	if err != nil {
 		h.Release()
 		return nil, node{}, err
+	}
+	if ck != nil {
+		ck.SetItemsChecked()
 	}
 	return h, n, nil
 }

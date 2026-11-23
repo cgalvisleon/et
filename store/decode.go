@@ -67,8 +67,14 @@ type TxInfo struct {
 // clases de los cambios guardados en el búfer.
 const (
 	itemChunk  byte = 1 // un trozo de desborde: a = su bloque, b = el siguiente; data = el trozo
-	itemWrite  byte = 2 // una versión: a = 1 si es lápida, b = el primer bloque si va en desborde; data = el valor o su largo
+	itemWrite  byte = 2 // una versión: a = sus marcas (itemTombstone, itemCompressed), b = el primer bloque si va en desborde; data = el valor o su largo
 	itemCreate byte = 3 // un store creado en el lote: id = el nombre
+)
+
+// marcas de una versión guardada en el búfer (campo a de itemWrite).
+const (
+	itemTombstone  uint32 = 1 << 0 // lápida
+	itemCompressed uint32 = 1 << 1 // el valor (en línea o armado del desborde) está comprimido: se entrega descomprimido
 )
 
 // txBuffer son los cambios de una transacción que todavía no confirmó: primero los que pasaron a disco (file), después
@@ -287,15 +293,18 @@ func (r *ChangeReader) leafWrite(rec *wal.Record, fn func(tx TxInfo, c Change) e
 	if err != nil || rec.XID == 0 {
 		return 0, err
 	}
-	var tomb, first uint32
+	var marks, first uint32
 	data := v.Value
 	switch {
 	case v.Flags&btree.EntryTombstone != 0:
-		tomb, data = 1, nil
+		marks, data = itemTombstone, nil
 	case v.Flags&btree.EntryOverflow != 0:
 		first, data = uint32(v.Overflow.First), le.AppendUint32(nil, v.Overflow.Len)
 	}
-	if err := r.add(rec, encodeItem(itemWrite, rec.Blocks[0].File, tomb, first, v.ID, data)); err != nil {
+	if v.Flags&btree.EntryCompressed != 0 {
+		marks |= itemCompressed
+	}
+	if err := r.add(rec, encodeItem(itemWrite, rec.Blocks[0].File, marks, first, v.ID, data)); err != nil {
 		return 0, err
 	}
 	if rec.Flags&wal.FlagCommit == 0 {
@@ -528,7 +537,7 @@ func (r *ChangeReader) replay(t *txBuffer, emit func(Change) error) error {
 			return nil
 		}
 		switch {
-		case a == 1:
+		case a&itemTombstone != 0:
 			c.Op, c.Data = ChangeDelete, nil
 		case b != 0:
 			value, err := assemble(chunks, b, le.Uint32(data))
@@ -537,6 +546,13 @@ func (r *ChangeReader) replay(t *txBuffer, emit func(Change) error) error {
 			}
 			c.Data = value
 			clear(chunks)
+		}
+		if a&itemCompressed != 0 && c.Op == ChangePut {
+			value, err := decompress(nil, c.Data)
+			if err != nil {
+				return err
+			}
+			c.Data = value
 		}
 		return emit(c)
 	}

@@ -319,7 +319,9 @@ func (m *metrics) growthChecks() ([]growth, bool) {
 		{"heap de Go (tras GC)", "MB", cfg.floorHeapMB, func(p point) float64 { return p.heap }},
 		{"data/ ÷ datos vivos", "×", 0.10, func(p point) float64 { return p.ratio }},
 		{"wal/", "MB", cfg.floorWALMB, func(p point) float64 { return p.wal }},
-		{"xact/", "MB", 16, func(p point) float64 { return p.xact }},
+		// xact/ se recorta por archivos enteros de 32 MB: el piso son dos archivos (uno llenándose y el que espera
+		// al checkpoint), para no confundir el llenado de un archivo con una fuga.
+		{"xact/", "MB", 64, func(p point) float64 { return p.xact }},
 	}
 	var out []growth
 	for _, d := range defs {

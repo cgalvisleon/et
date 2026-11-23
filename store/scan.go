@@ -84,6 +84,7 @@ type scanner struct {
 	mode   scanMode
 	r      scanRange
 	cursor *btree.Cursor
+	buf    []byte // scanBorrowed: el valor descomprimido, que se reutiliza de versión en versión
 }
 
 /**
@@ -176,7 +177,7 @@ func (sc *scanner) locked(f func() error) error {
 
 /**
 * emit llama a fn con una versión: sin valor (scanKeys), el de la hoja, o el leído de su cadena de desborde (con el
-* snapshot y el store tomados, como la hoja).
+* snapshot y el store tomados, como la hoja); un valor comprimido se entrega descomprimido (prestado: en sc.buf).
 * @param ver btree.Version, fn func(id string, data []byte) (bool, error)
 * @return bool: si sigue, error
 **/
@@ -192,6 +193,18 @@ func (sc *scanner) emit(ver btree.Version, fn func(id string, data []byte) (bool
 		})
 		if err != nil {
 			return false, err
+		}
+	case ver.Flags&btree.EntryCompressed != 0:
+		var dst []byte
+		if sc.mode == scanBorrowed {
+			dst = sc.buf
+		}
+		var err error
+		if data, err = decompress(dst, ver.Value); err != nil {
+			return false, sc.s.e.readError(err)
+		}
+		if sc.mode == scanBorrowed {
+			sc.buf = data
 		}
 	default:
 		data = ver.Value

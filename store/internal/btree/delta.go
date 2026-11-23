@@ -7,39 +7,52 @@ import (
 
 // Largos fijos de los deltas (formatos en doc.go, «Registros del WAL»).
 const (
-	blockDeltaSize       = 4     // un número de bloque
-	offsetDeltaSize      = 2     // un número de ítem
-	splitLeftHeaderSize  = 4 + 2 // right(4) keep(2)
-	splitRightHeaderSize = 16    // prev(4) next(4) level(4) flags(2) count(2)
-	newRootHeaderSize    = 4 + 4 // level(4) left(4)
-	metaRootDeltaSize    = 4 + 4 // root(4) level(4)
-	initMetaDeltaSize    = 4 + 8 // root(4) frozenXID(8); el formato viejo trae solo root(4)
-	frozenDeltaSize      = 8     // frozenXID(8)
-	itemLenSize          = 2     // largo de cada ítem en el delta de la derecha
+	blockDeltaSize       = 4         // un número de bloque
+	offsetDeltaSize      = 2         // un número de ítem
+	splitLeftHeaderSize  = 4 + 2     // right(4) keep(2)
+	splitRightHeaderSize = 16        // prev(4) next(4) level(4) flags(2) count(2)
+	newRootHeaderSize    = 4 + 4     // level(4) left(4)
+	metaRootDeltaSize    = 4 + 4     // root(4) level(4)
+	initMetaDeltaSize    = 4 + 8     // root(4) frozenXID(8); el formato viejo trae solo root(4)
+	initMetaFlagsSize    = 4 + 8 + 4 // root(4) frozenXID(8) flags(4): formato 2
+	frozenDeltaSize      = 8         // frozenXID(8)
+	frozenFlagsDeltaSize = 8 + 4     // frozenXID(8) flags(4): formato 2
+	itemLenSize          = 2         // largo de cada ítem en el delta de la derecha
+	layoutDeltaSize      = 2         // layout(2): la hoja raíz de KindInitStore es de la forma 2 (formato 2)
 )
+
+// layoutDelta arma el delta de la hoja raíz de un store nuevo del formato 2: su versión de página.
+func layoutDelta(v int) []byte {
+	return le.AppendUint16(nil, uint16(v))
+}
 
 // blockDelta arma el delta de un número de bloque.
 func blockDelta(b page.BlockNumber) []byte {
 	return le.AppendUint32(nil, uint32(b))
 }
 
-// initMetaDelta arma el delta de la meta de un store nuevo: la raíz y el frozenXID.
-func initMetaDelta(root page.BlockNumber, frozen page.XID) []byte {
-	return le.AppendUint64(blockDelta(root), uint64(frozen))
+// initMetaDelta arma el delta de la meta de un store nuevo: la raíz, el frozenXID y sus marcas (formato 2).
+func initMetaDelta(root page.BlockNumber, frozen page.XID, flags MetaFlags) []byte {
+	return le.AppendUint32(le.AppendUint64(blockDelta(root), uint64(frozen)), uint32(flags))
 }
 
 /**
-* parseInitMeta lee el delta de la meta de KindInitStore: root(4) y frozenXID(8), o solo root(4) (formato anterior al
-* congelado: frozenXID 0, el store retiene el truncado hasta su primera limpieza completa).
+* parseInitMeta lee el delta de la meta de KindInitStore: root(4), frozenXID(8) y flags(4) (formato 2); root(4) y
+* frozenXID(8) (formato 1: sin marcas, sus hojas son de la forma 1); o solo root(4) (anterior al congelado:
+* frozenXID 0, el store retiene el truncado hasta su primera limpieza completa).
 * @param delta []byte: ya validado por checkFixedDelta
-* @return page.BlockNumber, page.XID
+* @return page.BlockNumber, page.XID, MetaFlags
 **/
-func parseInitMeta(delta []byte) (page.BlockNumber, page.XID) {
+func parseInitMeta(delta []byte) (page.BlockNumber, page.XID, MetaFlags) {
 	root := page.BlockNumber(le.Uint32(delta))
 	if len(delta) < initMetaDeltaSize {
-		return root, 0
+		return root, 0, 0
 	}
-	return root, page.XID(le.Uint64(delta[blockDeltaSize:]))
+	frozen := page.XID(le.Uint64(delta[blockDeltaSize:]))
+	if len(delta) < initMetaFlagsSize {
+		return root, frozen, 0
+	}
+	return root, frozen, MetaFlags(le.Uint32(delta[initMetaDeltaSize:]))
 }
 
 // itemDelta arma el delta de un ítem nuevo: el número donde va y el ítem.
@@ -55,13 +68,21 @@ func splitLeftDelta(right page.BlockNumber, keep int, highKey []byte) []byte {
 	return append(b, highKey...)
 }
 
-// splitRightDelta arma el delta de la página derecha nueva: su espacio especial y todos sus ítems, en orden.
-func splitRightDelta(o page.Opaque, items [][]byte) []byte {
+// splitRightForm2 es el bit 15 de count en el delta de la derecha nueva: es una hoja de la forma 2 (formato 2).
+const splitRightForm2 = 0x8000
+
+// splitRightDelta arma el delta de la página derecha nueva: su espacio especial y todos sus ítems, en orden; form2
+// marca una hoja de la forma 2.
+func splitRightDelta(o page.Opaque, items [][]byte, form2 bool) []byte {
+	count := uint16(len(items))
+	if form2 {
+		count |= splitRightForm2
+	}
 	b := le.AppendUint32(nil, uint32(o.Prev))
 	b = le.AppendUint32(b, uint32(o.Next))
 	b = le.AppendUint32(b, o.Level)
 	b = le.AppendUint16(b, o.Flags)
-	b = le.AppendUint16(b, uint16(len(items)))
+	b = le.AppendUint16(b, count)
 	for _, it := range items {
 		b = le.AppendUint16(b, uint16(len(it)))
 		b = append(b, it...)
@@ -92,6 +113,7 @@ type splitLeft struct {
 type splitRight struct {
 	opaque page.Opaque
 	items  [][]byte
+	form2  bool // hoja de la forma 2
 }
 
 // newRootData es el delta de la raíz nueva, ya leído.
@@ -101,19 +123,44 @@ type newRootData struct {
 	rightPivot []byte
 }
 
+// leafWriteForm2 es el bit 15 del número de ítem del delta de KindLeafWrite: la entrada es de la forma 2, con el id
+// entero (formato 2; sin él, la entrada es de la forma 1 y va en una hoja de la forma 1).
+const leafWriteForm2 = 0x8000
+
+// writeFlags son las marcas que puede traer la entrada de la forma 2 de una escritura.
+const writeFlags = EntryTombstone | EntryOverflow | EntryCompressed
+
+// leafWriteDelta arma el delta de KindLeafWrite de una hoja de la forma 2: el número con leafWriteForm2 y la entrada.
+func leafWriteDelta(off page.OffsetNumber, item []byte) []byte {
+	return append(le.AppendUint16(nil, uint16(off)|leafWriteForm2), item...)
+}
+
 /**
-* parseLeafWrite lee el delta de KindLeafWrite: el número del ítem y la entrada.
+* parseLeafWrite lee el delta de KindLeafWrite: el número del ítem, la entrada y su forma. La de la forma 2 lleva el
+* id entero (el flujo lógico la lee sin la página) y solo marcas de escritura.
 * @param delta []byte
-* @return page.OffsetNumber, []byte, error: ErrBadRecord
+* @return page.OffsetNumber, entry: la entrada del delta (en la forma 2, con pre vacío y el id entero), error:
+* ErrBadRecord
 **/
-func parseLeafWrite(delta []byte) (page.OffsetNumber, []byte, error) {
-	off, item, err := parseItemDelta(wal.KindLeafWrite, delta)
-	if err == nil {
-		if _, perr := parseEntry(item); perr != nil {
-			err = badRecord(wal.KindLeafWrite, perr.Error())
-		}
+func parseLeafWrite(delta []byte) (page.OffsetNumber, entry, error) {
+	if len(delta) <= offsetDeltaSize || le.Uint16(delta)&^leafWriteForm2 == 0 {
+		return 0, entry{}, badRecord(wal.KindLeafWrite, "bad item delta")
 	}
-	return off, item, err
+	raw, item := le.Uint16(delta), delta[offsetDeltaSize:]
+	var e entry
+	var err error
+	if raw&leafWriteForm2 != 0 {
+		e, err = parseEntry2(item, nil)
+		if err == nil && (e.flags()&^writeFlags != 0 || e.hdrLen() != entry2Header) {
+			err = corrupt("leaf write with flags %#x", e.flags())
+		}
+	} else {
+		e, err = parseEntry(item)
+	}
+	if err != nil {
+		return 0, entry{}, badRecord(wal.KindLeafWrite, err.Error())
+	}
+	return page.OffsetNumber(raw &^ leafWriteForm2), e, nil
 }
 
 /**
@@ -174,7 +221,9 @@ func parseSplitRight(delta []byte) (splitRight, error) {
 		Level: le.Uint32(delta[8:]),
 		Flags: le.Uint16(delta[12:]),
 	}}
-	count, rest := int(le.Uint16(delta[14:])), delta[splitRightHeaderSize:]
+	raw, rest := le.Uint16(delta[14:]), delta[splitRightHeaderSize:]
+	count := int(raw &^ splitRightForm2)
+	d.form2 = raw&splitRightForm2 != 0
 	for range count {
 		if len(rest) < itemLenSize {
 			return splitRight{}, badRecord(wal.KindSplit, "right delta cut")
@@ -188,7 +237,36 @@ func parseSplitRight(delta []byte) (splitRight, error) {
 	if len(rest) != 0 || count == 0 || d.opaque.Prev <= MetaBlock || d.opaque.Flags&(notTreePage|ignoredPage) != 0 {
 		return splitRight{}, badRecord(wal.KindSplit, "bad right delta")
 	}
+	if d.form2 && !rightPrefixOk(d) {
+		return splitRight{}, badRecord(wal.KindSplit, "bad right leaf of form 2")
+	}
 	return d, nil
+}
+
+/**
+* rightPrefixOk dice si la derecha nueva de la forma 2 es una hoja con su ítem de prefijo en su lugar (después de la
+* clave alta, si tiene) y entradas de la forma 2 sanas.
+* @param d splitRight
+* @return bool
+**/
+func rightPrefixOk(d splitRight) bool {
+	at := 0
+	if d.opaque.Next != 0 {
+		at = 1
+	}
+	if d.opaque.Flags&page.OpaqueLeaf == 0 || d.opaque.Level != 0 || len(d.items) <= at {
+		return false
+	}
+	v, err := parsePivot(d.items[at])
+	if err != nil || v.downlink() != 0 || le.Uint16(v[offPivotFlags:]) != 0 || len(v)-PivotHeaderSize > MaxPrefixLen {
+		return false
+	}
+	for _, it := range d.items[at+1:] { // sus entradas, de la forma 2 con ese prefijo
+		if _, err := parseEntry2(it, v[PivotHeaderSize:]); err != nil {
+			return false
+		}
+	}
+	return true
 }
 
 /**
@@ -218,6 +296,10 @@ func checkDelta(kind wal.Kind, i int, delta []byte) error {
 	switch {
 	case kind == wal.KindLeafWrite:
 		_, _, err = parseLeafWrite(delta)
+	case kind == wal.KindLeafRewrite:
+		if len(delta) != rewriteDeltaSize || le.Uint16(delta) > MaxPrefixLen {
+			err = badRecord(kind, "bad rewrite delta")
+		}
 	case kind == wal.KindInsertPivot && i == 0:
 		_, _, err = parseInsertPivot(delta)
 	case kind == wal.KindSplit && i == 0:
@@ -241,6 +323,10 @@ func checkDelta(kind wal.Kind, i int, delta []byte) error {
 	case kind == wal.KindUnlinkPage:
 		if len(delta) != blockDeltaSize || i < 0 || i > roleLeaf {
 			err = badRecord(kind, "bad delta length")
+		} else if i == roleLeft && le.Uint32(delta) == 0 {
+			// La borrada nunca es la de más a la derecha: su izquierda no puede quedar sin hermana derecha (con una
+			// hoja de la forma 2 sería además leer su clave alta como ítem de prefijo)
+			err = badRecord(kind, "left sibling without a right link")
 		}
 	case kind == wal.KindRecyclePage:
 		if (i == 0 && len(delta) != recycleMetaSize) || (i != 0 && len(delta) != blockDeltaSize) {
@@ -267,10 +353,21 @@ func checkFixedDelta(kind wal.Kind, i int, delta []byte) error {
 	switch {
 	case kind == wal.KindInitStore && i == 0 && len(delta) == initMetaDeltaSize:
 		want = initMetaDeltaSize
+	case kind == wal.KindInitStore && i == 0 && len(delta) == initMetaFlagsSize:
+		if MetaFlags(le.Uint32(delta[initMetaDeltaSize:]))&^knownMetaFlags != 0 {
+			return badRecord(kind, "unknown meta flags")
+		}
+		want = initMetaFlagsSize
 	case kind == wal.KindInitStore && i == 0, kind == wal.KindSplit:
 		want = blockDeltaSize
+	case kind == wal.KindInitStore && i == 1 && len(delta) > 0:
+		if len(delta) != layoutDeltaSize || le.Uint16(delta) != page.LayoutVersion2 {
+			return badRecord(kind, "bad root layout")
+		}
+		return nil
 	case kind == wal.KindSetFrozen:
-		if len(delta) != frozenDeltaSize {
+		if len(delta) != frozenDeltaSize && (len(delta) != frozenFlagsDeltaSize ||
+			MetaFlags(le.Uint32(delta[frozenDeltaSize:]))&^knownMetaFlags != 0) {
 			return badRecord(kind, "bad delta length")
 		}
 		return nil

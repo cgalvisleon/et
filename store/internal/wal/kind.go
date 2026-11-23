@@ -31,6 +31,9 @@ const (
 	KindMarkHalfDead Kind = 24 // hoja vacía «medio muerta» y su enlace quitado del padre del subárbol
 	KindUnlinkPage   Kind = 25 // página desenganchada de sus hermanas, marcada borrada y apilada en la meta
 	KindRecyclePage  Kind = 26 // página borrada que ya nadie puede ver, de la pila de la meta a la lista de libres
+
+	// Formato 2 (tarea 134): hoja reescrita en la forma 2 (migración desde el formato 1, prefijo acortado).
+	KindLeafRewrite Kind = 27
 )
 
 // De overflow (32–39).

@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
@@ -25,6 +24,12 @@ type Conn struct {
 	events map[string]*nats.Subscription
 	keyed  map[string]*nats.Subscription
 	mutex  *sync.RWMutex
+}
+
+type Params struct {
+	Host     string
+	User     string
+	Password string
 }
 
 /**
@@ -60,35 +65,32 @@ func init() {
 * New: Opens the NATS connection from NATS_HOST, NATS_USER and NATS_PASSWORD.
 * @return *Conn, error
 **/
-func New() (*Conn, error) {
+func New(params Params) (*Conn, error) {
 	if !slices.Contains([]string{"linux", "darwin", "windows"}, oS) {
 		return nil, logs.Alertf(MSG_UNSUPPORTED_OS, oS)
 	}
 
-	host := envar.GetStr("NATS_HOST", "")
-	if !utility.ValidStr(host, 0, []string{}) {
+	if !utility.ValidStr(params.Host, 0, []string{}) {
 		return nil, logs.Alertf(msg.MSG_ATRIB_REQUIRED, "host")
 	}
 
-	user := envar.GetStr("NATS_USER", "")
-	password := envar.GetStr("NATS_PASSWORD", "")
 	opts := []nats.Option{
-		nats.UserInfo(user, password),
+		nats.UserInfo(params.User, params.Password),
 		nats.ReconnectWait(2 * time.Second),
 		nats.MaxReconnects(-1),
 		nats.ReconnectHandler(func(nc *nats.Conn) {
-			logs.Logf(packageName, `Reconnected host:%s`, host)
+			logs.Logf(packageName, `Reconnected host:%s`, params.Host)
 		}),
 		nats.ClosedHandler(func(nc *nats.Conn) {
-			logs.Logf(packageName, `Closed host:%s`, host)
+			logs.Logf(packageName, `Closed host:%s`, params.Host)
 		}),
 	}
-	client, err := nats.Connect(host, opts...)
+	client, err := nats.Connect(params.Host, opts...)
 	if err != nil {
 		return nil, err
 	}
 
-	logs.Logf("nats", `Connected host:%s`, host)
+	logs.Logf("nats", `Connected host:%s`, params.Host)
 
 	return &Conn{
 		id:     utility.UUID(),

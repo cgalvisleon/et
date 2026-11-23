@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
@@ -52,7 +53,11 @@ func Load() error {
 	}
 
 	var err error
-	conn, err = New()
+	conn, err = New(Params{
+		Host:     envar.GetStr("NATS_HOST", ""),
+		User:     envar.GetStr("NATS_USER", ""),
+		Password: envar.GetStr("NATS_PASSWORD", ""),
+	})
 	if err != nil {
 		return err
 	}

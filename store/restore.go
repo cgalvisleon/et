@@ -65,7 +65,7 @@ func encodeLabel(l backupLabel) []byte {
 * @return backupLabel, bool: false si el largo, el magic, la versión o el crc no son los del formato
 **/
 func decodeLabel(b []byte) (backupLabel, bool) {
-	if len(b) != backupLabelSize || le.Uint32(b[0:]) != backupLabelMagic || le.Uint32(b[4:]) != control.FormatVersion ||
+	if len(b) != backupLabelSize || le.Uint32(b[0:]) != backupLabelMagic || !wal.Readable(le.Uint32(b[4:])) ||
 		le.Uint32(b[60:]) != crc32.Checksum(b[:60], crcTable) {
 		return backupLabel{}, false
 	}

@@ -5,8 +5,11 @@ import "encoding/binary"
 // le es el orden de bytes de todo el formato.
 var le = binary.LittleEndian
 
-// pageSizeVersion es el valor de pd_pagesize_version de una página de este formato.
+// pageSizeVersion es el valor de pd_pagesize_version con que Init deja una página.
 const pageSizeVersion = Size | LayoutVersion
+
+// versionMask son los bits de la versión en pd_pagesize_version (el tamaño es múltiplo de 256, como en PostgreSQL).
+const versionMask = 0xFF
 
 // validFlags son las marcas de pd_flags que el formato conoce; cualquier otra es daño.
 const validFlags = FlagHasFreeLines | FlagPageFull | FlagAllVisible
@@ -29,6 +32,27 @@ func (p Page) Init(specialSize int) error {
 	p.setU16(OffUpper, special)
 	p.setU16(OffSpecial, special)
 	p.setU16(OffPageSizeVersion, pageSizeVersion)
+	return nil
+}
+
+/**
+* LayoutVersion lee la versión de la forma de la página (los bits bajos de pd_pagesize_version).
+* @return int
+**/
+func (p Page) LayoutVersion() int {
+	return int(le.Uint16(p[OffPageSizeVersion:]) & versionMask)
+}
+
+/**
+* SetLayoutVersion cambia la versión de la forma de una página iniciada.
+* @param v int: LayoutVersion o LayoutVersion2
+* @return error: ErrCorrupt si no es una versión conocida
+**/
+func (p Page) SetLayoutVersion(v int) error {
+	if v != LayoutVersion && v != LayoutVersion2 {
+		return corrupt("layout version %d", v)
+	}
+	p.setU16(OffPageSizeVersion, Size|v)
 	return nil
 }
 
@@ -127,7 +151,7 @@ func (p Page) checkHeader() error {
 	if len(p) != Size {
 		return ErrSize
 	}
-	if v := le.Uint16(p[OffPageSizeVersion:]); v != pageSizeVersion {
+	if v := le.Uint16(p[OffPageSizeVersion:]); v != Size|LayoutVersion && v != Size|LayoutVersion2 {
 		return corrupt("pd_pagesize_version %#x", v)
 	}
 	if f := p.Flags(); f&^validFlags != 0 {

@@ -53,6 +53,7 @@ const (
 	EntryXidAborted   EntryFlags = 1 << 3 // marca: su transacción abortó
 	EntryFrozen       EntryFlags = 1 << 4 // congelada: confirmada y visible para todos, sin consultar el archivo de estados
 	EntryFreeing      EntryFlags = 1 << 5 // versión muerta cuya cadena de desborde se está liberando (pregunta 58)
+	EntryCompressed   EntryFlags = 1 << 6 // formato 2: el valor (en línea o en desborde) está comprimido por el motor
 )
 
 // hintFlags son las marcas de visibilidad que pone una lectura (KindSetHints).
@@ -88,11 +89,12 @@ type Latest struct {
 
 // Write es una versión a escribir.
 type Write struct {
-	XID       page.XID
-	Tombstone bool
-	Value     []byte        // en línea
-	Overflow  *overflow.Ref // o ya escrito en desborde
-	Commit    bool          // operación suelta: el registro lleva FlagCommit
+	XID        page.XID
+	Tombstone  bool
+	Value      []byte        // en línea
+	Overflow   *overflow.Ref // o ya escrito en desborde
+	Compressed bool          // el valor (en línea o en desborde) está comprimido: la entrada lleva EntryCompressed
+	Commit     bool          // operación suelta: el registro lleva FlagCommit
 
 	// Snapshot de la transacción (nil en una operación suelta, Read Committed): si la última confirmada no es
 	// visible para él, Write devuelve el error de serialización.
@@ -179,6 +181,11 @@ type VacuumStats struct {
 	HalfDead int
 	Deleted  int
 	Recycled int
+
+	// Formato 2 (tarea 134): hojas de la forma 1 reescritas en la forma 2, y si al terminar todas las hojas del
+	// store son de la forma 2 (la meta lo anota: las pasadas siguientes vuelven a saltar hojas por el mapa).
+	Rewritten   int
+	LeavesForm2 bool
 }
 
 // Tree es el árbol de un store.

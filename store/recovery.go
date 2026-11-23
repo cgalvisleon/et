@@ -79,6 +79,7 @@ func (e *Engine) recover() error {
 		replica: e.cfg.replica, sample: ctl.FrozenXID}
 	opts := e.cfg.wal
 	opts.StopLSN = e.cfg.stopLSN
+	opts.Upgrade = !e.cfg.replica // un directorio del formato 1 sigue en un segmento del 2 (formato 2, doc.go)
 	clean := !fresh && !restoring && !e.cfg.replica && e.cfg.stopLSN == 0 && ctl.State == control.StateShutdown
 	if clean {
 		opts.CleanEnd = ctl.CheckpointLSN + 1 // el WAL termina en el checkpoint de Close (tarea 109)

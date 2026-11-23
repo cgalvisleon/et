@@ -121,6 +121,10 @@ func (s *Store) freezeStore(horizon page.XID) error {
 	st, err := s.tree.Vacuum(opts)
 	s.e.metrics.pagesDeleted.Add(int64(st.Deleted))
 	s.e.metrics.pagesRecycled.Add(int64(st.Recycled))
+	s.e.metrics.leafRewrites.Add(int64(st.Rewritten))
+	if err == nil {
+		s.e.leaves.note(s.file, st.LeavesForm2)
+	}
 	if errors.Is(err, btree.ErrVacuumStopped) {
 		return nil
 	}

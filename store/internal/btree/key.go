@@ -16,8 +16,11 @@ const MaxLSN page.LSN = math.MaxUint64
 // búsquedas: un pivote (k, l) manda a la derecha toda clave ≥ (k, l). top es mayor que toda clave (recorrer hacia
 // atrás desde el final). before es una clave de búsqueda apenas menor que (id, lsn): baja hasta la página cuya clave
 // alta es (id, lsn), no hasta su hermana derecha (como pivotsearch de nbtree; lo usa el borrado de páginas para hallar
-// el padre). id puede ser una vista dentro de una página: vale mientras la página siga bloqueada.
+// el padre). id puede ser una vista dentro de una página: vale mientras la página siga bloqueada. En una hoja de la
+// forma 2 (formato 2) el id de una entrada es pre + id: pre es el prefijo de la hoja y id el resto (sufijo); las demás
+// claves llevan pre vacío.
 type key struct {
+	pre    []byte
 	id     []byte
 	lsn    page.LSN
 	top    bool
@@ -52,7 +55,7 @@ func compareKeys(a, b key) int {
 	case b.top:
 		return -1
 	}
-	if c := bytes.Compare(a.id, b.id); c != 0 {
+	if c := compareIDs(a, b); c != 0 {
 		return c
 	}
 	if c := cmp.Compare(b.lsn, a.lsn); c != 0 {
@@ -75,11 +78,24 @@ func compareKeys(a, b key) int {
 * @return key: copia, no una vista de la página
 **/
 func separator(last, first key) key {
-	if bytes.Equal(last.id, first.id) {
-		return key{id: bytes.Clone(first.id), lsn: first.lsn}
+	if compareIDs(last, first) == 0 {
+		return key{id: first.appendID(nil), lsn: first.lsn}
 	}
-	n := commonPrefix(last.id, first.id) + 1
-	return key{id: bytes.Clone(first.id[:n]), lsn: MaxLSN}
+	n := commonPrefixKeys(last, first) + 1
+	return key{id: first.appendID(nil)[:n:n], lsn: MaxLSN}
+}
+
+/**
+* commonPrefixKeys es el largo del prefijo común de los ids enteros de dos claves; si las dos traen el mismo pre (dos
+* entradas de una hoja de la forma 2) no arma nada.
+* @param a, b key
+* @return int
+**/
+func commonPrefixKeys(a, b key) int {
+	if len(a.pre) == len(b.pre) && bytes.Equal(a.pre, b.pre) {
+		return len(a.pre) + commonPrefix(a.id, b.id)
+	}
+	return commonPrefix(a.appendID(nil), b.appendID(nil))
 }
 
 /**
@@ -98,10 +114,80 @@ func commonPrefix(a, b []byte) int {
 }
 
 /**
-* cloneKey copia la clave para que sobreviva a soltar la página de donde salió.
+* cloneKey copia la clave para que sobreviva a soltar la página de donde salió; el id queda entero (sin pre).
 * @param k key
 * @return key
 **/
 func cloneKey(k key) key {
-	return key{id: bytes.Clone(k.id), lsn: k.lsn, top: k.top, before: k.before}
+	return key{id: k.appendID(nil), lsn: k.lsn, top: k.top, before: k.before}
+}
+
+/**
+* flatKey es la clave con el id entero en id (pre vacío). Sin pre no copia nada.
+* @param k key
+* @return key
+**/
+func flatKey(k key) key {
+	if len(k.pre) == 0 {
+		return k
+	}
+	return cloneKey(k)
+}
+
+/**
+* appendID agrega a dst el id entero de la clave (pre + id).
+* @param dst []byte
+* @return []byte
+**/
+func (k key) appendID(dst []byte) []byte {
+	if dst == nil {
+		dst = make([]byte, 0, len(k.pre)+len(k.id))
+	}
+	return append(append(dst, k.pre...), k.id...)
+}
+
+/**
+* idEqual dice si el id entero de la clave es b, sin armarlo.
+* @param b []byte
+* @return bool
+**/
+func (k key) idEqual(b []byte) bool {
+	n := len(k.pre)
+	return len(b) == n+len(k.id) && bytes.Equal(b[:n], k.pre) && bytes.Equal(b[n:], k.id)
+}
+
+/**
+* compareIDs ordena por bytes los ids enteros de dos claves (pre + id) sin armarlos.
+* @param a, b key
+* @return int: -1, 0 o 1
+**/
+func compareIDs(a, b key) int {
+	if len(a.pre) == 0 && len(b.pre) == 0 {
+		return bytes.Compare(a.id, b.id)
+	}
+	return compareSplit(a.pre, a.id, b.pre, b.id)
+}
+
+/**
+* compareSplit compara por bytes ap+as con bp+bs, de a trozos.
+* @param ap, as, bp, bs []byte
+* @return int: -1, 0 o 1
+**/
+func compareSplit(ap, as, bp, bs []byte) int {
+	for {
+		if len(ap) == 0 {
+			ap, as = as, nil
+		}
+		if len(bp) == 0 {
+			bp, bs = bs, nil
+		}
+		if len(ap) == 0 || len(bp) == 0 {
+			return cmp.Compare(len(ap), len(bp))
+		}
+		n := min(len(ap), len(bp))
+		if c := bytes.Compare(ap[:n], bp[:n]); c != 0 {
+			return c
+		}
+		ap, bp = ap[n:], bp[n:]
+	}
 }

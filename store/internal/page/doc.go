@@ -15,7 +15,9 @@
 //	 12   2 pd_lower            fin del arreglo de punteros = inicio del espacio libre
 //	 14   2 pd_upper            fin del espacio libre = inicio de los ítems
 //	 16   2 pd_special          inicio del espacio especial (Size si la página no tiene)
-//	 18   2 pd_pagesize_version Size | LayoutVersion
+//	 18   2 pd_pagesize_version Size | la versión de la forma de la página: LayoutVersion (1) en todas las clases,
+//	                            LayoutVersion2 (2) en una hoja del formato 2 (btree; tarea 134). Verify acepta las
+//	                            dos; qué clase puede ser de cuál lo valida quien la lee (btree, overflow, fsm)
 //	 20   8 pd_prune_xid        el xid más viejo que una limpieza podría quitar de la página, 0 si ninguno
 //	 28   4 reservado           en cero
 //
@@ -61,6 +63,8 @@
 //	CheckItems()                     (PageRepairFragmentation)   punteros en su lugar, sin pisarse
 //	AddItem(item)                    PageAddItem sin número      reusa un puntero libre o agrega al final
 //	InsertItem(item, off)            PageAddItem con número      inserta en off y corre los siguientes
+//	InsertItemParts(head, tail, off) (formato 2)                 InsertItem de head + tail sin juntarlas antes
+//	LayoutVersion(), SetLayoutVersion(v)  PageGetPageLayoutVersion  la versión de la forma de la página
 //	Item(off), ItemID(off)           PageGetItem, PageGetItemId  bytes del ítem (sin copiar) y su puntero
 //	ReplaceItem(off, item)           PageIndexTupleOverwrite     cambia el contenido, de cualquier largo
 //	DeleteItem(off), DeleteItems     PageIndexTupleDelete, …Multi… quita ítem y puntero, cierra el hueco
@@ -74,7 +78,7 @@
 // guardan sus datos desde el byte 32 hasta pd_lower (SetLower). Aun sobre punteros dañados ningún método entra en
 // pánico ni lee fuera de la página: Item revisa los límites de cada ítem y las funciones que cambian la página
 // validan el encabezado y el ítem que tocan; quien lee del disco una página de ítems puede llamar a CheckItems.
-// CheckItems no ordena (el árbol lo llama en cada bloqueo, tarea 100): marca las unidades de ItemAlign de cada ítem en
+// CheckItems no ordena (el árbol lo llama una vez por carga de la página en la caché, tareas 100 y 134): marca las unidades de ItemAlign de cada ítem en
 // un mapa de bits de la página de 128 bytes en la pila; FuzzVerify compara su veredicto con el de storedItems.
 //
 // Decisiones a confirmar: LineRedirect se trata como daño (no se usa); un puntero libre debe estar en cero; AddItem

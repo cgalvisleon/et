@@ -1,8 +1,6 @@
 package btree
 
 import (
-	"bytes"
-
 	"github.com/cgalvisleon/et/store/internal/buffer"
 	"github.com/cgalvisleon/et/store/internal/xact"
 )
@@ -117,7 +115,7 @@ func (t *BTree) lookup(id string, snap *xact.Snapshot, withValue bool) (Version,
 			continue
 		}
 		var e entry
-		if e, err = n.entryAt(off); err != nil || !bytes.Equal(e.id(), k.id) {
+		if e, err = n.entryAt(off); err != nil || !e.idEqual(k.id) {
 			break
 		}
 		var ok bool

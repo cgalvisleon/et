@@ -72,7 +72,7 @@ func (m *Manager) freeNext(file smgr.FileNo, block page.BlockNumber) (page.Block
 	h.Lock(buffer.Share)
 	defer release(h)
 	o, err := h.Page().Opaque()
-	if h.Page().IsNew() || err != nil || o.Flags&page.OpaqueFree == 0 {
+	if h.Page().IsNew() || err != nil || o.Flags&page.OpaqueFree == 0 || h.Page().LayoutVersion() != page.LayoutVersion {
 		return 0, blockErr(ErrNotFree, file, block)
 	}
 	return o.Next, nil

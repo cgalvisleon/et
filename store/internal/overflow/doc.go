@@ -52,8 +52,9 @@
 // Cada cadena pertenece a exactamente una versión: se escribe antes de la entrada de hoja que la apunta, con la
 // misma transacción (un KindOverflowWrite con BlockWillInit por página: el delta es el trozo, y es también el cambio
 // lógico que junta un decodificador), y la limpieza la libera (FreeTail, desde el final) al quitar esa versión, también
-// si su transacción abortó. No hay reutilización entre versiones: Update con el mismo valor no escribe. Sin
-// compresión (fase posterior).
+// si su transacción abortó. No hay reutilización entre versiones: Update con el mismo valor no escribe. Desde el
+// formato 2 el motor puede guardar aquí un valor comprimido (EntryCompressed en la entrada): para este paquete son
+// bytes como cualquier otro, y Ref.Len es su largo comprimido (store/doc.go, «Formato 2»).
 //
 // A confirmar: un corte a mitad de Free (no de FreeTail) deja liberadas las primeras páginas y la cadena rota; volver
 // a llamar a Free devuelve ErrBadChain y las páginas restantes quedan huérfanas, como las de un Write cortado a medias

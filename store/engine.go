@@ -118,8 +118,9 @@ type Engine struct {
 
 	replayed int // registros rehechos por Open, sin contar los checkpoints (pruebas, regla 2)
 
-	frozen frozenXIDs // el frozenXID de cada store leído y el del control al abrir (ver frozen.go)
-	heads  headState  // la cota del primer registro de cada lote que escribe (ChangeHead, changes.go)
+	frozen frozenXIDs    // el frozenXID de cada store leído y el del control al abrir (ver frozen.go)
+	leaves leafMigration // los stores con hojas de la forma 1 por reescribir (formato 2, migrate.go)
+	heads  headState     // la cota del primer registro de cada lote que escribe (ChangeHead, changes.go)
 
 	// droppedNames: los stores que borró un lote confirmado, con su xid, mientras quede abierto un snapshot que no
 	// ve ese borrado (pregunta 74, tarea 86): un lote más viejo no puede crear uno con el mismo nombre. Crece con los

@@ -9,6 +9,7 @@ import (
 
 	"github.com/cgalvisleon/et/store/internal/page"
 	"github.com/cgalvisleon/et/store/internal/smgr"
+	"github.com/cgalvisleon/et/store/internal/wal"
 )
 
 // Desplazamientos del encabezado y de cada entrada del catálogo (tabla en doc.go).
@@ -128,7 +129,7 @@ func decodeCatalog(b []byte) (Catalog, error) {
 	if m := le.Uint32(b[catOffMagic:]); m != CatalogMagic {
 		return Catalog{}, fmt.Errorf("%w: magic %08x", ErrBadCatalog, m)
 	}
-	if v := le.Uint32(b[catOffVersion:]); v != FormatVersion {
+	if v := le.Uint32(b[catOffVersion:]); !wal.Readable(v) {
 		return Catalog{}, fmt.Errorf("%w: %w: %d, want %d", ErrBadCatalog, ErrFormatVersion, v, FormatVersion)
 	}
 	if !allZero(b[catOffReserved:CatalogHeaderSize]) {

@@ -133,6 +133,7 @@ const (
 	MSG_FORMAT_NEWER    = "%w: %s has format version %d, newer than the %d this binary reads: upgrade et"
 	MSG_FORMAT_OLDER    = "%w: %s has format version %d, older than the %d this binary reads and not migratable"
 	MSG_FORMAT_CONTROL  = "%w: %w"
+	MSG_COMPRESSED      = "%w: compressed value: %s"
 	MSG_NO_CHECKPOINT   = "%w: the checkpoint record at lsn %d is missing from the WAL"
 	MSG_BAD_RECORD      = "%w: wal record lsn %d kind %d: %s"
 	MSG_NOT_SUPPORTED   = "%w: wal record lsn %d kind %d is not supported yet"
@@ -174,7 +175,7 @@ const (
 
 // Mensajes del informe de Verify y Repair (report.go, verify.go, repair.go).
 const (
-	MSG_REPORT_TOTALS   = "stores %d, pages %d (tree %d, deleted %d, chains %d, free %d, lost %d), versions %d, live ids %d, orphan files %d\n"
+	MSG_REPORT_TOTALS   = "stores %d, pages %d (tree %d, deleted %d, chains %d, free %d, lost %d), versions %d, live ids %d, orphan files %d, leaves of form 1 %d\n"
 	MSG_REPORT_FINDINGS = "findings %d (repaired %d, irreparable %d)\n"
 	MSG_REPORT_OMITTED  = "... and %d more findings\n"
 
@@ -198,6 +199,7 @@ const (
 	MSG_CHECK_DOUBLE_CHAIN  = "page %d of the overflow chain of %.40q already has another owner"
 	MSG_CHECK_DOUBLE_FREE   = "page in the free list already has another owner"
 	MSG_CHECK_CHAIN         = "overflow chain of %.40q (lsn %d): %v"
+	MSG_CHECK_VALUE         = "compressed value of %.40q (lsn %d): %v"
 	MSG_CHECK_FREE_LIST     = "the free list is damaged: %v"
 	MSG_CHECK_STATUS        = "cannot read the status of xid %d: %v"
 	MSG_CHECK_FROZEN        = "%d versions below the store's frozenXID %d are not frozen (first xid %d)"

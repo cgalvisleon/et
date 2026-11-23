@@ -21,8 +21,9 @@ import (
 var errUnlinkCut = errors.New("corte antes de KindUnlinkPage")
 
 // longPrefix hace ids largos con un prefijo común: los separadores no se pueden truncar y las internas tienen pocos
-// enlaces, así un árbol de pocos miles de ids ya tiene tres niveles.
-var longPrefix = strings.Repeat("p", 180)
+// enlaces, así un árbol de pocos miles de ids ya tiene tres niveles. Pasa de MaxPrefixLen: en las hojas de la forma 2
+// cada entrada sigue guardando 251 B del id (las hojas tienen la misma cantidad de entradas que la forma 1 con 180).
+var longPrefix = strings.Repeat("p", 500)
 
 // longID es el id número i con el prefijo largo.
 func longID(i int) string { return fmt.Sprintf("%s%06d", longPrefix, i) }
@@ -118,8 +119,9 @@ func TestPageDeleteAll(t *testing.T) {
 	tr := createTree(t, e)
 	m := model{}
 	fillLong(t, tr, m, 0, 3000)
-	levels := checkTree(t, tr, m).Levels
+	checkTree(t, tr, m)
 	removeLong(t, tr, m, 0, 3000)
+	levels := checkTree(t, tr, m).Levels // las lápidas pueden partir hojas y subir un nivel
 	vacuumAt(t, tr, 2)
 	st := checkTree(t, tr, m)
 	if st.Pages != levels || st.Levels != levels {

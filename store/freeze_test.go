@@ -1,7 +1,6 @@
 package store
 
 import (
-	"encoding/binary"
 	"fmt"
 	"io"
 	"path/filepath"
@@ -80,15 +79,13 @@ func checkLeaves(t testing.TB, s *Store, below page.XID) int {
 		if bits != 0 && p.Flags()&page.FlagAllVisible == 0 {
 			t.Fatalf("store %q leaf %d: bits %d without FlagAllVisible", s.name, blk, bits)
 		}
-		first := page.FirstOffset
-		if o.Next != 0 {
-			first++
+		if o.Flags&(page.OpaqueDeleted|page.OpaqueHalfDead) != 0 {
+			continue
 		}
-		for off := first; off <= p.MaxOffset(); off++ {
-			item, err := p.Item(off)
-			mustOK(t, err)
-			flags := btree.EntryFlags(binary.LittleEndian.Uint32(item[btree.OffEntryFlags:]))
-			xid := page.XID(binary.LittleEndian.Uint64(item[btree.OffEntryXID:]))
+		versions, err := btree.LeafVersions(p)
+		mustOK(t, err)
+		for _, v := range versions {
+			flags, xid := v.Flags, v.XID
 			if flags&btree.EntryFrozen != 0 {
 				frozen++
 			}

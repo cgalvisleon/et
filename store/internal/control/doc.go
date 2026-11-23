@@ -9,13 +9,15 @@
 // Dos copias de CopySize = 512 bytes: la A en el byte 0 y la B en el 512. Cada escritura va a la copia seq % 2 (la
 // que no tiene la última versión) y termina con Sync: si un corte rompe la que se escribía, queda la otra entera.
 // Al leer gana la copia válida (magia, versión y CRC correctos) con mayor seq; si ninguna es válida, Open falla. Una
-// copia con su CRC y su magia válidos pero de otra versión del formato da ErrFormatVersion aunque la otra copia valga
-// (tarea 54: no se vuelve atrás de lo que escribió otro binario); el catálogo de otra versión, también.
+// copia con su CRC y su magia válidos pero de una versión que este binario no lee da ErrFormatVersion aunque la otra
+// copia valga (tarea 54: no se vuelve atrás de lo que escribió otro binario); el catálogo de otra versión, también.
+// Desde el formato 2 se leen las versiones de MinFormatVersion (1) a FormatVersion (2) (wal.Readable) y se escribe
+// siempre FormatVersion: el primer Write o Save de un directorio del 1 lo deja en 2 (store/doc.go, «Formato 2»).
 // Cada copia, little-endian:
 //
 //	off tam campo
 //	  0   4 magic            ControlMagic ("ETCT")
-//	  4   4 version          FormatVersion
+//	  4   4 version          FormatVersion al escribir; se lee de MinFormatVersion a FormatVersion
 //	  8   8 seq              número de escritura del control; crece de a uno
 //	 16   4 state            StateShutdown, StateInProduction, StateInRecovery
 //	 20   4 pageSize         page.Size; otro valor = Open falla
@@ -40,7 +42,7 @@
 //
 //	encabezado (CatalogHeaderSize = 32)
 //	  0   4 magic       CatalogMagic ("ETCG")
-//	  4   4 version     FormatVersion
+//	  4   4 version     FormatVersion al escribir; se lee de MinFormatVersion a FormatVersion
 //	  8   4 nextFileNo  el próximo FileNo a asignar (nunca se reutiliza uno)
 //	 12   4 entryCount
 //	 16   8 countLSN    los contadores cuentan todas las confirmaciones con lsn < countLSN

@@ -51,9 +51,11 @@ type WAL struct {
 	failure      error         // primer error de escritura o fsync: el WAL queda inutilizable
 	published    atomic.Uint64 // todos los lsn ≤ published están escritos en el archivo; se escribe con pubMu
 
-	// drainMu: una tanda de escritura a la vez (drain); scratch es su búfer, de tamaño fijo (maxRun).
+	// drainMu: una tanda de escritura a la vez (drain); scratch es su búfer, de tamaño fijo (maxRun), y run la lista
+	// de la tanda (nextRun la reusa: sin una asignación por tanda).
 	drainMu sync.Mutex
 	scratch []byte
+	run     []*reservation
 
 	// syncMu: qué está en disco; lo toma solo el líder del fsync (WaitDurable), rotate y Close.
 	syncMu  sync.Mutex
@@ -161,7 +163,35 @@ func Open(fsys vfs.FS, dir string, opts Options, redo Position, fn func(rec *Rec
 	w.published.Store(last)
 	w.durable.Store(last)
 	w.redo.Store(&redo)
+	if opts.Upgrade {
+		if err := w.upgrade(end); err != nil {
+			file.Close()
+			return nil, end, err
+		}
+	}
 	return w, end, nil
+}
+
+/**
+* upgrade deja atrás el segmento activo de Open si su encabezado es de una versión anterior (Options.Upgrade): sin
+* registros le reescribe el encabezado con FormatVersion (y fsync); con registros lo sella y sigue en uno nuevo.
+* @param end Position: el final válido, en el segmento activo
+* @return error
+**/
+func (w *WAL) upgrade(end Position) error {
+	h, state, err := readHeader(w.active.file)
+	if err != nil || state != headerValid || h.Version >= FormatVersion {
+		return err
+	}
+	if end.Offset == SegmentHeaderSize {
+		if _, err := w.active.file.WriteAt(encodeHeader(end.Segment, end.LSN), 0); err != nil {
+			return err
+		}
+		return w.active.file.Sync()
+	}
+	w.writeMu.Lock()
+	defer w.writeMu.Unlock()
+	return w.rotate()
 }
 
 /**
@@ -304,6 +334,7 @@ func (w *WAL) drain() error {
 		w.published.Store(uint64(run[len(run)-1].lsn))
 		w.pubCond.Broadcast()
 		w.pubMu.Unlock()
+		clear(run) // w.run se reusa: que no retenga las reservas ya escritas
 	}
 }
 
@@ -315,7 +346,8 @@ func (w *WAL) nextRun() []*reservation {
 	if w.failure != nil {
 		return nil
 	}
-	var run []*reservation
+	run := w.run[:0]
+	defer func() { w.run = run }()
 	size := int64(0)
 	for next := page.LSN(w.published.Load()) + 1; ; next++ {
 		r := w.pending[next]

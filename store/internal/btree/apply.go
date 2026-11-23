@@ -1,6 +1,8 @@
 package btree
 
 import (
+	"bytes"
+
 	"github.com/cgalvisleon/et/store/internal/page"
 	"github.com/cgalvisleon/et/store/internal/wal"
 )
@@ -20,16 +22,18 @@ func applyBlock(kind wal.Kind, i int, p page.Page, delta []byte, lsn page.LSN) e
 	}
 	switch {
 	case kind == wal.KindInitStore && i == 0:
-		root, frozen := parseInitMeta(delta)
-		return initMetaPage(p, root, frozen)
+		root, frozen, flags := parseInitMeta(delta)
+		return initMetaPage(p, root, frozen, flags)
 	case kind == wal.KindSetFrozen:
 		return applyMetaFrozen(p, delta)
 	case kind == wal.KindInitStore:
-		return initTreePage(p, page.Opaque{Flags: page.OpaqueLeaf | page.OpaqueRoot})
+		return initLeaf(p, page.Opaque{Flags: page.OpaqueLeaf | page.OpaqueRoot}, len(delta) > 0)
 	case kind == wal.KindLeafWrite:
 		return applyLeafWrite(p, delta, lsn)
 	case kind == wal.KindLeafVacuum:
 		return applyLeafVacuum(p, delta)
+	case kind == wal.KindLeafRewrite:
+		return applyLeafRewrite(p, delta)
 	case kind == wal.KindSetHints:
 		return applySetHints(p, delta)
 	case kind == wal.KindSplit && i == 0:
@@ -114,22 +118,57 @@ func initTreePage(p page.Page, o page.Opaque) error {
 
 /**
 * applyLeafWrite inserta la entrada del delta en su número y le pone el lsn del registro: la clave (id, lsn) recién
-* existe acá, con la hoja bloqueada desde antes de reservar. Apaga page.FlagAllVisible: la versión nueva no es visible
-* para todos (su bit del mapa de visibilidad se borró antes, en un KindVMClear anterior).
+* existe acá, con la hoja bloqueada desde antes de reservar. Una entrada de la forma 1 va en una hoja de la forma 1 (un
+* registro del formato 1); una de la forma 2 en una de la forma 2, sin el prefijo de la hoja (que el id tiene que
+* tener). Apaga page.FlagAllVisible: la versión nueva no es visible para todos (su bit del mapa de visibilidad se borró
+* antes, en un KindVMClear anterior).
 * @param p page.Page, delta []byte, lsn page.LSN
 * @return error
 **/
 func applyLeafWrite(p page.Page, delta []byte, lsn page.LSN) error {
-	off, item, _ := parseLeafWrite(delta)
-	if err := insertAt(wal.KindLeafWrite, p, off, item); err != nil {
+	off, e, _ := parseLeafWrite(delta)
+	o, err := p.Opaque()
+	if err != nil || o.Flags&page.OpaqueLeaf == 0 {
+		return badRecord(wal.KindLeafWrite, "not a leaf")
+	}
+	n, err := pageNode(p, o)
+	if err != nil || n.v2 != e.v2 {
+		return badRecord(wal.KindLeafWrite, "entry and leaf of different forms")
+	}
+	if off < n.firstData() {
+		return badRecord(wal.KindLeafWrite, "item would go before the high key")
+	}
+	if !n.v2 {
+		if err := p.InsertItem(e.b, off); err != nil {
+			return badRecord(wal.KindLeafWrite, err.Error())
+		}
+		stored, _ := p.Item(off)
+		le.PutUint64(stored[OffEntryLSN:], uint64(lsn))
+	} else if err := insertForm2(p, off, e, n.pre, lsn); err != nil {
 		return err
 	}
 	p.SetFlags(p.Flags() &^ page.FlagAllVisible)
-	stored, err := p.Item(off)
-	if err != nil {
-		return err
+	return nil
+}
+
+/**
+* insertForm2 guarda en off la entrada de la forma 2 del delta (con el id entero) sin el prefijo de la hoja y con el
+* lsn del registro, sin armarla antes en otro búfer.
+* @param p page.Page, off page.OffsetNumber, e entry: la del delta, pre []byte: el prefijo de la hoja, lsn page.LSN
+* @return error: ErrBadRecord
+**/
+func insertForm2(p page.Page, off page.OffsetNumber, e entry, pre []byte, lsn page.LSN) error {
+	if !bytes.HasPrefix(e.suffix(), pre) {
+		return badRecord(wal.KindLeafWrite, "id without the leaf prefix")
 	}
-	le.PutUint64(stored[OffEntryLSN:], uint64(lsn))
+	var head [entry2Header]byte
+	copy(head[:], e.b[:entry2Header])
+	sfx := len(e.suffix()) - len(pre)
+	le.PutUint32(head[:], e.w0&^(word0LenMask<<word0SuffixShift)|uint32(sfx)<<word0SuffixShift)
+	le.PutUint64(head[off2LSN:], uint64(lsn))
+	if err := p.InsertItemParts(head[:], e.b[entry2Header+len(pre):], off); err != nil {
+		return badRecord(wal.KindLeafWrite, err.Error())
+	}
 	return nil
 }
 
@@ -146,6 +185,9 @@ func insertAt(kind wal.Kind, p page.Page, off page.OffsetNumber, item []byte) er
 	if o.Next != 0 && off <= page.FirstOffset {
 		return badRecord(kind, "item would go before the high key")
 	}
+	if p.LayoutVersion() != page.LayoutVersion {
+		return badRecord(kind, "a pivot never goes in a leaf of form 2")
+	}
 	if err := p.InsertItem(item, off); err != nil {
 		return badRecord(kind, err.Error())
 	}
@@ -155,7 +197,8 @@ func insertAt(kind wal.Kind, p page.Page, off page.OffsetNumber, item []byte) er
 /**
 * applySplitLeft rehace la izquierda de una partición: conserva sus primeros keep ítems de datos, pone la clave alta
 * nueva, enlaza a la derecha nueva y se marca OpaqueIncompleteSplit (el enlace en el padre llega en otro registro).
-* Arma la página de nuevo desde una copia: queda compacta.
+* Arma la página de nuevo desde una copia: queda compacta. Una hoja de la forma 2 se arma con su prefijo nuevo
+* (choosePrefix de las entradas que conserva: igual o más largo que el de antes) y sus entradas recortadas.
 * @param p page.Page, delta []byte
 * @return error
 **/
@@ -165,6 +208,9 @@ func applySplitLeft(p page.Page, delta []byte) error {
 	o, err := old.Opaque()
 	if err != nil {
 		return badRecord(wal.KindSplit, err.Error())
+	}
+	if old.LayoutVersion() == page.LayoutVersion2 {
+		return splitLeft2(p, old, d)
 	}
 	first := page.FirstOffset
 	if o.Next != 0 {
@@ -193,6 +239,29 @@ func applySplitLeft(p page.Page, delta []byte) error {
 }
 
 /**
+* splitLeft2 es applySplitLeft de una hoja de la forma 2: sus primeras keep entradas con la clave alta nueva y el
+* prefijo que eligen (choosePrefix), sin las marcas de la página ni pd_prune_xid (como la forma 1, que se arma con
+* page.Init).
+* @param p, old page.Page: la hoja y su copia de antes, d splitLeft
+* @return error: ErrBadRecord
+**/
+func splitLeft2(p, old page.Page, d splitLeft) error {
+	c, err := readLeafContent(old)
+	if err == nil && d.keep > len(c.entries) {
+		err = corrupt("left keeps more items than it has")
+	}
+	if err != nil {
+		return badRecord(wal.KindSplit, err.Error())
+	}
+	c.entries, c.highKey, c.flags, c.prune = c.entries[:d.keep], d.highKey, 0, 0
+	c.o.Next, c.o.Flags = d.right, c.o.Flags|page.OpaqueIncompleteSplit
+	if err := c.write2(p, choosePrefix(c.firstKey(), c.lastKey())); err != nil {
+		return badRecord(wal.KindSplit, err.Error())
+	}
+	return nil
+}
+
+/**
 * applySplitRight inicia la página derecha nueva con el espacio especial y los ítems del delta.
 * @param p page.Page, delta []byte
 * @return error
@@ -201,6 +270,11 @@ func applySplitRight(p page.Page, delta []byte) error {
 	d, _ := parseSplitRight(delta)
 	if err := initTreePage(p, d.opaque); err != nil {
 		return err
+	}
+	if d.form2 {
+		if err := p.SetLayoutVersion(page.LayoutVersion2); err != nil {
+			return err
+		}
 	}
 	for _, it := range d.items {
 		if _, err := p.AddItem(it); err != nil {

@@ -289,7 +289,7 @@ func encodeArchiveStatus(st archiveStatus) []byte {
 **/
 func decodeArchiveStatus(b []byte) (archiveStatus, bool) {
 	if len(b) != archiveStatusSize || le.Uint32(b[0:]) != archiveStatusMagic ||
-		le.Uint32(b[4:]) != control.FormatVersion || le.Uint32(b[28:]) != crc32.Checksum(b[:28], crcTable) {
+		!wal.Readable(le.Uint32(b[4:])) || le.Uint32(b[28:]) != crc32.Checksum(b[:28], crcTable) {
 		return archiveStatus{}, false
 	}
 	return archiveStatus{archived: le.Uint64(b[8:]), gap: le.Uint64(b[16:])}, true

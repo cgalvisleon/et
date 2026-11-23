@@ -118,7 +118,7 @@ banco, `Stores()` exacto, `Verify` limpio, GC y una medición; cada 30 min adem�
 **Falla si** hay un error inesperado, un dato distinto al modelo, `Verify` sucio, `ReadOnly`, `FrozenAge` > 134.217.728,
 `data/` ÷ datos vivos > 3 (`-max-ratio`, tras el calentamiento) o **crecimiento sostenido**: tras el calentamiento
 (1/6 de la duración, hasta 6 h) la mediana del último tercio de las verificaciones contra la del primero sube más de
-20 % (`-grow`) **y** más que un piso: RSS 64 MB, heap de Go 16 MB, `data/`÷vivos 0,10, `wal/` `MAX_WAL_SIZE` (el WAL oscila hasta ahí entre checkpoints), `xact/` 16 MB.
+20 % (`-grow`) **y** más que un piso: RSS 64 MB, heap de Go 16 MB, `data/`÷vivos 0,10, `wal/` `MAX_WAL_SIZE` (el WAL oscila hasta ahí entre checkpoints), `xact/` 64 MB (se recorta por archivos enteros de 32 MB: uno llenándose más el que espera al checkpoint).
 
 En IA: `nice -n 15`, 2.000 op/s (`SOAK_RATE`), caché 64 MB (`SOAK_CACHE`; los ~130 MB vivos no caben: hay reemplazo),
 `MIN_FREE` antes de arrancar y un vigilante cada minuto: RSS > `SOAK_MAX_RSS_MB` (2048) → SIGTERM; memoria libre de IA

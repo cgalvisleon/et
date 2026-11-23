@@ -83,7 +83,7 @@ func TestCatalogRejectsBytes(t *testing.T) {
 	first := CatalogHeaderSize
 	cases := map[string]func(b []byte) []byte{
 		"magic":           func(b []byte) []byte { b[0] ^= 1; return b },
-		"version":         func(b []byte) []byte { b[catOffVersion] = 2; return b },
+		"version":         func(b []byte) []byte { b[catOffVersion] = FormatVersion + 1; return b },
 		"reserved header": func(b []byte) []byte { b[catOffReserved] = 1; return b },
 		"count too big":   func(b []byte) []byte { le.PutUint32(b[catOffCount:], math.MaxUint32); return b },
 		"count +1":        func(b []byte) []byte { le.PutUint32(b[catOffCount:], 4); return b },

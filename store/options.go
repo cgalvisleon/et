@@ -31,6 +31,9 @@ type Options struct {
 	Archive      *bool // WAL_ARCHIVE: el archivo continuo del WAL (nil: la variable)
 	ArchiveMaxMB int   // WAL_ARCHIVE_MAX_SIZE, en MB (< 0: sin tope)
 	SlotKeepMB   int   // MAX_SLOT_WAL_KEEP_SIZE, en MB (< 0: sin tope)
+
+	Compression    string // STORE_COMPRESSION: s2, zstd, auto u off ("" = la variable)
+	CompressionMin int    // STORE_COMPRESSION_MIN: el largo desde el que se comprime un valor, en bytes
 }
 
 /**
@@ -71,6 +74,12 @@ func (o Options) apply(cfg *config) {
 	}
 	setMB(&cfg.archiveMaxSize, o.ArchiveMaxMB)
 	setMB(&cfg.slotKeepSize, o.SlotKeepMB)
+	if o.Compression != "" {
+		cfg.compress.method = compressMethodOf(o.Compression)
+	}
+	if o.CompressionMin > 0 {
+		cfg.compress.min = o.CompressionMin
+	}
 }
 
 /**

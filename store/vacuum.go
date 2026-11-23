@@ -106,9 +106,9 @@ func (s *Store) freeDead(v btree.Version) error {
 
 /**
 * vacuumer es la limpieza de fondo (como autovacuum, con un criterio simple): cada VACUUM_INTERVAL, si hubo al menos
-* VACUUM_THRESHOLD escrituras desde la última (0 = en cada vuelta) o se asignaron al menos vacuumXids xids (así el
-* congelado y el truncado del archivo de estados siguen también con transacciones que no escriben), limpia todos los
-* stores. Termina con Close o cuando el motor quedó inutilizable; Close la espera antes del checkpoint final.
+* VACUUM_THRESHOLD escrituras desde la última (0 = en cada vuelta), se asignaron al menos vacuumXids xids (así el
+* congelado y el truncado del archivo de estados siguen también con transacciones que no escriben) o queda una
+* migración de hojas al formato 2 por terminar (leafMigration.due), limpia todos los stores. Termina con Close o cuando el motor quedó inutilizable; Close la espera antes del checkpoint final.
 **/
 func (e *Engine) vacuumer() {
 	defer e.bg.Done()
@@ -121,12 +121,17 @@ func (e *Engine) vacuumer() {
 			return
 		case <-ticker.C:
 			next := e.txs.NextXID()
-			if e.writes.Load()-e.metrics.vacuumWrites.Load() < e.cfg.vacuumWrites && uint64(next-lastXID) < e.cfg.vacuumXids {
+			if e.writes.Load()-e.metrics.vacuumWrites.Load() < e.cfg.vacuumWrites && uint64(next-lastXID) < e.cfg.vacuumXids &&
+				!e.leaves.due() {
 				continue
 			}
 			lastXID = next
-			if err := e.vacuum(); errors.Is(err, ErrClosed) || errors.Is(err, ErrFailed) {
+			err := e.vacuum()
+			if errors.Is(err, ErrClosed) || errors.Is(err, ErrFailed) {
 				return
+			}
+			if err == nil {
+				e.leaves.fromV1.Store(false) // una pasada entera: cada store abierto ya anotó si quedó migrado
 			}
 		}
 	}

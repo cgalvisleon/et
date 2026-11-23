@@ -221,8 +221,8 @@ func TestFreezeMinAge(t *testing.T) {
 	m := model{}
 	rng := rand.New(rand.NewSource(3))
 	next := fillCommitted(t, tr, status, 100, 600, m)
-	for i := range 40 { // abortadas por debajo del horizonte, algunas con desborde
-		id := fmt.Sprintf("id%04d", rng.Intn(600))
+	for i := range 40 { // abortadas por debajo del horizonte, algunas con desborde, en las hojas que se congelan
+		id := fmt.Sprintf("id%04d", rng.Intn(300))
 		value := randomValue(rng, 50)
 		if i%4 == 0 {
 			value = fixedValue(rng, bigValue)

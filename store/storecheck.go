@@ -151,6 +151,7 @@ func (c *storeCheck) run() error {
 	c.r.TreePages += int64(st.Pages)
 	c.r.Deleted += int64(st.Deleted)
 	c.r.Entries += int64(st.Entries)
+	c.r.LeavesForm1 += int64(st.LeavesForm1)
 	for _, step := range []func() error{c.freeList, c.visibilityMap, c.lostPages} {
 		if err := step(); err != nil {
 			return err
@@ -220,6 +221,10 @@ func (c *storeCheck) leaf(info btree.LeafInfo, entries []btree.Version) error {
 		if v.Flags&btree.EntryOverflow != 0 && v.Flags&btree.EntryTombstone == 0 {
 			if err := c.chain(info.Block, v); err != nil {
 				return err
+			}
+		} else if v.Flags&btree.EntryCompressed != 0 {
+			if _, err := decompress(nil, v.Value); err != nil {
+				c.add(FindValue, int64(info.Block), 1, false, fmt.Sprintf(MSG_CHECK_VALUE, v.ID, v.LSN, err))
 			}
 		}
 	}

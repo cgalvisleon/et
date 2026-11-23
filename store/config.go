@@ -71,6 +71,7 @@ type config struct {
 	replica           bool          // OpenReplica: el motor es una réplica de solo lectura que aplica el WAL del primario
 	conflictDelay     time.Duration // replicaConflictDelay (las pruebas lo acortan)
 	decodeWorkMem     int           // memoria del búfer de reordenamiento de un ChangeReader (0 = logicalWorkMem)
+	compress          compression   // STORE_COMPRESSION y STORE_COMPRESSION_MIN: cómo se comprimen los valores grandes
 
 	// Solo pruebas: páginas por archivo de estados (0 = xact.PagesPerFile) y primer xid de un motor nuevo (0 = 1).
 	xactFilePages int
@@ -101,6 +102,7 @@ func envConfig() config {
 		archiveMaxSize:    max(envar.GetInt64("WAL_ARCHIVE_MAX_SIZE", 0), 0) << 20,
 		slotKeepSize:      max(envar.GetInt64("MAX_SLOT_WAL_KEEP_SIZE", 4096), 0) << 20,
 		conflictDelay:     replicaConflictDelay,
+		compress:          envCompression(),
 	}
 }
 

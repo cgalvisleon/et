@@ -2,6 +2,7 @@ package buffer
 
 import (
 	"sync"
+	"sync/atomic"
 
 	"github.com/cgalvisleon/et/store/internal/page"
 )
@@ -42,6 +43,10 @@ type desc struct {
 	// BM_JUST_DIRTIED de PostgreSQL): si al terminar la escritura sigue puesto, el búfer cambió después de la copia y
 	// queda sucio.
 	justDirtied bool
+
+	// checked: quien usa la página ya validó sus punteros a ítems desde que el búfer la cargó (ItemsChecker). Se
+	// borra cada vez que el búfer recibe otra página (read, PinZero).
+	checked atomic.Bool
 }
 
 // handle es un búfer fijado por quien llamó a Pin o PinNew. Lo usa una sola goroutine.
@@ -51,6 +56,18 @@ type handle struct {
 	mode     LockMode // bloqueo de contenido tomado; 0 = ninguno
 	released bool
 }
+
+/**
+* ItemsChecked dice si la página ya pasó la validación de sus ítems desde que llegó al búfer (ItemsChecker).
+* @return bool
+**/
+func (h *handle) ItemsChecked() bool { return h.d.checked.Load() }
+
+/**
+* SetItemsChecked anota que la página pasó la validación de sus ítems (page.CheckItems): hasta que el búfer cargue
+* otra página no hace falta repetirla. Con el bloqueo tomado (compartido o exclusivo).
+**/
+func (h *handle) SetItemsChecked() { h.d.checked.Store(true) }
 
 /**
 * Tag devuelve la página que tiene el búfer.

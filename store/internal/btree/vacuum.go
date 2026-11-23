@@ -1,7 +1,6 @@
 package btree
 
 import (
-	"bytes"
 	"slices"
 
 	"github.com/cgalvisleon/et/store/internal/buffer"
@@ -60,7 +59,7 @@ func (pv pageVacuum) empty() bool {
 
 // vacuumGroup son las versiones de un id que la limpieza está mirando, de la más nueva a la más vieja.
 type vacuumGroup struct {
-	id        []byte            // copia
+	id        key               // el id (sin lsn): apunta a la hoja bloqueada en planLeaf; copia entera en carry
 	anchored  bool              // ya apareció la versión de referencia: la más nueva confirmada visible para todos
 	anchorLSN page.LSN          // su lsn: toda versión del id más vieja está muerta
 	tomb      page.OffsetNumber // la versión de referencia, si es una lápida de esta hoja (0 = no)
@@ -73,6 +72,10 @@ type vacuumRun struct {
 	opts  VacuumOptions
 	st    VacuumStats
 	carry vacuumGroup // el último id de la hoja recorrida antes (sus versiones pueden seguir en la siguiente)
+
+	// migrating: la meta no dice que todas las hojas son de la forma 2 (un store del formato 1): la pasada no salta
+	// hojas por el mapa y reescribe en la forma 2 las de la forma 1 que encuentra (migración perezosa).
+	migrating bool
 }
 
 // parentLinks son los enlaces de una página del nivel 1, copiados con ella bloqueada, y su hermana derecha.
@@ -108,12 +111,19 @@ func (t *BTree) Vacuum(opts VacuumOptions) (VacuumStats, error) {
 		m, err = t.readMeta()
 	}
 	if err == nil {
+		r.migrating = m.flags&MetaLeavesForm2 == 0
 		if m.level == 0 || t.vm == nil {
 			err = r.leftmostChain()
 		} else {
 			err = r.byParents()
 		}
 	}
+	if err == nil && r.migrating {
+		// La pasada recorrió todas las hojas sin saltar ninguna: las de la forma 1 quedaron reescritas, y desde que
+		// empezó ninguna hoja nueva nace en la forma 1
+		err = t.setMetaFlags(MetaLeavesForm2)
+	}
+	r.st.LeavesForm2 = err == nil && (r.migrating || m.flags&MetaLeavesForm2 != 0)
 	r.st.Complete = err == nil && r.st.SkippedVisible == 0
 	return r.st, err
 }
@@ -254,7 +264,7 @@ func (r *vacuumRun) downlink(d, stop page.BlockNumber) error {
 		return err
 	}
 	frozen, visible := bits&fsm.VMAllFrozen != 0, bits&fsm.VMAllVisible != 0
-	if frozen || (visible && !r.opts.Aggressive) {
+	if !r.migrating && (frozen || (visible && !r.opts.Aggressive)) {
 		r.st.Skipped++
 		if !frozen {
 			r.st.SkippedVisible++
@@ -308,6 +318,17 @@ func (r *vacuumRun) leaf(blk page.BlockNumber) (page.BlockNumber, error) {
 		}
 		return next, nil
 	}
+	if !n.v2 {
+		var ok bool
+		if n, ok, err = r.t.rewriteLeaf(h, n, nil); err == nil && !ok {
+			err = corruptAt(blk, "leaf of form 1 does not fit in form 2")
+		}
+		if err != nil {
+			h.Release()
+			return 0, err
+		}
+		r.st.Rewritten++
+	}
 	plan, err := r.t.planLeaf(n, r.opts, &r.carry, true)
 	if err == nil {
 		err = r.t.vacuumLeaf(h, n, plan, r.opts.XID)
@@ -352,7 +373,7 @@ func (t *BTree) vacuumLeaf(h buffer.Handle, n node, plan leafPlan, xid page.XID)
 /**
 * planLeaf decide, con la hoja bloqueada en exclusivo, qué versiones quitar, cuáles marcar y cuáles congelar, y qué
 * bits del mapa le tocan. carry es el último id de la hoja anterior (sus versiones pueden seguir en esta) y al volver
-* es el último de esta. Con lookRight, si el último id puede seguir en la hermana derecha se mira ahí
+* es el último de esta (nil = sin hoja anterior y sin guardarlo). Con lookRight, si el último id puede seguir en la hermana derecha se mira ahí
 * (rightStartsWith); sin él (la poda de una escritura, que no recorre hermanas) se da por compartido y su lápida se
 * queda.
 * @param n node, opts VacuumOptions, carry *vacuumGroup, lookRight bool
@@ -360,25 +381,29 @@ func (t *BTree) vacuumLeaf(h buffer.Handle, n node, plan leafPlan, xid page.XID)
 **/
 func (t *BTree) planLeaf(n node, opts VacuumOptions, carry *vacuumGroup, lookRight bool) (leafPlan, error) {
 	plan := leafPlan{oldest: opts.Horizon}
-	var g *vacuumGroup
+	if carry == nil {
+		carry = &vacuumGroup{} // sin hoja anterior (la poda de una escritura): no se guarda el último id
+	}
+	var g vacuumGroup // un solo grupo reusado: su id apunta a la hoja, bloqueada mientras dura el recorrido
+	started := false
 	for off := n.firstData(); off <= n.maxOff(); off++ {
 		e, err := n.entryAt(off)
 		if err != nil {
 			return leafPlan{}, err
 		}
-		if g == nil || !bytes.Equal(g.id, e.id()) {
-			if g != nil {
-				plan.endGroup(g)
-			} else if bytes.Equal(carry.id, e.id()) {
+		if !started || compareIDs(g.id, e.key()) != 0 {
+			if started {
+				plan.endGroup(&g)
+			} else if e.idEqual(carry.id.id) {
 				plan.shared = true // el primer id viene de la hoja anterior
 			}
-			g = startGroup(e.id(), carry)
+			g, started = startGroup(e.key(), carry), true
 		}
-		if err := t.planEntry(&plan, g, off, e, opts); err != nil {
+		if err := t.planEntry(&plan, &g, off, e, opts); err != nil {
 			return leafPlan{}, err
 		}
 	}
-	if g != nil { // una hoja vacía deja pasar el grupo de la anterior
+	if started { // una hoja vacía deja pasar el grupo de la anterior
 		shared := continuesRight(n, g.id)
 		if shared && lookRight {
 			var err error
@@ -389,9 +414,11 @@ func (t *BTree) planLeaf(n node, opts VacuumOptions, carry *vacuumGroup, lookRig
 		if shared {
 			plan.shared = true
 		} else {
-			plan.endGroup(g)
+			plan.endGroup(&g)
 		}
-		*carry = *g
+		id := g.id.appendID(carry.id.id[:0]) // copia: carry sigue después de soltar la hoja
+		*carry = g
+		carry.id = key{id: id}
 	}
 	slices.Sort(plan.remove)
 	plan.finish(n, opts)
@@ -435,13 +462,14 @@ func (plan *leafPlan) finish(n node, opts VacuumOptions) {
 }
 
 /**
-* startGroup empieza el grupo de un id: si es el último de la hoja anterior, hereda su versión de referencia.
-* @param id []byte, carry *vacuumGroup
-* @return *vacuumGroup
+* startGroup empieza el grupo de un id: si es el último de la hoja anterior, hereda su versión de referencia. No
+* copia id: el grupo vive mientras la hoja está bloqueada (planLeaf copia solo el último a carry).
+* @param id key: la clave de su primera versión (solo cuenta el id), carry *vacuumGroup
+* @return vacuumGroup
 **/
-func startGroup(id []byte, carry *vacuumGroup) *vacuumGroup {
-	g := &vacuumGroup{id: bytes.Clone(id)}
-	if carry.anchored && bytes.Equal(carry.id, id) {
+func startGroup(id key, carry *vacuumGroup) vacuumGroup {
+	g := vacuumGroup{id: key{pre: id.pre, id: id.id}}
+	if carry.anchored && compareIDs(carry.id, id) == 0 {
 		g.anchored, g.anchorLSN = true, carry.anchorLSN
 	}
 	return g
@@ -523,15 +551,15 @@ func (plan *leafPlan) endGroup(g *vacuumGroup) {
 * continuesRight dice si las versiones de id pueden seguir en la hermana derecha: solo si la clave alta es de ese
 * mismo id (el corte de la partición cayó entre sus versiones). Las versiones nuevas de un id van antes que las
 * viejas, así que nunca llegan a la derecha después.
-* @param n node, id []byte
+* @param n node, id key: solo cuenta el id
 * @return bool
 **/
-func continuesRight(n node, id []byte) bool {
+func continuesRight(n node, id key) bool {
 	if n.rightmost() {
 		return false
 	}
 	hk, err := n.highKey()
-	return err != nil || bytes.Equal(hk.key().id, id)
+	return err != nil || compareIDs(hk.key(), id) == 0
 }
 
 /**
@@ -541,10 +569,10 @@ func continuesRight(n node, id []byte) bool {
 * una (como latest). Cuando la limpieza ya quitó esas versiones, la clave alta sigue nombrando el id pero la hoja ya
 * no comparte nada: puede llevar bits y su lápida de referencia se quita. Una versión nueva del id va siempre a la
 * izquierda de la clave alta (a esta hoja, que está bloqueada), así que la derecha no vuelve a tener ese id.
-* @param n node: la hoja, no la de más a la derecha; id []byte
+* @param n node: la hoja, no la de más a la derecha; id key: solo cuenta el id
 * @return bool, error
 **/
-func (t *BTree) rightStartsWith(n node, id []byte) (bool, error) {
+func (t *BTree) rightStartsWith(n node, id key) (bool, error) {
 	blk := n.o.Next
 	for {
 		h, rn, err := t.lockNode(blk, buffer.Share)
@@ -558,7 +586,7 @@ func (t *BTree) rightStartsWith(n node, id []byte) (bool, error) {
 		if rn.dataCount() > 0 {
 			e, err := rn.entryAt(rn.firstData())
 			h.Release()
-			return err == nil && bytes.Equal(e.id(), id), err
+			return err == nil && compareIDs(e.key(), id) == 0, err
 		}
 		next := rn.o.Next
 		h.Release()
@@ -794,14 +822,17 @@ func applyLeafVacuum(p page.Page, delta []byte) error {
 	if err != nil || o.Flags&page.OpaqueLeaf == 0 {
 		return badRecord(wal.KindLeafVacuum, "not a leaf")
 	}
-	n := node{p: p, o: o}
+	n, err := pageNode(p, o)
+	if err != nil {
+		return badRecord(wal.KindLeafVacuum, err.Error())
+	}
 	if err := checkVacuumEntries(n, pv); err != nil {
 		return err
 	}
 	if err := orEntries(p, pv.mark, EntryFreeing); err != nil {
 		return err
 	}
-	if err := orEntries(p, pv.freeze, EntryFrozen); err != nil {
+	if err := freezeEntries(n, pv.freeze); err != nil {
 		return err
 	}
 	if pv.setVisible {
@@ -840,6 +871,33 @@ func checkVacuumEntries(n node, pv pageVacuum) error {
 }
 
 /**
+* freezeEntries congela las entradas de la hoja: en la forma 1, EntryFrozen con un OR atómico; en la 2 además se
+* achican (sin xid si no tienen desborde, doc.go «Hojas de la forma 2»): se arman todas antes de cambiar la página (las
+* vistas de n se mueven al reemplazar) y se reemplazan en su lugar.
+* @param n node: la hoja, offs []page.OffsetNumber: entradas ya validadas
+* @return error: ErrBadRecord
+**/
+func freezeEntries(n node, offs []page.OffsetNumber) error {
+	if !n.v2 {
+		return orEntries(n.p, offs, EntryFrozen)
+	}
+	items := make([][]byte, len(offs))
+	for i, off := range offs {
+		e, err := n.entryAt(off)
+		if err != nil {
+			return badRecord(wal.KindLeafVacuum, err.Error())
+		}
+		items[i] = e.reencode(len(n.pre), true)
+	}
+	for i, off := range offs {
+		if err := n.p.ReplaceItem(off, items[i]); err != nil {
+			return badRecord(wal.KindLeafVacuum, err.Error())
+		}
+	}
+	return nil
+}
+
+/**
 * orEntries agrega una marca a las entradas de la hoja con un OR atómico.
 * @param p page.Page, offs []page.OffsetNumber, flag EntryFlags
 * @return error: ErrBadRecord si una entrada no se puede marcar
@@ -847,7 +905,7 @@ func checkVacuumEntries(n node, pv pageVacuum) error {
 func orEntries(p page.Page, offs []page.OffsetNumber, flag EntryFlags) error {
 	for _, off := range offs {
 		b, _ := p.Item(off)
-		if !entry(b).orFlags(flag) {
+		if !orItemFlags(b, flag) {
 			return badRecord(wal.KindLeafVacuum, "cannot mark an entry")
 		}
 	}

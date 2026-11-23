@@ -107,7 +107,7 @@ func decodeControl(b []byte) (Control, error) {
 	if m := le.Uint32(b[offMagic:]); m != ControlMagic {
 		return Control{}, fmt.Errorf("%w: magic %08x", ErrBadControl, m)
 	}
-	if v := le.Uint32(b[offVersion:]); v != FormatVersion {
+	if v := le.Uint32(b[offVersion:]); !wal.Readable(v) {
 		return Control{}, fmt.Errorf("%w: %w: %d, want %d", ErrBadControl, ErrFormatVersion, v, FormatVersion)
 	}
 	if n := le.Uint32(b[offPageSize:]); n != page.Size {

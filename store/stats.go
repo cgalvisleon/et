@@ -32,16 +32,20 @@ type Stats struct {
 	LastCheckpointTook time.Duration // cuánto duró el último (uno de fondo se reparte en el 90 % de su intervalo)
 
 	// Versiones por limpiar y transacciones
-	WritesSinceVacuum int64  // escrituras desde la última limpieza: lo que mira VACUUM_THRESHOLD
-	Vacuums           int64  // limpiezas del motor (Vacuum y la de fondo)
-	PagesDeleted      int64  // páginas del árbol borradas por la limpieza (hojas vacías y padres sin hijos)
-	PagesRecycled     int64  // páginas borradas devueltas a la lista de libres (ya nadie podía verlas)
-	OpenBatches       int64  // lotes abiertos
-	OpenSnapshots     int64  // snapshots abiertos
-	NextXID           uint64 // el próximo xid a asignar
-	OldestXID         uint64 // el xid vivo más viejo (el horizonte de la limpieza); NextXID si no hay ninguno
-	FrozenXID         uint64 // el frozenXID del motor: las xid menores están congeladas
-	FrozenAge         uint64 // OldestXID − FrozenXID: cuántos xid esperan el congelado
+	WritesSinceVacuum int64 // escrituras desde la última limpieza: lo que mira VACUUM_THRESHOLD
+	Vacuums           int64 // limpiezas del motor (Vacuum y la de fondo)
+	PagesDeleted      int64 // páginas del árbol borradas por la limpieza (hojas vacías y padres sin hijos)
+	PagesRecycled     int64 // páginas borradas devueltas a la lista de libres (ya nadie podía verlas)
+
+	// Migración de las hojas al formato 2 (perezosa: doc.go «Formato 2: migración desde el formato 1 (e)»)
+	LeafForm1Stores int    // stores abiertos con hojas de la forma 1 por reescribir (Verify cuenta las hojas: Report.LeavesForm1)
+	LeafRewrites    int64  // hojas de la forma 1 que la limpieza reescribió en la forma 2 desde Open
+	OpenBatches     int64  // lotes abiertos
+	OpenSnapshots   int64  // snapshots abiertos
+	NextXID         uint64 // el próximo xid a asignar
+	OldestXID       uint64 // el xid vivo más viejo (el horizonte de la limpieza); NextXID si no hay ninguno
+	FrozenXID       uint64 // el frozenXID del motor: las xid menores están congeladas
+	FrozenAge       uint64 // OldestXID − FrozenXID: cuántos xid esperan el congelado
 
 	// Operaciones
 	Reads   int64 // lecturas puntuales: Read, Exists, GetVersion y sus …In y …At (no los recorridos)
@@ -101,6 +105,7 @@ type engineMetrics struct {
 	vacuumWrites   atomic.Int64 // Engine.writes al empezar la última limpieza
 	pagesDeleted   atomic.Int64 // páginas del árbol desenganchadas por la limpieza
 	pagesRecycled  atomic.Int64 // páginas borradas devueltas a la lista de libres
+	leafRewrites   atomic.Int64 // hojas de la forma 1 que la limpieza reescribió en la forma 2
 	openBatches    atomic.Int64
 	openSnapshots  atomic.Int64
 	diskFull       atomic.Int64 // operaciones rechazadas con ErrDiskFull sin tocar el motor
@@ -166,6 +171,8 @@ func (e *Engine) stats() Stats {
 		Vacuums:           m.vacuums.Load(),
 		PagesDeleted:      m.pagesDeleted.Load(),
 		PagesRecycled:     m.pagesRecycled.Load(),
+		LeafForm1Stores:   e.leaves.count(),
+		LeafRewrites:      m.leafRewrites.Load(),
 		OpenBatches:       m.openBatches.Load(),
 		OpenSnapshots:     m.openSnapshots.Load(),
 		NextXID:           uint64(e.txs.NextXID()),

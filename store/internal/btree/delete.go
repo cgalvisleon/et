@@ -942,7 +942,10 @@ func applyHalfDeadLeaf(p page.Page, delta []byte) error {
 	if err != nil {
 		return badRecord(wal.KindMarkHalfDead, err.Error())
 	}
-	n := node{p: p, o: o}
+	n, err := pageNode(p, o)
+	if err != nil {
+		return badRecord(wal.KindMarkHalfDead, err.Error())
+	}
 	if !n.leaf() || n.ignore() || n.rightmost() || n.incomplete() || n.root() || n.dataCount() != 0 {
 		return badRecord(wal.KindMarkHalfDead, "page is not an empty leaf that can be deleted")
 	}
@@ -985,7 +988,10 @@ func applyHalfDeadParent(p page.Page, delta []byte) error {
 	if err != nil || o.Flags&page.OpaqueLeaf != 0 {
 		return badRecord(wal.KindMarkHalfDead, "parent is not an internal page")
 	}
-	n := node{p: p, o: o}
+	n, err := pageNode(p, o)
+	if err != nil {
+		return badRecord(wal.KindMarkHalfDead, err.Error())
+	}
 	if off < n.firstData() || off >= n.maxOff() {
 		return badRecord(wal.KindMarkHalfDead, "parent link outside the page")
 	}

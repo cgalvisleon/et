@@ -20,8 +20,13 @@ const (
 	// Size es el tamaño de una página (pregunta 19).
 	Size = 8192
 
-	// LayoutVersion va en los bits bajos de pd_pagesize_version.
+	// LayoutVersion va en los bits bajos de pd_pagesize_version: la versión con que Init deja una página. Es la
+	// versión de la forma de la página, no la del formato: todas las clases de página son de la 1 salvo las hojas
+	// del formato 2 (LayoutVersion2, btree: prefijo compartido y cabecera corta).
 	LayoutVersion = 1
+
+	// LayoutVersion2 es la de una hoja del formato 2 (btree la pone con SetLayoutVersion al armar la hoja).
+	LayoutVersion2 = 2
 
 	// HeaderSize es el largo del encabezado de página.
 	HeaderSize = 32

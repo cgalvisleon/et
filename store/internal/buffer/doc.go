@@ -40,6 +40,12 @@
 // sobre el búfer. La copia se hace con cargas atómicas de 32 bits; quien lea esas marcas con bloqueo compartido
 // también tiene que leerlas con atomic.LoadUint32, o -race verá una carrera con el OR de otro lector.
 //
+// # Ítems ya validados (tarea 134)
+//
+// ItemsChecker (interfaz opcional de Handle): ItemsChecked/SetItemsChecked recuerdan, por búfer, que quien usa la
+// página ya validó sus punteros a ítems (btree, con page.CheckItems) desde que el búfer la cargó; read y PinZero lo
+// borran. Así el árbol valida una página una vez por carga y no en cada bloqueo.
+//
 // # Implementación (ola 2)
 //
 // Open(Config) reserva los búferes en un solo arena fuera del heap (Buffers, o STORE_CACHE_SIZE con EnvBuffers) y

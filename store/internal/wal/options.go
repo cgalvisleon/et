@@ -34,6 +34,12 @@ type Options struct {
 	// con lsn ≥ CleanEnd en ningún segmento, así que la preasignación del activo y de los repuestos sigue valiendo
 	// (tarea 109). Con StopLSN no se usa.
 	CleanEnd page.LSN
+
+	// Upgrade: si el segmento activo es de una versión anterior (wal.MinFormatVersion ≤ v < FormatVersion), Open lo
+	// deja atrás antes de devolver el WAL: con registros lo sella y empieza uno nuevo; sin registros le reescribe el
+	// encabezado. Así ningún registro escrito por este binario cae en un segmento que dice otra versión (formato 2,
+	// store/doc.go). Una réplica no lo pone: su WAL sigue las posiciones del primario.
+	Upgrade bool
 }
 
 // EnvOptions lee las opciones de WAL_SEGMENT_SIZE (MB, mínimo 1) y MAX_WAL_SIZE (MB): se guardan como repuesto los

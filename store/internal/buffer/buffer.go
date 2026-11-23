@@ -60,6 +60,14 @@ type Handle interface {
 	Release()
 }
 
+// ItemsChecker es lo opcional de un Handle que recuerda si quien usa la página ya validó sus punteros a ítems desde que
+// el búfer la cargó (la caché del motor lo cumple; btree lo usa para no repetir page.CheckItems en cada acceso: los
+// cambios en memoria los hacen funciones que validan lo que tocan, y lo que llega del disco se valida una vez).
+type ItemsChecker interface {
+	ItemsChecked() bool
+	SetItemsChecked()
+}
+
 // Extender es lo opcional de una Pool que extiende un fork con varias páginas de una vez (la caché del motor lo
 // cumple; fsm.Manager.Grow lo usa).
 type Extender interface {

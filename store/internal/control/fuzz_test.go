@@ -38,7 +38,7 @@ func checkControlBytes(t *testing.T, b []byte) {
 	if err != nil {
 		t.Fatalf("accepted control does not encode: %v", err)
 	}
-	if !bytes.Equal(again, b) {
+	if !bytes.Equal(asVersionOf(again, b), b) {
 		t.Fatal("re-encoded control differs")
 	}
 }
@@ -71,7 +71,7 @@ func checkCatalogBytes(t *testing.T, b []byte) {
 	if err != nil {
 		t.Fatalf("accepted catalog does not encode: %v", err)
 	}
-	if !bytes.Equal(again, b) {
+	if !bytes.Equal(asVersionOf(again, b), b) {
 		t.Fatal("re-encoded catalog differs")
 	}
 	if _, err := LoadStores(c); err != nil {
@@ -88,4 +88,16 @@ func withCRC(b []byte) []byte {
 	n := len(c) - crcSize
 	le.PutUint32(c[n:], crcOf(c[:n]))
 	return c
+}
+
+// asVersionOf es again (escrito con FormatVersion) con la versión de orig en el byte 4 y su CRC final recalculado:
+// un archivo de una versión anterior que se lee (formato 1) se vuelve a codificar igual salvo la versión.
+func asVersionOf(again, orig []byte) []byte {
+	if len(orig) < 8 || len(again) != len(orig) || le.Uint32(orig[4:]) == FormatVersion {
+		return again
+	}
+	out := append([]byte(nil), again...)
+	le.PutUint32(out[4:], le.Uint32(orig[4:]))
+	le.PutUint32(out[len(out)-crcSize:], crcOf(out[:len(out)-crcSize]))
+	return out
 }

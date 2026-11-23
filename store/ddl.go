@@ -287,6 +287,11 @@ func (e *Engine) openExisting(cfg btree.Config) (*btree.BTree, error) {
 		return nil, e.readError(err)
 	}
 	e.frozen.set(cfg.File, frozen)
+	form2, err := tree.LeavesForm2()
+	if err != nil {
+		return nil, e.readError(err)
+	}
+	e.leaves.note(cfg.File, form2)
 	return tree, nil
 }
 
@@ -395,6 +400,7 @@ func (e *Engine) removeFiles(entry control.Entry) error {
 	e.cat.Drop(entry.Name, entry.File)
 	e.counts.remove(entry.File)
 	e.frozen.forget(entry.File)
+	e.leaves.forget(entry.File)
 	e.catalogChanged()
 	e.pool.DropFile(entry.File)
 	return e.unlinkData(entry.File)

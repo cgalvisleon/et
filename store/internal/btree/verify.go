@@ -14,6 +14,11 @@ type VerifyStats struct {
 	Entries    int // entradas de hoja (todas las versiones)
 	HalfDead   int // hojas medio muertas: borrados que un corte dejó a medias (la próxima limpieza los termina)
 	Deleted    int // páginas borradas en la pila de la meta, esperando reciclarse
+
+	// LeavesForm1 son las hojas de la forma 1 (de un directorio del formato 1) que la migración perezosa todavía no
+	// reescribió en la forma 2; LeavesForm2 dice si la meta ya da a todas por reescritas.
+	LeavesForm1 int
+	LeavesForm2 bool
 }
 
 // VerifyOptions dice qué más hace VerifyWith mientras recorre (Verify del motor, fase 3).
@@ -35,6 +40,7 @@ type LeafInfo struct {
 	Block      page.BlockNumber
 	AllVisible bool // la página lleva page.FlagAllVisible
 	HalfDead   bool // la hoja está medio muerta: un borrado que un corte dejó a medias (FinishDeletes lo termina)
+	Form1      bool // la hoja es de la forma 1 (formato 1): la limpieza la reescribe en la forma 2
 }
 
 // verifier es un recorrido de VerifyWith: el árbol, las opciones y las entradas de la hoja que se está leyendo.
@@ -47,8 +53,8 @@ type verifier struct {
 // levelStats es lo que deja el recorrido de un nivel: tops son las páginas sin enlace en el padre por un borrado a
 // medias (la cima de su subárbol).
 type levelStats struct {
-	pages, incomplete, entries, downlinks, tops, halfDead int
-	firstChild                                            page.BlockNumber
+	pages, incomplete, entries, downlinks, tops, halfDead, form1 int
+	firstChild                                                   page.BlockNumber
 }
 
 // pendingInfo es lo que hace falta de una página (ya soltada) para saber si es parte de un borrado a medias.
@@ -117,7 +123,12 @@ func (t *BTree) VerifyWith(opts VerifyOptions) (VerifyStats, error) {
 		st.Incomplete += ls.incomplete
 		st.Entries += ls.entries
 		st.HalfDead += ls.halfDead
+		st.LeavesForm1 += ls.form1
 		blk, linksAbove = ls.firstChild, ls.downlinks
+	}
+	st.LeavesForm2 = m.flags&MetaLeavesForm2 != 0
+	if st.LeavesForm2 && st.LeavesForm1 > 0 {
+		return st, corruptAt(MetaBlock, "meta says every leaf is of form 2 but %d are of form 1", st.LeavesForm1)
 	}
 	st.Deleted, err = v.deletedStack(m.deleted)
 	return st, err
@@ -210,7 +221,8 @@ func (v *verifier) level(leftmost page.BlockNumber, level uint32, top bool) (lev
 			return ls, corruptAt(blk, "deleted page still linked in level %d", level)
 		}
 		next, hk, err := v.page(n, level, prev, low, &ls, top && prev == 0)
-		info := LeafInfo{Block: n.blk, AllVisible: n.p.Flags()&page.FlagAllVisible != 0, HalfDead: n.halfDead()}
+		info := LeafInfo{Block: n.blk, AllVisible: n.p.Flags()&page.FlagAllVisible != 0, HalfDead: n.halfDead(),
+			Form1: n.leaf() && !n.v2}
 		pi := pendingOf(n)
 		h.Release()
 		if err == nil {
@@ -364,6 +376,9 @@ func (v *verifier) page(n node, level uint32, prev page.BlockNumber, low *key, l
 	}
 	if n.leaf() {
 		ls.entries += n.dataCount()
+		if !n.v2 {
+			ls.form1++
+		}
 	}
 	return n.o.Next, high, nil
 }
@@ -412,7 +427,8 @@ func (v *verifier) keys(n node, low, high *key, ls *levelStats) error {
 }
 
 /**
-* collect copia la entrada off de una hoja (sin el valor en línea) si hay quien reciba las hojas. keyAt ya la validó.
+* collect copia la entrada off de una hoja si hay quien reciba las hojas: sin el valor en línea, salvo el de una
+* versión comprimida (el motor comprueba que se descomprime). keyAt ya la validó.
 * @param n node, off page.OffsetNumber
 **/
 func (v *verifier) collect(n node, off page.OffsetNumber) {
@@ -420,6 +436,10 @@ func (v *verifier) collect(n node, off page.OffsetNumber) {
 		return
 	}
 	e, _ := n.entryAt(off)
+	if e.flags()&(EntryCompressed|EntryOverflow) == EntryCompressed {
+		v.entries = append(v.entries, e.version())
+		return
+	}
 	v.entries = append(v.entries, e.header())
 }
 

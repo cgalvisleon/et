@@ -45,10 +45,11 @@ type Store struct {
 
 // change es una escritura suelta: la versión nueva y su condición.
 type change struct {
-	tombstone bool
-	data      []byte
-	check     func(latest btree.Latest) btree.Action // nil = siempre (Put, Remove)
-	deferred  bool                                   // confirma sin esperar el fsync del WAL (Deferred)
+	tombstone  bool
+	data       []byte
+	check      func(latest btree.Latest) btree.Action // nil = siempre (Put, Remove)
+	deferred   bool                                   // confirma sin esperar el fsync del WAL (Deferred)
+	compressed bool                                   // data ya es el valor comprimido (formato 2, compress.go)
 }
 
 /**
@@ -225,6 +226,7 @@ func (s *Store) write(id string, c change) (bool, error) {
 	if err := checkWrite(id, c.data); err != nil {
 		return false, err
 	}
+	c = s.e.compressed(c)
 	if err := s.e.throttle(); err != nil {
 		return false, err
 	}
@@ -303,6 +305,7 @@ func (s *Store) prepare(xid page.XID, id string, c change) (btree.Write, error) 
 	if c.tombstone {
 		return w, nil
 	}
+	w.Compressed = c.compressed
 	if inline(id, c.data) {
 		w.Value = c.data
 		return w, nil
@@ -498,18 +501,26 @@ func (s *Store) readVersion(id string, snap *xact.Snapshot) (current, bool, erro
 }
 
 /**
-* valueOf devuelve el valor de una versión: el de la hoja (ya es una copia) o el leído de su cadena de desborde.
+* valueOf devuelve el valor de una versión: el de la hoja (ya es una copia) o el leído de su cadena de desborde,
+* descomprimido si la versión lleva EntryCompressed.
 * @param v btree.Version
 * @return []byte, error
 **/
 func (s *Store) valueOf(v btree.Version) ([]byte, error) {
+	stored := v.Value
 	if v.Flags&btree.EntryOverflow != 0 {
-		return s.e.chains.Read(s.file, v.Overflow)
+		var err error
+		if stored, err = s.e.chains.Read(s.file, v.Overflow); err != nil {
+			return nil, err
+		}
 	}
-	if v.Value == nil {
+	if v.Flags&btree.EntryCompressed != 0 {
+		return decompress(nil, stored)
+	}
+	if stored == nil {
 		return []byte{}, nil
 	}
-	return v.Value, nil
+	return stored, nil
 }
 
 /**

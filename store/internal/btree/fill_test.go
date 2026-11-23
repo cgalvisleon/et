@@ -63,19 +63,22 @@ func groupID(group, seq int) string {
 // TestSplitAscendingGroups: con inserciones al final de varios grupos de duplicados de sufijo creciente (un índice
 // valor + jid), las hojas quedan casi llenas (partir en el punto de inserción); con inserciones al azar, mitad y mitad
 // como antes (el llenado de un árbol al azar, ~70 %). Cada grupo deja su hoja de cola a medio llenar (recibe las
-// inserciones, como la de más a la derecha) y a veces un resto del comienzo del grupo siguiente: por eso la cota baja
-// con la cantidad de grupos (unas 13 hojas por grupo con 20).
+// inserciones, como la de más a la derecha) y a veces un resto del comienzo del grupo siguiente (de la primera fase,
+// con todos los grupos en pocas hojas): por eso la cota baja con la cantidad de grupos. Con las hojas de la forma 2
+// (formato 2) entran ~260 entradas por hoja en lugar de 166, cada grupo ocupa menos hojas y esos restos pesan más: 3000
+// ids por grupo (unas 11 hojas por grupo) y cotas de 0,79 y 0,78 (medido 0,81 y 0,80; con la heurística anterior a la
+// tarea 129 daba 0,55).
 func TestSplitAscendingGroups(t *testing.T) {
 	for _, c := range []struct {
 		groups int
 		min    float64
-	}{{1, 0.88}, {5, 0.85}, {20, 0.8}} {
+	}{{1, 0.88}, {5, 0.79}, {20, 0.78}} {
 		t.Run(fmt.Sprintf("grupos=%d", c.groups), func(t *testing.T) {
 			e := openEnv(t, crashfs.New(), wal.Start, 256)
 			tr := createTree(t, e)
 			rng := rand.New(rand.NewSource(int64(c.groups)))
 			m := model{}
-			for seq := range 2000 * c.groups {
+			for seq := range 3000 * c.groups {
 				put(t, tr, m, groupID(rng.Intn(c.groups), seq), nil)
 			}
 			fill, leaves := leafFill(t, tr)

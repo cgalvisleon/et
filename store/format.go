@@ -57,6 +57,12 @@ func (e *Engine) checkFormat() error {
 		if _, err := e.catFile.Read(); errors.Is(err, control.ErrFormatVersion) {
 			return fmt.Errorf(MSG_FORMAT_CONTROL, ErrFormatVersion, err)
 		}
+		// Un catálogo del formato 1 (Open lo reescribe en el 2): sus stores pueden tener hojas de la forma 1, así
+		// que la limpieza de fondo corre hasta una pasada entera (migrate.go)
+		catalog := formatHeader{name: control.CatalogFileName, magic: control.CatalogMagic}
+		if version, ok, err := e.readFormatHeader(catalog); err == nil && ok && version < control.FormatVersion {
+			e.leaves.fromV1.Store(true)
+		}
 	}
 	if name, version, found, err := wal.OtherVersion(e.fs, e.dir, redoSegment, e.slotsKeep()); err != nil || found {
 		if err != nil {
@@ -72,7 +78,7 @@ func (e *Engine) checkFormat() error {
 		if err != nil {
 			return err
 		}
-		if ok && version != control.FormatVersion {
+		if ok && !wal.Readable(version) {
 			return formatError(h.name, version)
 		}
 	}
@@ -104,7 +110,8 @@ func (e *Engine) readFormatHeader(h formatHeader) (uint32, bool, error) {
 }
 
 /**
-* formatError es el error de un archivo de otra versión: más nueva (actualizar et) o anterior (sin migración).
+* formatError es el error de un archivo de una versión que este binario no lee: más nueva (actualizar et) o anterior
+* a wal.MinFormatVersion (sin migración).
 * @param name string, version uint32
 * @return error: ErrFormatVersion
 **/

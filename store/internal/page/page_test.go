@@ -113,7 +113,7 @@ func TestVerifyNewPage(t *testing.T) {
 
 func TestVerifyHeader(t *testing.T) {
 	cases := map[string]func(p Page){
-		"version":       func(p Page) { p.setU16(OffPageSizeVersion, Size|2) },
+		"version":       func(p Page) { p.setU16(OffPageSizeVersion, Size|3) },
 		"flags":         func(p Page) { p.SetFlags(0x80) },
 		"lower<header":  func(p Page) { p.setU16(OffLower, 8) },
 		"lower>upper":   func(p Page) { p.setU16(OffLower, p.Upper()+4) },

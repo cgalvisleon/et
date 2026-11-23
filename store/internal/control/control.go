@@ -18,6 +18,9 @@ const (
 	// de los segmentos del WAL, así hay un solo número.
 	FormatVersion = wal.FormatVersion
 
+	// MinFormatVersion es la versión más vieja que se lee (y se reescribe como FormatVersion al escribir).
+	MinFormatVersion = wal.MinFormatVersion
+
 	ControlMagic = 0x45544354 // "ETCT"
 	CatalogMagic = 0x45544347 // "ETCG"
 

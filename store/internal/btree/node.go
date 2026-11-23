@@ -1,6 +1,10 @@
 package btree
 
-import "github.com/cgalvisleon/et/store/internal/page"
+import (
+	"bytes"
+
+	"github.com/cgalvisleon/et/store/internal/page"
+)
 
 // notTreePage son las marcas de páginas que no son del árbol.
 const notTreePage = page.OpaqueMeta | page.OpaqueFree | page.OpaqueOverflow
@@ -16,11 +20,15 @@ const capacity = page.Size - page.HeaderSize - page.OpaqueSize
 //
 // Como en nbtree, en una página que no es la de más a la derecha de su nivel el ítem 1 es su clave alta (un pivote
 // sin enlace) y los datos empiezan en el 2; en la de más a la derecha empiezan en el 1. En una hoja los datos son
-// entradas; en una interna, pivotes con enlace, y el primero tiene la clave menos infinito.
+// entradas; en una interna, pivotes con enlace, y el primero tiene la clave menos infinito. Una hoja de la forma 2
+// (LayoutVersion 2, formato 2) lleva después de la clave alta (o primero, en la de más a la derecha) su ítem de
+// prefijo, y los datos empiezan uno después; sus entradas guardan el id sin el prefijo (leaf2.go).
 type node struct {
 	blk page.BlockNumber
 	p   page.Page
 	o   page.Opaque
+	pre []byte // hoja de la forma 2: el prefijo (vista de la página)
+	v2  bool   // hoja de la forma 2
 }
 
 /**
@@ -32,6 +40,16 @@ type node struct {
 * @return node, error: ErrCorrupt con el bloque
 **/
 func readNode(blk page.BlockNumber, p page.Page) (node, error) {
+	return readNodeWith(blk, p, true)
+}
+
+/**
+* readNodeWith es readNode; sin checkItems no repite page.CheckItems (la caché recuerda que la página ya lo pasó
+* desde que la cargó: buffer.ItemsChecker).
+* @param blk page.BlockNumber, p page.Page, checkItems bool
+* @return node, error
+**/
+func readNodeWith(blk page.BlockNumber, p page.Page, checkItems bool) (node, error) {
 	if p.IsNew() {
 		return node{}, corruptAt(blk, "page is new (all zeros)")
 	}
@@ -42,11 +60,20 @@ func readNode(blk page.BlockNumber, p page.Page) (node, error) {
 	if o.Flags&notTreePage != 0 || (o.Flags&page.OpaqueLeaf != 0) != (o.Level == 0) {
 		return node{}, corruptAt(blk, "not a tree page: flags %#x level %d", o.Flags, o.Level)
 	}
-	if err := p.CheckItems(); err != nil {
+	if checkItems {
+		if err := p.CheckItems(); err != nil {
+			return node{}, corruptAt(blk, "%v", err)
+		}
+	}
+	n, err := pageNode(p, o)
+	if err != nil {
 		return node{}, corruptAt(blk, "%v", err)
 	}
-	n := node{blk: blk, p: p, o: o}
+	n.blk = blk
 	if n.deleted() {
+		if n.v2 {
+			return node{}, corruptAt(blk, "deleted page with layout version 2")
+		}
 		return n, checkDeleted(n)
 	}
 	if n.firstData() > n.maxOff()+1 {
@@ -59,46 +86,82 @@ func readNode(blk page.BlockNumber, p page.Page) (node, error) {
 }
 
 // leaf dice si la página es una hoja.
-func (n node) leaf() bool { return n.o.Flags&page.OpaqueLeaf != 0 }
+func (n *node) leaf() bool { return n.o.Flags&page.OpaqueLeaf != 0 }
 
 // rightmost dice si es la de más a la derecha de su nivel (sin clave alta).
-func (n node) rightmost() bool { return n.o.Next == 0 }
+func (n *node) rightmost() bool { return n.o.Next == 0 }
 
 // incomplete dice si su hermana derecha todavía no tiene enlace en el padre.
-func (n node) incomplete() bool { return n.o.Flags&page.OpaqueIncompleteSplit != 0 }
+func (n *node) incomplete() bool { return n.o.Flags&page.OpaqueIncompleteSplit != 0 }
 
 // root dice si lleva la marca de raíz.
-func (n node) root() bool { return n.o.Flags&page.OpaqueRoot != 0 }
+func (n *node) root() bool { return n.o.Flags&page.OpaqueRoot != 0 }
 
 // deleted dice si la página está borrada (desenganchada de sus hermanas, esperando que se recicle).
-func (n node) deleted() bool { return n.o.Flags&page.OpaqueDeleted != 0 }
+func (n *node) deleted() bool { return n.o.Flags&page.OpaqueDeleted != 0 }
 
 // halfDead dice si es una hoja medio muerta: vacía, sin enlace en el padre y todavía enganchada a sus hermanas.
-func (n node) halfDead() bool { return n.o.Flags&page.OpaqueHalfDead != 0 }
+func (n *node) halfDead() bool { return n.o.Flags&page.OpaqueHalfDead != 0 }
 
 // ignore dice si un recorrido la salta siguiendo a la derecha (borrada o medio muerta).
-func (n node) ignore() bool { return n.o.Flags&ignoredPage != 0 }
+func (n *node) ignore() bool { return n.o.Flags&ignoredPage != 0 }
 
-// firstData es el número del primer ítem de datos.
-func (n node) firstData() page.OffsetNumber {
+/**
+* pageNode arma el node de una página del árbol ya leída (sin bloque): en una hoja de la forma 2, lee su ítem de
+* prefijo. Solo una hoja puede ser de la forma 2. No valida los punteros (readNode llama antes a CheckItems; los
+* rehaceres validan cada ítem que tocan).
+* @param p page.Page, o page.Opaque
+* @return node, error: ErrCorrupt
+**/
+func pageNode(p page.Page, o page.Opaque) (node, error) {
+	n := node{p: p, o: o}
+	if p.LayoutVersion() != page.LayoutVersion2 {
+		return n, nil
+	}
+	if !n.leaf() || n.deleted() {
+		return node{}, corrupt("page with layout version 2 is not a leaf")
+	}
+	n.v2 = true
+	pre, err := readPrefixItem(p, n.prefixOff())
+	if err != nil {
+		return node{}, err
+	}
+	n.pre = pre
+	return n, nil
+}
+
+// prefixOff es el número del ítem de prefijo de una hoja de la forma 2: después de la clave alta, si tiene.
+func (n *node) prefixOff() page.OffsetNumber {
 	if n.rightmost() {
 		return page.FirstOffset
 	}
 	return page.FirstOffset + 1
 }
 
+// firstData es el número del primer ítem de datos.
+func (n *node) firstData() page.OffsetNumber {
+	off := page.FirstOffset
+	if !n.rightmost() {
+		off++
+	}
+	if n.v2 {
+		off++
+	}
+	return off
+}
+
 // maxOff es el número del último ítem.
-func (n node) maxOff() page.OffsetNumber { return n.p.MaxOffset() }
+func (n *node) maxOff() page.OffsetNumber { return n.p.MaxOffset() }
 
 // dataCount es la cantidad de ítems de datos.
-func (n node) dataCount() int { return int(n.maxOff()) - int(n.firstData()) + 1 }
+func (n *node) dataCount() int { return int(n.maxOff()) - int(n.firstData()) + 1 }
 
 /**
 * item devuelve el ítem off (vista).
 * @param off page.OffsetNumber
 * @return []byte, error: ErrCorrupt
 **/
-func (n node) item(off page.OffsetNumber) ([]byte, error) {
+func (n *node) item(off page.OffsetNumber) ([]byte, error) {
 	b, err := n.p.Item(off)
 	if err != nil {
 		return nil, corruptAt(n.blk, "item %d: %v", off, err)
@@ -111,14 +174,19 @@ func (n node) item(off page.OffsetNumber) ([]byte, error) {
 * @param off page.OffsetNumber
 * @return entry, error
 **/
-func (n node) entryAt(off page.OffsetNumber) (entry, error) {
+func (n *node) entryAt(off page.OffsetNumber) (entry, error) {
 	b, err := n.item(off)
 	if err != nil {
-		return nil, err
+		return entry{}, err
 	}
-	e, err := parseEntry(b)
+	var e entry
+	if n.v2 {
+		e, err = parseEntry2(b, n.pre)
+	} else {
+		e, err = parseEntry(b)
+	}
 	if err != nil {
-		return nil, corruptAt(n.blk, "item %d: %v", off, err)
+		return entry{}, corruptAt(n.blk, "item %d: %v", off, err)
 	}
 	return e, nil
 }
@@ -128,7 +196,7 @@ func (n node) entryAt(off page.OffsetNumber) (entry, error) {
 * @param off page.OffsetNumber
 * @return pivot, error
 **/
-func (n node) pivotAt(off page.OffsetNumber) (pivot, error) {
+func (n *node) pivotAt(off page.OffsetNumber) (pivot, error) {
 	b, err := n.item(off)
 	if err != nil {
 		return nil, err
@@ -145,7 +213,7 @@ func (n node) pivotAt(off page.OffsetNumber) (pivot, error) {
 * @param off page.OffsetNumber
 * @return key, error
 **/
-func (n node) keyAt(off page.OffsetNumber) (key, error) {
+func (n *node) keyAt(off page.OffsetNumber) (key, error) {
 	if n.leaf() {
 		e, err := n.entryAt(off)
 		if err != nil {
@@ -164,7 +232,7 @@ func (n node) keyAt(off page.OffsetNumber) (key, error) {
 * highKey lee la clave alta. Solo en una página que no es la de más a la derecha.
 * @return pivot, error
 **/
-func (n node) highKey() (pivot, error) {
+func (n *node) highKey() (pivot, error) {
 	return n.pivotAt(page.FirstOffset)
 }
 
@@ -174,7 +242,7 @@ func (n node) highKey() (pivot, error) {
 * @param k key
 * @return bool, error
 **/
-func (n node) pastHighKey(k key) (bool, error) {
+func (n *node) pastHighKey(k key) (bool, error) {
 	if n.rightmost() {
 		return false, nil
 	}
@@ -190,7 +258,7 @@ func (n node) pastHighKey(k key) (bool, error) {
 * @param k key
 * @return page.OffsetNumber: de firstData a maxOff + 1, error
 **/
-func (n node) lowerBound(k key) (page.OffsetNumber, error) {
+func (n *node) lowerBound(k key) (page.OffsetNumber, error) {
 	return n.search(func(c int) bool { return c >= 0 }, k)
 }
 
@@ -199,7 +267,7 @@ func (n node) lowerBound(k key) (page.OffsetNumber, error) {
 * @param k key
 * @return page.OffsetNumber, error
 **/
-func (n node) upperBound(k key) (page.OffsetNumber, error) {
+func (n *node) upperBound(k key) (page.OffsetNumber, error) {
 	return n.search(func(c int) bool { return c > 0 }, k)
 }
 
@@ -210,13 +278,25 @@ func (n node) upperBound(k key) (page.OffsetNumber, error) {
 * @param k key
 * @return page.OffsetNumber, error
 **/
-func (n node) search(stop func(c int) bool, k key) (page.OffsetNumber, error) {
+func (n *node) search(stop func(c int) bool, k key) (page.OffsetNumber, error) {
 	lo, hi := int(n.firstData()), int(n.maxOff())+1
+	if len(n.pre) > 0 {
+		var inside bool
+		if k, inside = n.trim(k); !inside {
+			if stop(compareKeys(key{pre: n.pre, lsn: MaxLSN}, k)) {
+				return page.OffsetNumber(lo), nil // k va antes de toda la hoja
+			}
+			return page.OffsetNumber(hi), nil // después
+		}
+	}
 	for lo < hi {
 		mid := int(uint(lo+hi) >> 1)
 		mk, err := n.keyAt(page.OffsetNumber(mid))
 		if err != nil {
 			return 0, err
+		}
+		if len(n.pre) > 0 {
+			mk.pre = nil // k ya está recortada: se comparan los sufijos
 		}
 		if stop(compareKeys(mk, k)) {
 			hi = mid
@@ -228,12 +308,26 @@ func (n node) search(stop func(c int) bool, k key) (page.OffsetNumber, error) {
 }
 
 /**
+* trim recorta una vez por hoja la clave de búsqueda al prefijo de una hoja de la forma 2: si el id de k empieza con
+* el prefijo, k sin él (se compara con los sufijos de las entradas); si no, k cae antes o después de toda la hoja.
+* @param k key: sin pre (una clave de búsqueda o top)
+* @return key, bool: si k tiene el prefijo
+**/
+func (n *node) trim(k key) (key, bool) {
+	if k.top || len(k.pre) > 0 || !bytes.HasPrefix(k.id, n.pre) {
+		return k, false
+	}
+	k.id = k.id[len(n.pre):]
+	return k, true
+}
+
+/**
 * childFor elige el enlace a seguir en una página interna: el último pivote con clave ≤ k (el primero es menos
 * infinito, así que siempre hay uno).
 * @param k key
 * @return page.BlockNumber, error
 **/
-func (n node) childFor(k key) (page.BlockNumber, error) {
+func (n *node) childFor(k key) (page.BlockNumber, error) {
 	off, err := n.upperBound(k)
 	if err != nil {
 		return 0, err
@@ -253,7 +347,7 @@ func (n node) childFor(k key) (page.BlockNumber, error) {
 * @param child page.BlockNumber
 * @return page.OffsetNumber: 0 si no está, error
 **/
-func (n node) findDownlink(child page.BlockNumber) (page.OffsetNumber, error) {
+func (n *node) findDownlink(child page.BlockNumber) (page.OffsetNumber, error) {
 	for off := n.firstData(); off <= n.maxOff(); off++ {
 		v, err := n.pivotAt(off)
 		if err != nil {

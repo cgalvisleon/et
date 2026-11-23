@@ -25,7 +25,8 @@
 //
 //	0   4 crc      CRC-32C de [4, 32)
 //	4   4 magic    0x47455357 («WSEG»)
-//	8   4 version  FormatVersion (= control.FormatVersion, que la toma de aquí: un solo número)
+//	8   4 version  FormatVersion (= control.FormatVersion, que la toma de aquí: un solo número); 2 desde la tarea
+//	               132 (formato 2, en desarrollo); se lee de MinFormatVersion (1) a FormatVersion (Readable)
 //	12  4 cero     reservado
 //	16  8 num      número del segmento (uno reciclado conserva el de su número viejo, que no vale para el nuevo)
 //	24  8 first    lsn de su primer registro (el que tiene o el que va a tener)
@@ -44,6 +45,12 @@
 // encabezado falta (el primero de un motor nuevo, o uno cortado antes de que fuera durable: ensureHeader). La
 // réplica rota igual al recibir el primer registro de un segmento, con el mismo número y el mismo lsn: su encabezado
 // es idéntico al del primario y las posiciones (el primer registro en el byte 32) coinciden byte a byte.
+//
+// Formato 2 (tarea 132): los registros no cambian de forma (el 2 solo agrega EntryCompressed a la entrada de hoja,
+// que viaja en el delta de KindLeafWrite), así que un segmento del 1 se recorre igual. Options.Upgrade (el motor lo
+// pone salvo en una réplica) hace que Open deje atrás un segmento activo del 1 antes de devolver el WAL (upgrade: lo
+// sella y rota si tiene registros; si no, le reescribe el encabezado con fsync): ningún registro escrito por este
+// binario cae en un segmento que dice 1.
 //
 // Quién lo valida: el recorrido (scan: Open, la recuperación, OpenAt, Read de WalSince y de la réplica) en el
 // segmento donde empieza (checkStartHeader: de este número, de esta versión, first ≤ from; ausente solo si from es

@@ -22,8 +22,13 @@ const (
 	// SegmentHeaderSize es el largo del encabezado; el primer registro de un segmento empieza aquí.
 	SegmentHeaderSize = 32
 
-	// FormatVersion es la versión del formato en disco del motor (la misma del control, que la toma de aquí).
-	FormatVersion = 1
+	// FormatVersion es la versión del formato en disco del motor (la misma del control, que la toma de aquí): la que
+	// este binario escribe. 2 desde la tarea 132 (formato 2, en desarrollo: valores comprimidos).
+	FormatVersion = 2
+
+	// MinFormatVersion es la versión más vieja que este binario lee: un directorio de [MinFormatVersion,
+	// FormatVersion) se abre y pasa a FormatVersion al escribir (ver «Formato 2» en store/doc.go).
+	MinFormatVersion = 1
 
 	headerMagic = 0x47455357 // «WSEG» en little-endian
 
@@ -95,13 +100,22 @@ func decodeHeader(buf []byte) (SegmentHeader, headerState) {
 			return h, headerAbsent
 		}
 		return h, headerBroken
-	case h.Version != FormatVersion:
+	case !Readable(h.Version):
 		return h, headerVersion
 	case binary.LittleEndian.Uint32(buf[offHeaderCRC:]) != crc32.Checksum(buf[offHeaderMagic:], castagnoli),
 		binary.LittleEndian.Uint32(buf[offHeaderReserved:]) != 0, h.Num == 0, h.First == 0:
 		return h, headerBroken
 	}
 	return h, headerValid
+}
+
+/**
+* Readable dice si este binario lee la versión del formato v: de MinFormatVersion a FormatVersion.
+* @param v uint32
+* @return bool
+**/
+func Readable(v uint32) bool {
+	return v >= MinFormatVersion && v <= FormatVersion
 }
 
 /**

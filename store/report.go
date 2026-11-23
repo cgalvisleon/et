@@ -20,6 +20,7 @@ const (
 	FindNoMeta      FindingKind = "no-meta"      // store sin página meta: se crea vacío al abrirlo con Store
 	FindTree        FindingKind = "tree"         // el árbol no pasa btree.Verify o una página suya no se lee
 	FindChain       FindingKind = "chain"        // la cadena de desborde de una versión está dañada
+	FindValue       FindingKind = "value"        // un valor comprimido en línea no se descomprime (formato 2)
 	FindDouble      FindingKind = "double-page"  // una página es de dos dueños (árbol, cadena o lista de libres)
 	FindFreeList    FindingKind = "free-list"    // la lista de libres apunta a una página que no es libre o se sale
 	FindLostPage    FindingKind = "lost-page"    // páginas sin dueño (reparable: vuelven a la lista de libres)
@@ -55,6 +56,7 @@ type Report struct {
 	Entries     int64 // versiones en las hojas
 	LiveIDs     int64 // ids vivos según el recorrido (lo que debería dar Count)
 	OrphanFiles int   // números de archivo de datos sin store
+	LeavesForm1 int64 // hojas de la forma 1 (formato 1) que la limpieza todavía no reescribió en la forma 2
 
 	Findings    []Finding // los primeros MaxFindings hallazgos
 	Total       int       // todos los hallazgos, también los que no entraron en Findings
@@ -85,7 +87,7 @@ func (r Report) Pending() int {
 func (r Report) String() string {
 	var b strings.Builder
 	fmt.Fprintf(&b, MSG_REPORT_TOTALS, r.Stores, r.Pages, r.TreePages, r.Deleted, r.ChainPages, r.FreePages, r.LostPages,
-		r.Entries, r.LiveIDs, r.OrphanFiles)
+		r.Entries, r.LiveIDs, r.OrphanFiles, r.LeavesForm1)
 	fmt.Fprintf(&b, MSG_REPORT_FINDINGS, r.Total, r.Repaired, r.Irreparable)
 	for _, f := range r.Findings {
 		b.WriteString(f.String())

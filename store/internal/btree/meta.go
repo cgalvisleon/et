@@ -18,9 +18,22 @@ const (
 	offMetaFreeHead  = page.MetaOffFreeHead
 	offMetaDeleted   = page.HeaderSize + 28
 	offMetaFrozen    = page.HeaderSize + 32
+	offMetaFlags     = page.HeaderSize + 40
 
 	// metaVersion es la versión del formato de la meta.
 	metaVersion = 1
+)
+
+// MetaFlags son las marcas de la meta (formato 2; en una meta anterior, el campo reservado en cero: ninguna).
+type MetaFlags uint32
+
+const (
+	// MetaLeavesForm2: todas las hojas del store son de la forma 2 (LayoutVersion 2). La pone Create en un store
+	// nuevo y la limpieza al terminar de reescribir las hojas de la forma 1 de un store del formato 1 (migración
+	// perezosa, doc.go «Hojas de la forma 2»).
+	MetaLeavesForm2 MetaFlags = 1 << 0
+
+	knownMetaFlags = MetaLeavesForm2
 )
 
 // meta es lo que el árbol lee de la página meta.
@@ -31,6 +44,7 @@ type meta struct {
 	fastLevel uint32
 	deleted   page.BlockNumber // la cabeza de la pila de páginas borradas que esperan reciclarse (0 = vacía)
 	freeHead  page.BlockNumber // la cabeza de la lista de libres (de fsm)
+	flags     MetaFlags
 }
 
 /**
@@ -39,7 +53,8 @@ type meta struct {
 * @return meta, error: ErrCorrupt
 **/
 func readMetaPage(p page.Page) (meta, error) {
-	if p.IsNew() || le.Uint32(p[offMetaMagic:]) != MetaMagic || le.Uint32(p[offMetaVersion:]) != metaVersion {
+	if p.IsNew() || le.Uint32(p[offMetaMagic:]) != MetaMagic || le.Uint32(p[offMetaVersion:]) != metaVersion ||
+		p.LayoutVersion() != page.LayoutVersion {
 		return meta{}, corruptAt(MetaBlock, "not a meta page")
 	}
 	if o, err := p.Opaque(); err != nil || o.Flags&page.OpaqueMeta == 0 {
@@ -52,9 +67,13 @@ func readMetaPage(p page.Page) (meta, error) {
 		fastLevel: le.Uint32(p[offMetaFastLevel:]),
 		deleted:   page.BlockNumber(le.Uint32(p[offMetaDeleted:])),
 		freeHead:  page.BlockNumber(le.Uint32(p[offMetaFreeHead:])),
+		flags:     MetaFlags(le.Uint32(p[offMetaFlags:])),
 	}
 	if m.root == MetaBlock || m.fastRoot == MetaBlock {
 		return meta{}, corruptAt(MetaBlock, "root or fast root is the meta page")
+	}
+	if m.flags&^knownMetaFlags != 0 {
+		return meta{}, corruptAt(MetaBlock, "unknown meta flags %#x", m.flags)
 	}
 	return m, nil
 }
@@ -70,12 +89,12 @@ func setMetaFast(p page.Page, fast page.BlockNumber, level uint32) {
 }
 
 /**
-* initMetaPage deja p como la meta de un store nuevo: raíz root de nivel 0, lista de libres vacía y su frozenXID.
-* pd_lower cubre el contenido para que la imagen de página entera del WAL no lo deje fuera.
-* @param p page.Page, root page.BlockNumber, frozen page.XID
+* initMetaPage deja p como la meta de un store nuevo: raíz root de nivel 0, lista de libres vacía, su frozenXID y sus
+* marcas. pd_lower cubre el contenido para que la imagen de página entera del WAL no lo deje fuera.
+* @param p page.Page, root page.BlockNumber, frozen page.XID, flags MetaFlags
 * @return error
 **/
-func initMetaPage(p page.Page, root page.BlockNumber, frozen page.XID) error {
+func initMetaPage(p page.Page, root page.BlockNumber, frozen page.XID, flags MetaFlags) error {
 	if err := p.Init(page.OpaqueSize); err != nil {
 		return err
 	}
@@ -86,22 +105,64 @@ func initMetaPage(p page.Page, root page.BlockNumber, frozen page.XID) error {
 	le.PutUint32(p[offMetaVersion:], metaVersion)
 	setMetaRoot(p, root, 0)
 	le.PutUint64(p[offMetaFrozen:], uint64(frozen))
+	le.PutUint32(p[offMetaFlags:], uint32(flags))
 	return p.SetLower(page.HeaderSize + MetaSize)
 }
 
 /**
-* applyMetaFrozen anota el frozenXID nuevo en la meta (KindSetFrozen): solo sube.
-* @param p page.Page, delta []byte: frozenXID(8)
+* applyMetaFrozen anota el frozenXID nuevo en la meta (KindSetFrozen): solo sube; con flags(4) al final del delta
+* (formato 2), además suma esas marcas a las de la meta.
+* @param p page.Page, delta []byte: frozenXID(8) [flags(4)]
 * @return error
 **/
 func applyMetaFrozen(p page.Page, delta []byte) error {
-	if _, err := readMetaPage(p); err != nil {
+	m, err := readMetaPage(p)
+	if err != nil {
 		return err
 	}
 	if frozen := page.XID(le.Uint64(delta)); frozen > metaFrozen(p) {
 		le.PutUint64(p[offMetaFrozen:], uint64(frozen))
 	}
+	if len(delta) == frozenFlagsDeltaSize {
+		le.PutUint32(p[offMetaFlags:], uint32(m.flags|MetaFlags(le.Uint32(delta[frozenDeltaSize:]))))
+	}
 	return nil
+}
+
+/**
+* LeavesForm2 dice si todas las hojas del store son de la forma 2 (MetaLeavesForm2): si no, quedan hojas del
+* formato 1 que la limpieza todavía no reescribió.
+* @return bool, error
+**/
+func (t *BTree) LeavesForm2() (bool, error) {
+	m, err := t.readMeta()
+	return m.flags&MetaLeavesForm2 != 0, err
+}
+
+/**
+* setMetaFlags suma marcas a la meta con un KindSetFrozen (frozenXID sin cambiar + flags) sobre la meta bloqueada en
+* exclusivo. Si ya las tiene, no escribe nada.
+* @param flags MetaFlags
+* @return error
+**/
+func (t *BTree) setMetaFlags(flags MetaFlags) error {
+	h, err := t.pool.Pin(t.tag(MetaBlock), buffer.Normal)
+	if err != nil {
+		return err
+	}
+	h.Lock(buffer.Exclusive)
+	m, err := readMetaPage(h.Page())
+	if err != nil || m.flags&flags == flags {
+		h.Release()
+		return err
+	}
+	delta := le.AppendUint32(le.AppendUint64(nil, uint64(metaFrozen(h.Page()))), uint32(flags))
+	res, err := t.logChange(wal.KindSetFrozen, 0, 0, []wal.BlockRef{{Delta: delta}}, []buffer.Handle{h}, nil)
+	h.Release()
+	if err != nil {
+		return err
+	}
+	return res.Write()
 }
 
 /**
@@ -183,7 +244,7 @@ func RecordFrozenXID(rec *wal.Record) (page.XID, bool) {
 	case rec.Kind == wal.KindSetFrozen && len(delta) >= 8:
 		return page.XID(le.Uint64(delta)), true
 	case rec.Kind == wal.KindInitStore && len(delta) >= 12:
-		_, frozen := parseInitMeta(delta)
+		_, frozen, _ := parseInitMeta(delta)
 		return frozen, true
 	}
 	return 0, false
@@ -199,9 +260,9 @@ func DecodeLeafWrite(rec *wal.Record) (Version, error) {
 	if rec.Kind != wal.KindLeafWrite || len(rec.Blocks) != 1 || len(rec.Blocks[0].Delta) <= offsetDeltaSize {
 		return Version{}, badRecord(rec.Kind, "not a leaf write")
 	}
-	e, err := parseEntry(rec.Blocks[0].Delta[offsetDeltaSize:])
+	_, e, err := parseLeafWrite(rec.Blocks[0].Delta)
 	if err != nil {
-		return Version{}, badRecord(rec.Kind, err.Error())
+		return Version{}, err
 	}
 	v := e.version()
 	v.LSN = rec.LSN

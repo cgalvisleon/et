@@ -1,7 +1,6 @@
 package btree
 
 import (
-	"bytes"
 	"slices"
 
 	"github.com/cgalvisleon/et/store/internal/page"
@@ -59,7 +58,10 @@ func LeafVacuumConflict(p page.Page, delta []byte, status func(page.XID) (xact.S
 	if err != nil || o.Flags&page.OpaqueLeaf == 0 {
 		return VacuumConflict{}, corruptAt(0, "leaf vacuum conflict: not a leaf")
 	}
-	n := node{p: p, o: o}
+	n, err := pageNode(p, o)
+	if err != nil {
+		return VacuumConflict{}, err
+	}
 	gone := slices.Concat(pv.mark, pv.remove)
 	slices.Sort(gone)
 	var c VacuumConflict
@@ -71,8 +73,8 @@ func LeafVacuumConflict(p page.Page, delta []byte, status func(page.XID) (xact.S
 		if err != nil {
 			return VacuumConflict{}, err
 		}
-		if id == nil || !bytes.Equal(id, e.id()) {
-			id, newer, shadowed = bytes.Clone(e.id()), 0, false
+		if id == nil || !e.idEqual(id) {
+			id, newer, shadowed = e.appendID(id[:0]), 0, false
 		}
 		seen, all, err := entrySeen(e, status)
 		if err != nil {

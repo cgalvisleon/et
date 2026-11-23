@@ -592,7 +592,7 @@ func encodeSlots(list []*slot) []byte {
 * @return []*slot, bool: false si no tiene la forma del formato
 **/
 func decodeSlots(b []byte) ([]*slot, bool) {
-	if len(b) < slotsHeaderSize+4 || le.Uint32(b[0:]) != slotsMagic || le.Uint32(b[4:]) != control.FormatVersion {
+	if len(b) < slotsHeaderSize+4 || le.Uint32(b[0:]) != slotsMagic || !wal.Readable(le.Uint32(b[4:])) {
 		return nil, false
 	}
 	body := b[:len(b)-4]

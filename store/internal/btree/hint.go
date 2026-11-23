@@ -210,7 +210,10 @@ func setHintsChecked(p page.Page, items []hintItem) error {
 	if err != nil || o.Flags&page.OpaqueLeaf == 0 {
 		return badRecord(wal.KindSetHints, "not a leaf")
 	}
-	n := node{p: p, o: o}
+	n, err := pageNode(p, o)
+	if err != nil {
+		return badRecord(wal.KindSetHints, err.Error())
+	}
 	for _, it := range items {
 		if it.off < n.firstData() || it.off > n.maxOff() {
 			return badRecord(wal.KindSetHints, "hint outside the leaf's entries")
@@ -230,7 +233,7 @@ func setHintsChecked(p page.Page, items []hintItem) error {
 func setHintItems(p page.Page, items []hintItem) error {
 	for _, it := range items {
 		b, err := p.Item(it.off)
-		if err != nil || !entry(b).orFlags(it.flag) {
+		if err != nil || !orItemFlags(b, it.flag) {
 			return badRecord(wal.KindSetHints, "cannot set a hint")
 		}
 	}

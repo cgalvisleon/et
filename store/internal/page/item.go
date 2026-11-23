@@ -135,13 +135,39 @@ func (p Page) InsertItem(item []byte, off OffsetNumber) error {
 }
 
 /**
+* InsertItemParts es InsertItem de un ítem que llega en dos partes, head y después tail, sin juntarlas antes en otro
+* búfer (btree arma así la entrada de una hoja desde el delta del WAL).
+* @param head, tail []byte: el ítem es head + tail, de 1 byte en adelante
+* @param off OffsetNumber: de FirstOffset a MaxOffset + 1
+* @return error: ErrEmptyItem, ErrInvalidOffset, ErrNoSpace o ErrCorrupt
+**/
+func (p Page) InsertItemParts(head, tail []byte, off OffsetNumber) error {
+	if err := p.checkLayout(); err != nil {
+		return err
+	}
+	if off < FirstOffset || off > p.MaxOffset()+1 {
+		return ErrInvalidOffset
+	}
+	return p.placeParts(head, tail, off, true)
+}
+
+/**
 * placeItem guarda el ítem justo debajo de pd_upper y lo apunta desde off, con un puntero nuevo (corriendo los
 * siguientes) o en uno libre que ya existe. La página ya pasó checkLayout.
 * @param item []byte, off OffsetNumber, newLine bool
 * @return error: ErrEmptyItem o ErrNoSpace
 **/
 func (p Page) placeItem(item []byte, off OffsetNumber, newLine bool) error {
-	n := len(item)
+	return p.placeParts(item, nil, off, newLine)
+}
+
+/**
+* placeParts es placeItem del ítem head + tail.
+* @param head, tail []byte, off OffsetNumber, newLine bool
+* @return error: ErrEmptyItem o ErrNoSpace
+**/
+func (p Page) placeParts(head, tail []byte, off OffsetNumber, newLine bool) error {
+	n := len(head) + len(tail)
 	if n == 0 {
 		return ErrEmptyItem
 	}
@@ -156,7 +182,7 @@ func (p Page) placeItem(item []byte, off OffsetNumber, newLine bool) error {
 		pos := linePos(off)
 		copy(p[pos+ItemIDSize:lower], p[pos:lower-ItemIDSize])
 	}
-	copy(p[upper:], item)
+	copy(p[upper+copy(p[upper:], head):], tail)
 	clear(p[upper+n : upper+Align(n)])
 	p.setLine(off, makeItemID(upper, LineNormal, n))
 	p.setU16(OffLower, lower)

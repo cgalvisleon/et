@@ -10,7 +10,6 @@ import (
 
 	"github.com/cgalvisleon/et/envar"
 	"github.com/cgalvisleon/et/et"
-	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/msg"
 	"github.com/cgalvisleon/et/reg"
 	"github.com/cgalvisleon/et/utility"
@@ -48,15 +47,13 @@ func Load() error {
 		return nil
 	}
 
-	// No Redis configured: keep the cache in this process (see memory.go).
-	if envar.GetStr("REDIS_HOST", "") == "" {
-		local = newMemStore()
-		logs.Log(packageName, "REDIS_HOST is not set, using an in-memory cache")
-		return nil
-	}
-
 	var err error
-	conn, err = New()
+	conn, err = New(Params{
+		Host:       envar.GetStr("REDIS_HOST", ""),
+		Dbname:     envar.GetInt("REDIS_DB", 0),
+		Password:   envar.GetStr("REDIS_PASSWORD", ""),
+		MaxRetries: envar.GetInt("REDIS_MAX_RETRIES", 1000),
+	})
 	if err != nil {
 		return err
 	}

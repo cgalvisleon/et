@@ -120,13 +120,14 @@
 //	backup.go      BackupInfo, backups (retenciones y borrados que esperan), unlinkData, backupRun (los pasos)
 //	restore.go     el marcador backup_label, checkBackupWAL, removeBackupLabel, checkTarget (el objetivo de OpenAt)
 //	format.go      checkFormat: la versión del formato de los archivos de la raíz antes de abrir (ErrFormatVersion)
+//	compress.go    compression (STORE_COMPRESSION), encode, decompress, Engine.compressed: el formato 2 (a)
 //	archive.go     archiveState, startArchive, PendingArchive, SetArchived, SwitchWAL, el tope, archive_status
 //	walsince.go    WalReader (WalSince, Next): leer el WAL durable desde un lsn, del disco
 //	replica.go     WalEntry, replicaState, startReplica, applyWal (conflictos con snapshots), restartpoint
 //	slots.go       slotState, CreateSlot, DropSlot, AdvanceSlot, checkpointSlots (el tope), el archivo slots
 //	decode.go      ChangeReader: búfer de reordenamiento por xid con derrame a disco, Next, Confirm
 //
-// # Formatos en disco (little-endian; versión del formato 1, ver «Versiones del formato»)
+// # Formatos en disco (little-endian; versión del formato 2, congelado el 2026-11-22: ver «Versiones del formato» y «Formato 2»)
 //
 // Todos los enteros son little-endian: el orden nativo de arm64 y amd64, que permite poner las marcas de visibilidad
 // de una entrada con un OR atómico sobre su uint32. Las sumas son CRC-32C (Castagnoli).
@@ -148,19 +149,26 @@
 // prev(4) next(4) level(4) flags(2) cycleID(2). Suma: CRC-32C de la página con pd_checksum en cero y el número de
 // bloque, plegado a 16 bits. Una página en ceros es nueva y válida.
 //
-// Entrada de hoja (una versión): flags(4) idLen(2) reservado(2) lsn(8) xid(8) valueLen(4) = 28 B, más el id, más el
-// valor en línea o la referencia a desborde (primer bloque, 4). Clave: (id ascendente, lsn descendente). Va en línea
-// si 28 + id + valor ≤ 2.032 B; si no, a desborde. Con el puntero y la alineación, una versión ocupa ~32 B + id +
-// valor. flags: EntryTombstone, EntryOverflow, las marcas de visibilidad (EntryXidCommitted, EntryXidAborted),
+// Entrada de hoja de la forma 1 (una versión; hojas con LayoutVersion 1, las del formato 1): flags(4) idLen(2)
+// reservado(2) lsn(8) xid(8) valueLen(4) = 28 B, más el id, más el valor en línea o la referencia a desborde (primer
+// bloque, 4). Entrada de la forma 2 (hojas con LayoutVersion 2, las que escribe el formato 2; ver «Formato 2: hojas de
+// la forma 2 (b y c)»): word0(4) = marcas (bits 0–7) | largo del sufijo (8–19) | largo en línea (20–31), lsn(8) y
+// xid(8) salvo en una congelada sin desborde = 20 B (12 congelada), más el id sin el prefijo de la hoja, más el valor
+// en línea o first(4) len(4). Clave: (id ascendente, lsn descendente). Va en línea si 28 + id + valor ≤ 2.032 B (la
+// regla de la forma 1 en las dos); si no, a desborde. Con el puntero y la alineación, una versión de la forma 1 ocupa
+// ~32 B + id + valor; una de la 2, ~24 B (16 congelada) + el resto del id + valor. flags: EntryTombstone, EntryOverflow, las marcas de visibilidad (EntryXidCommitted, EntryXidAborted),
 // EntryFrozen (congelada: confirmada y visible para todo snapshot, sin consultar el archivo de estados; la pone la
-// limpieza con WAL) y EntryFreeing (versión muerta cuya cadena de desborde se está liberando). La página de una hoja
-// lleva page.FlagAllVisible mientras su bit del mapa de visibilidad puede estar puesto.
+// limpieza con WAL), EntryFreeing (versión muerta cuya cadena de desborde se está liberando) y, desde el formato 2,
+// EntryCompressed (el valor guardado, en línea o en desborde, es method(1) rawLen(4) y los datos comprimidos;
+// valueLen es lo guardado; ver «Formato 2»). La página de una hoja lleva page.FlagAllVisible mientras su bit del mapa
+// de visibilidad puede estar puesto.
 //
 // Pivote (páginas internas y claves altas): keyLen(2) flags(2) downlink(4) lsn(8) = 16 B, más el prefijo truncado
 // del id.
 //
 // Página meta (bloque 0 de cada store, desde el byte 32): magic(4) version(4) root(4) level(4) fastRoot(4)
-// fastLevel(4) freeHead(4) deletedHead(4) frozenXID(8) reservado(8) = 48 B. frozenXID es el del store: ninguna versión
+// fastLevel(4) freeHead(4) deletedHead(4) frozenXID(8) flags(4) reservado(4) = 48 B; flags (formato 2; en una meta
+// del 1, en cero) bit 0 MetaLeavesForm2: todas las hojas del store son de la forma 2. frozenXID es el del store: ninguna versión
 // del store con un xid menor queda sin congelar (o sin quitar). fastRoot/fastLevel es la raíz rápida (btm_fastroot de
 // nbtree): la página de más a la izquierda del nivel más bajo con una sola página, donde empiezan las bajadas.
 // deletedHead es la cabeza de la pila de páginas del árbol borradas que esperan reciclarse (0 = vacía; era un campo
@@ -205,7 +213,8 @@
 // congela), 22 KindSetHints (la primera marca de visibilidad de una hoja tras un checkpoint, con su imagen), 23
 // KindSetFrozen (frozenXID de la meta de un store), 24 KindMarkHalfDead (hoja medio muerta y el enlace quitado del
 // padre del subárbol), 25 KindUnlinkPage (página desenganchada de sus hermanas, borrada y apilada en la meta), 26
-// KindRecyclePage (de la pila de borradas a la lista de libres); overflow 32 KindOverflowWrite; fsm 40 KindFreePush,
+// KindRecyclePage (de la pila de borradas a la lista de libres), 27 KindLeafRewrite (formato 2: hoja reescrita en la
+// forma 2, por la migración desde el 1 o un prefijo que se acorta); overflow 32 KindOverflowWrite; fsm 40 KindFreePush,
 // 41 KindFreePop, 42 KindVMSet, 43 KindVMClear.
 //
 // Registro del WAL: crc(4) lsn(8) totalLen(4) xid(8) kind(1) flags(1) blockCount(1) reservado(1) mainLen(4) = 32 B
@@ -241,14 +250,16 @@
 // control, porque nunca se leen sin él (o sin el backup_label de una copia, que también la lleva):
 //
 //	archivo                       dónde está la versión                       si no coincide
-//	control (cada copia)          version(4), byte 4; FormatVersion = 1       ErrFormatVersion (una copia con su crc
+//	control (cada copia)          version(4), byte 4; FormatVersion = 2       ErrFormatVersion (una copia con su crc
 //	                                                                          válido basta, aunque la otra valga)
 //	catalog                       version(4), byte 4                          ErrFormatVersion
 //	backup_label                  version(4), byte 4                          ErrFormatVersion
 //	archive_status                version(4), byte 4                          ErrFormatVersion
 //	slots                         version(4), byte 4                          ErrFormatVersion
-//	página (todas las clases)     pd_pagesize_version = 8.192 | 1             daño de la página (ErrCorrupt al leerla,
-//	                                                                          hallazgo de Verify)
+//	página (todas las clases)     pd_pagesize_version = 8.192 | 1, y 8.192 |  daño de la página (ErrCorrupt al leerla,
+//	                              2 en una hoja de la forma 2 (la versión de  hallazgo de Verify); una hoja de la
+//	                              página no es la del formato: una hoja del   forma 1 en un store cuya meta dice
+//	                              formato 1 sigue en 1 hasta reescribirse)    MetaLeavesForm2 también es daño
 //	página meta de un store       version(4) = 1, tras su magic               daño de la página
 //	segmento del WAL              encabezado (32 B): version(4), byte 8       ErrFormatVersion (checkFormat); roto:
 //	                              (pregunta 76; wal/doc.go)                   ErrCorrupt al recorrerlo
@@ -262,6 +273,8 @@
 // retiene solo el archivo continuo atrasado los valida quien los lee), de
 // backup_label, de archive_status y de slots con la que lee el binario: una mayor es de un binario más nuevo (MSG_FORMAT_NEWER: actualizar et) y una menor, de un formato anterior
 // sin migración (MSG_FORMAT_OLDER); las dos dan ErrFormatVersion y el directorio queda como estaba (TestOpenFormatVersion).
+// Desde el formato 2 «la que lee» es un rango (wal.Readable: de wal.MinFormatVersion = 1 a FormatVersion = 2): un
+// archivo del 1 se lee y lo que se escribe sale en 2 (ver «Formato 2: migración desde el formato 1 (e)»).
 // Un archivo sin la magia de su formato no es «otra versión» sino daño, y lo informa quien lo lee. La versión de las
 // páginas y de la meta no se mira al abrir: el control las cubre, y una página de otra versión con un control de esta
 // es daño. La réplica física copia el WAL byte a byte: primario y réplica tienen que leer la misma versión, y un
@@ -280,6 +293,11 @@
 // con el directorio guardado en store/testdata/format-v1 (primary/, backup/ y want.json), que se genera una sola vez
 // con go test ./store -run TestFormatV1Reference -update-format-v1 y que la prueba exige (sin él falla).
 //
+// Estado (2026-11-22): **formato 2 congelado el 2026-11-22** (tareas 132 y 134, «Formato 2»): este binario escribe el
+// 2 y lee el 1 y el 2. TestFormatV2Reference exige store/testdata/format-v2 (primary/, backup/ y want-bytes.json, con
+// los valores en base64 porque la referencia del 2 tiene valores binarios), generado una sola vez con
+// go test ./store -run TestFormatV2Reference -update-format-v2 y que nunca se regenera; format-v1 sigue igual.
+//
 // Estado (2026-11-21): **el formato 1 está congelado** (tarea 54). Antes de congelar entró el encabezado de los
 // segmentos del WAL (pregunta 76; el formato en store/internal/wal/doc.go, «Encabezado del segmento»), y se midió el
 // encabezado de 28 B de cada versión con la forma en que josefina guarda sus índices (pregunta 75,
@@ -291,11 +309,212 @@
 //
 // Regla, desde el 2026-11-21: **todo cambio en disco sube FormatVersion** (wal.FormatVersion, que el control toma) y
 // lleva migración (o lectura de la versión anterior), un directorio de referencia nuevo (testdata/format-v<n>) junto
-// a los anteriores, que se siguen abriendo o migrando, y su prueba de ida y vuelta. Nunca se regenera format-v1: si
+// a los anteriores, que se siguen abriendo o migrando, y su prueba de ida y vuelta (checkCodecs compara lo que
+// escribe este binario con el archivo de una versión anterior salvo el byte de la versión: asWritten). Nunca se regenera format-v1: si
 // TestFormatV1Reference falla, el cambio rompió el formato 1. Lo que cuenta como formato: todo lo de «Formatos en
 // disco», los registros del WAL (también los Kind y deltas de las piezas), el encabezado y la marca de los
 // segmentos, y los archivos de la raíz. Un cambio de comportamiento que no cambia bytes (dónde se parte una página,
 // cuándo se limpia) no es de formato.
+//
+// # Formato 2
+//
+// Tarea 132 de F-23, pregunta 78 (decidida el 2026-11-22): un solo formato 2 con (a) el motor comprime los valores
+// grandes, (b) prefijo de clave compartido en la hoja y (c) cabecera de versión más corta; sin (d) (empaquetar el
+// desborde). Medido con la base real (tarea 131, muestra 1/20 de josephine): store 2,84 × Pebble; los documentos 3,28 ×
+// porque no se comprimen y el desborde ocupa al menos una página por valor; los índices 2,54 × con la cabecera de 28 B
+// = 32 % de sus hojas. Estimado con prototipos: (a) −23 % del total, (b) −8 %, (c) −7 % (−12 % con 8 B en las
+// congeladas); (a)+(b)+(c) ≈ 1,74 × Pebble.
+//
+// Estado: **formato 2 congelado el 2026-11-22** (tarea 134). FormatVersion = 2 (wal.FormatVersion, que el control
+// toma) y MinFormatVersion = 1: este binario lee los dos y escribe el 2. Hecho: (a), (b)+(c) (hojas de la forma 2) y la
+// migración desde el 1 (los archivos al abrir; las hojas de a poco). La referencia es store/testdata/format-v2
+// (TestFormatV2Reference la exige); format-v1 se conserva y nunca se regenera: TestFormatV1Reference sigue abriéndolo
+// y TestFormatV1Migrates comprueba que se migra (también las hojas, con Vacuum). Desde ahora un cambio en disco es un
+// formato 3. La forma 1 de la hoja (con EntryCompressed) sigue siendo parte del 2: un directorio del 1 a medio migrar
+// es un directorio del 2.
+//
+// # Formato 2: compresión de valores (a)
+//
+// Cuándo: en cada escritura con valor (Put, Insert, Update, sus formas In y Deferred), una sola vez, antes de las
+// vueltas de espera y del desborde (Engine.compressed en compress.go: write y writeIn), si STORE_COMPRESSION no es off
+// y el valor mide al menos STORE_COMPRESSION_MIN (256 B). El valor comprimido, con su encabezado, se guarda solo si
+// ahorra al menos un octavo; si no, va tal cual (leerlo no cuesta CPU). La decisión en línea o desborde se toma sobre lo
+// guardado (28 + id + guardado ≤ 2.032): un documento JSON de 2 a 5 KB vuelve a la hoja. Una lápida nunca se comprime.
+// Los valores ya escritos no se recomprimen: quedan como están hasta que se reescriben (pregunta 80).
+//
+// Marca en la entrada: EntryCompressed (bit 6 de flags, btree). Con ella, valueLen es el largo guardado (comprimido y
+// con su encabezado) y el valor en línea, o la cadena de desborde (EntryOverflow | EntryCompressed), guarda esos bytes;
+// Ref.Len es ese largo. Una lápida con EntryCompressed es daño (parseEntry). La marca nunca cambia después de escribir
+// la versión: las marcas de visibilidad, el congelado, «liberándose», la poda (tarea 108), la partición y la
+// recuperación la copian con la entrada sin mirarla.
+//
+// Valor comprimido (lo guardado, en línea o juntando la cadena de desborde; little-endian):
+//
+//	off tam campo
+//	  0   1 method   1 = zstd (un cuadro, nivel SpeedFastest, sin suma de contenido), 2 = S2 (un bloque); otro = daño
+//	  1   4 rawLen   largo sin comprimir, ≤ MaxValueLen
+//	  5   … datos    del método; descomprimidos tienen que medir rawLen
+//
+// El método va en el valor, no en la entrada ni en el control: un motor lee cualquiera, y STORE_COMPRESSION solo
+// elige con cuál escribe (cambiarla no pide migración; s2 por omisión, zstd, auto = S2 bajo 2 KB y zstd desde 2 KB,
+// u off). Sin
+// suma propia: la página (en línea) y cada página de desborde tienen la suya; un byte cambiado dentro de los datos que
+// pasara la suma de la página puede no notarse al descomprimir (zstd sin suma), uno del encabezado o un cuadro roto sí.
+// Sin diccionario (a confirmar: un diccionario por store entrenado con sus valores ayudaría a los JSON de < 512 B, que
+// sin él casi no achican; sería otro method con el id del diccionario).
+//
+// WAL: sin Kind nuevo ni cambio en los deltas. KindLeafWrite lleva la entrada con el valor comprimido (el delta es la
+// entrada) y KindOverflowWrite los trozos de lo comprimido; el WAL también achica. La réplica física aplica los bytes
+// tal cual y descomprime al leer, como el primario. El flujo lógico (Changes) entrega el valor sin comprimir:
+// leafWrite anota la marca itemCompressed en el búfer de reordenamiento (no es durable: su formato cambia libremente)
+// y replay descomprime después de armar el valor de la cadena. Respaldo, archivo continuo y OpenAt copian bytes.
+//
+// Lectura: valueOf (Read, ReadIn, ReadAt, GetVersion…, Update, que compara con el valor descomprimido) y emit de los
+// recorridos (ForEach… con una copia nueva; ForEachBorrowed descomprime en un búfer del recorrido que se reutiliza,
+// válido solo dentro de fn como siempre). Un valor que no se descomprime es ErrCorrupt (MSG_COMPRESSED).
+//
+// Verify: descomprime cada valor comprimido en línea (btree.VerifyWith entrega su valor) y anota FindValue (no
+// reparable) si falla; de uno en desborde solo recorre la cadena (a confirmar: descomprimirlo pide leerlo entero).
+// Repair no toca los valores.
+//
+// Memoria y CPU: un codificador y un decodificador de zstd por proceso (EncodeAll y DecodeAll concurrentes,
+// WithLowerEncoderMem, WithDecoderLowmem); S2 no guarda estado. Nada crece con la base.
+//
+// Medido (Apple M5, 2026-11-22; compress_test.go): BenchmarkValueCodec (CPU por valor, JSON tipo josefina con ids al
+// azar; la razón incluye los 5 B del encabezado):
+//
+//	tamaño   zstd razón  comprimir  descomprimir   S2 razón  comprimir  descomprimir
+//	1 KB       0,64       5,3 µs     ~3,6 µs         0,83     0,96 µs     0,12 µs
+//	2 KB       0,51       8,1 µs      3,2 µs         0,67     1,5 µs      0,23 µs
+//	4 KB       0,42      12,0 µs      5,4 µs         0,56     3,1 µs      0,56 µs
+//	8 KB       0,36      23,3 µs     10,1 µs         0,50     6,0 µs      1,2 µs
+//	16 KB      0,32      42,6 µs     18,4 µs         0,46    11,8 µs      2,6 µs
+//
+// Por debajo de 512 B ninguno ahorra un octavo con estos documentos (quedan sin comprimir). Las opciones de zstd
+// (memoria baja, ventana de 64 KB, nivel por omisión) no cambian la CPU más de un 30 % y la razón menos de un 2 %.
+// TestCompressDisk (STORE_BENCH=1; 40.000 documentos con la mezcla de tamaños de la base josephine, doc-sizes.md:
+// 59 MB de JSON; disco del store tras Vacuum y Checkpoint; Put diferido y Read de cada documento, ForEach completo):
+//
+//	STORE_COMPRESSION  disco ÷ JSON   WAL      Put diferido   Read        ForEach (por documento)
+//	off                1,64           90 MB    20–26 µs       3,6–4,1 µs  0,77 µs
+//	s2                 1,10           69 MB    16–17 µs       4,0–4,4 µs  0,85 µs
+//	zstd               0,94           56 MB    17–21 µs       6,2–6,4 µs  3,95 µs
+//	auto               1,06           64 MB    17,8 µs        4,5 µs      1,60 µs
+//
+// off da lo mismo que la muestra real sin comprimir (1,67 ×, tarea 128) y zstd lo mismo que su prototipo (0,90 ×).
+// Comprimir no encarece la escritura (escribe menos páginas y WAL; los rangos son de dos corridas). La lectura paga
+// la descompresión: con S2 casi nada (Read +8 %, ForEach +10 %); con zstd Read +60 % y un recorrido completo 5 veces
+// más lento, a cambio de un 15 % menos de disco que S2. Por omisión S2 (pregunta 81): con ella el disco de los
+// documentos baja un tercio y la CPU de leer queda igual; zstd queda para quien prefiere disco a CPU.
+//
+// # Formato 2: hojas de la forma 2 (b y c)
+//
+// Tarea 134 de F-23 (preguntas 79 y 82, decididas el 2026-11-22), hecha el 2026-11-22. Una hoja nueva lleva
+// LayoutVersion 2 en pd_pagesize_version (8.192 | 2); las demás clases de página (meta, internas, desborde, libres,
+// borradas, vm) siguen en 1, y una hoja en 1 es la forma 1 (más EntryCompressed). btree lee las dos formas detrás de
+// node.entryAt/keyAt (parseEntry y parseEntry2) y escribe solo la 2: al iniciar una hoja (KindInitStore, la derecha
+// de KindSplit), al rearmar la izquierda de una partición, y al reescribir una hoja de la forma 1 antes de cambiarla
+// (KindLeafRewrite; ver la migración, abajo). El formato byte a byte está en store/internal/btree/doc.go, «Hojas de la
+// forma 2»; el resumen:
+//
+//	ítems de una hoja 2   qué guarda
+//	1                     clave alta (pivote, como en la 1; no está en la de más a la derecha)
+//	2 (o 1)               ítem de prefijo: pivote sin enlace ni lsn con el prefijo de la hoja (0 a 255 B)
+//	resto                 entradas de la forma 2 en orden (id, lsn descendente), cada una sin el prefijo
+//
+//	entrada 2   word0(4) = marcas (bits 0–7) | largo del sufijo (8–19) | largo en línea (20–31), lsn(8), xid(8) salvo
+//	            en una congelada sin desborde, sufijo del id, valor en línea o first(4) len(4): 20 B viva, 12 B
+//	            congelada (pregunta 82)
+//
+// (b) Prefijo compartido. Invariante: el id de toda entrada de la hoja empieza con su prefijo. El prefijo se elige al
+// armar la hoja (choosePrefix): el común de su primera y su última entrada, hasta 255 B. Una escritura cuyo id no lo
+// tiene reescribe antes la hoja con el común de los dos (KindLeafRewrite) y, si así no cabe, la parte; una que no
+// cabe intenta, después de podar (tarea 108) y antes de partir, recortar las entradas con un prefijo más largo si ya lo
+// comparten. Cada mitad de una partición elige el suyo (igual o más largo que el de la hoja: sus entradas solo se
+// achican; con 255 B de tope la partición cuenta el ítem de prefijo de cada mitad con su largo máximo y siempre
+// encuentra un corte). La búsqueda recorta la clave una vez por hoja (un id sin el prefijo cae antes o después de toda
+// la hoja) y compara solo sufijos; keyAt da la clave con el prefijo aparte (key.pre) y Version el id entero.
+//
+// Diseño corregido al implementar (lo de arriba reemplaza lo diseñado el 2026-11-22): el prefijo iba a salir de las
+// cotas (clave baja como segundo ítem y clave alta), con la izquierda de una partición conservando el suyo. No sirve:
+// (1) el borrado de una hoja (tarea 70) pasa su espacio de claves a la hermana derecha, que desde ahí recibe ids
+// menores que su clave baja y sin su prefijo; (2) con ids crecientes (la hoja de más a la derecha, sin cota alta, la
+// cola de cada grupo de un índice) el prefijo de las cotas es vacío y la izquierda lo conservaba: casi ninguna hoja
+// tenía prefijo. Por eso el prefijo sale de las entradas, una escritura que no lo comparte lo acorta, cada mitad de una
+// partición elige el suyo y la clave baja no se guarda; el largo va en el ítem de prefijo y no en pd_flags.
+//
+// (c) Cabecera corta. Las marcas de visibilidad siguen con un OR atómico sobre el uint32 del byte 0 (los bits altos de
+// word0 no cambian después de escribir la entrada). Congelar achica la entrada: KindLeafVacuum (sin cambio de forma)
+// rehace en una hoja 2 su lista de congeladas reemplazando cada entrada por la misma sin xid (si no tiene desborde) y
+// compacta con page.Repair. Una congelada en línea da Version.XID = 0.
+//
+// WAL: KindLeafWrite lleva en una hoja 2 la entrada de la forma 2 con el id entero (bit 15 del número de ítem): el flujo
+// lógico (DecodeLeafWrite) la lee sin la página, y al aplicarla se le quita el prefijo de la hoja. KindSplit marca con
+// el bit 15 de count una derecha de la forma 2; la izquierda de una hoja 2 se rearma con su prefijo nuevo en el mismo
+// rehacer (determinista: sale de la página y del delta). KindInitStore lleva layout(2) en la hoja raíz y flags(4) en
+// la meta (MetaLeavesForm2). KindLeafRewrite (27) = prefixLen(2): rearma la hoja en la forma 2 con ese prefijo.
+// KindSetFrozen admite flags(4) al final (se suman a las de la meta). Registros del formato 1 (entradas de la forma 1,
+// KindInitStore sin layout) se rehacen como antes, sobre hojas de la forma 1.
+//
+// Lo que no cambió: la poda antes de partir (tarea 108) y el borrado de páginas (tarea 70) trabajan igual sobre hojas
+// 2 (una hoja medio muerta conserva su ítem de prefijo; la borrada vuelve a la forma 1: es otra clase de página); las
+// marcas de visibilidad; Repair (sin reparación nueva). Verify comprueba el ítem de prefijo y cada entrada (todas
+// tienen el prefijo por construcción: un prefijo dañado sale como claves fuera de orden o de sus cotas), cuenta las
+// hojas de la forma 1 (Report.LeavesForm1) y da daño si la meta dice MetaLeavesForm2 y queda alguna.
+//
+// Medido (Apple M5, 2026-11-22; antes = el binario con (a) y la hoja de la forma 1). Disco:
+//
+//	prueba (STORE_BENCH=1)                       antes      después    cambio
+//	TestIndexHeaderShare índices, tras cargar     154,7 MB   115,5 MB   −25 % (disco ÷ datos vivos 2,02 → 1,51)
+//	  tras actualizar y limpiar                   161,2 MB   119,7 MB   −26 % (2,10 → 1,56)
+//	  principal (documentos de ~400 B)             49,1 MB    46,5 MB    −5 %
+//	  todo el modelo, tras actualizar             210,3 MB   166,1 MB   −21 % (1,83 → 1,44)
+//	TestDiskSteadyState (disco ÷ datos vivos)     1,38       1,27        −8 %
+//	TestCompressDisk s2 (documentos JSON)         64,7 MB    64,1 MB     −1 % (pesan los valores)
+//
+// El prototipo de la tarea 131 (muestra real de josephine) daba en los índices −16 % con (b) y −29 a −36 % con
+// (b)+(c); el −25 % de TestIndexHeaderShare cae en ese rango por abajo: sus índices no tienen versiones congeladas (la
+// cabecera de 12 B no entra en juego) y las claves son más cortas que las reales (50 B contra 51 + 35 de sobrecarga).
+// Sobre el total del modelo, −21 %, contra −15 a −20 % de (b)+(c) en el prototipo. Las columnas «28 B %» y «llenado»
+// de TestIndexHeaderShare suponen la entrada de la forma 1: con la 2 pasan del 100 %.
+//
+// CPU (go test -bench, mediana de 2–3 corridas): el árbol solo (store/internal/btree, bench_test.go: ids de índice de
+// 36 B) BenchmarkTreeLookup 1,87 → 1,08 µs, BenchmarkTreeWrite 2,36 → 1,70 µs, BenchmarkTreeScan (100.000 ids)
+// 5,2 → 6,0 ms (+15 %: armar el id entero de cada versión); el motor BenchmarkPutPlain diferido 4,97 → 4,35 µs,
+// BenchmarkPutIndexed diferido 8,5 → 6,7 µs (1 índice) y 10,3 → 8,4 µs (2), con commit igual (manda el fsync),
+// BenchmarkQueryByIndex 476 → 431 µs, BenchmarkScanFilter 9,6 → 9,8 ms. Asignaciones por operación iguales o menos
+// (PutPlain 42/43 → 41/43, QueryByIndex 4.090 → 3.916); los bytes por escritura suben ~20–30 % (las páginas que arman
+// las particiones y las reescrituras, repartidas). Lo que más ganó no es de formato: page.CheckItems se hace una vez
+// por carga de la página en la caché (buffer.ItemsChecker) y no en cada bloqueo; con hojas de ~1,5 veces más
+// entradas repetirlo hacía a Lookup un 30 % más lento.
+//
+// # Formato 2: migración desde el formato 1 (e)
+//
+// Hecha para (a): Open de un directorio del 1 (sin herramienta aparte): checkFormat acepta 1 y 2 en cada archivo; la
+// recuperación rehace el WAL del 1 (sus registros son del 2: el 2 solo agrega la marca); antes de escribir nada
+// nuevo, wal.Open (Options.Upgrade, salvo en una réplica) deja atrás el segmento activo del 1 (lo sella y sigue en uno
+// nuevo con encabezado del 2, o le reescribe el encabezado si no tiene registros) y el control (markInProduction, o el
+// checkpoint del final de la recuperación) y el catálogo pasan al 2. Así ningún registro con EntryCompressed cae en
+// un segmento que dice 1, y un binario del 1 que abre el directorio migrado da ErrFormatVersion (control 2) sin
+// tocarlo. Los segmentos sellados del 1, slots y archive_status siguen en 1 hasta reciclarse o reescribirse: se leen
+// igual. Las páginas siguen en LayoutVersion 1 (la (a) no cambia su forma). Réplicas: el binario nuevo primero en
+// las réplicas (leen 1 y 2), después en el primario; una réplica del 1 frente a un primario migrado da
+// ErrFormatVersion en el primer segmento del 2. No hay vuelta atrás: un directorio migrado no lo abre un binario del 1
+// (copiarlo antes con Backup).
+//
+// Para (b)+(c), hecha (pregunta 79: migración perezosa, como la versión por página de PostgreSQL): las páginas de un
+// directorio del 1 no se tocan al abrir. Una hoja de la forma 1 se reescribe en la 2 (KindLeafRewrite) cuando una
+// escritura va a cambiarla; la limpieza de un store cuya meta no tiene MetaLeavesForm2 recorre todas sus hojas sin
+// saltar por el mapa de visibilidad, reescribe las de la forma 1 y, si la pasada termina sin error, anota la marca
+// (KindSetFrozen con flags): desde ahí salta hojas como siempre. Las marcas de visibilidad y las lecturas no
+// reescriben nada. El registro de una reescritura es chico (prefixLen); la primera vez que se toca la hoja tras un
+// checkpoint lleva su imagen, como cualquier cambio: mientras la limpieza recorre un store del 1 escribe un WAL del
+// tamaño de sus hojas. Cuánto falta: Stats.LeafForm1Stores (stores abiertos con hojas de la forma 1; el motor lo lee de
+// cada meta al abrir el store y lo pone al día cada limpieza) y Report.LeavesForm1 de Verify (las hojas exactas);
+// Stats.LeafRewrites cuenta las que reescribió la limpieza. La limpieza de fondo corre también sin escrituras mientras
+// quede algo (leafMigration.due: el catálogo era del 1 al abrir y todavía no hubo una pasada entera, o un store abierto
+// sin migrar); Engine.Vacuum la fuerza. No hay herramienta aparte (a confirmar: Engine.Upgrade o storecheck -upgrade).
+// Una réplica no limpia: sus hojas se reescriben con los registros del primario.
 //
 // # Límites
 //
@@ -492,8 +711,13 @@
 //	                                      0 = sin tope (la ranura frena a los escritores, como el archivo)
 //	WAL_BUFFERS              1024         KB de registros sellados que esperan en memoria antes de escribirse
 //	                                      (wal_buffers; tarea 100); 0 = una escritura por registro
+//	STORE_COMPRESSION        s2           cómo se comprimen los valores grandes (formato 2, tarea 132): s2, zstd,
+//	                                      auto (S2 bajo 2 KB, zstd desde 2 KB) u off; solo elige al escribir
+//	                                      (pregunta 81)
+//	STORE_COMPRESSION_MIN    256          bytes: un valor más corto no se comprime
 //
-// OpenWith y OpenReplicaWith (tarea 84) toman las mismas de un Options: un campo en cero deja la variable, uno
+// OpenWith y OpenReplicaWith (tarea 84) toman las mismas de un Options (STORE_COMPRESSION en Compression, "" = la
+// variable; STORE_COMPRESSION_MIN en CompressionMin): un campo en cero deja la variable, uno
 // negativo apaga lo que 0 apaga (WALWriterDelay, VacuumInterval, TransactionTimeout, ArchiveMaxMB, SlotKeepMB,
 // WALBuffersKB). Así un proceso abre varios motores con distinta caché, WAL y tiempos.
 //
@@ -1355,7 +1579,8 @@
 //     nueva confirmada decide, como Count; el estado sale de las marcas o del archivo de estados, sin marcar), las
 //     versiones sin congelar con xid menor que el frozenXID del store (y ese frozenXID no mayor que nextXID), las
 //     cadenas de desborde (overflow.Manager.Pages: cada página de desborde, del xid de la versión, en su posición y
-//     con su trozo; de una versión «liberándose», solo lo que todavía es suyo) y su bit del mapa de visibilidad (un
+//     con su trozo; de una versión «liberándose», solo lo que todavía es suyo), los valores comprimidos en línea
+//     (formato 2: se descomprimen; FindValue, no reparable, si no) y su bit del mapa de visibilidad (un
 //     bit puesto exige page.FlagAllVisible y todas las versiones congeladas o confirmadas con xid menor que el
 //     horizonte; VMAllFrozen, todas congeladas). Una hoja medio muerta (un borrado de páginas cortado a medias) es un
 //     hallazgo reparable, FindHalfDead: btree.Verify reconoce el borrado a medias (la hoja y su cadena de padres de un

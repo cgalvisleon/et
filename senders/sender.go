@@ -1,4 +1,4 @@
-package service
+package senders
 
 import (
 	"fmt"
@@ -50,7 +50,7 @@ type WhatsApp struct {
 	Otp      string
 }
 
-// Sender: un proveedor de envíos con su configuración; cada uno vive en este paquete (infobip.go)
+// Sender: un proveedor de envíos con su configuración; cada uno vive en este paquete (infobip.go, meta.go…)
 type Sender interface {
 	SendSMS(message SMS) (et.Json, error)
 	SendEmail(message Email) (et.Json, error)

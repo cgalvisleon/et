@@ -105,7 +105,8 @@ Cada tabla lista la API pública principal de cada paquete. `go doc github.com/c
 | --- | --- | --- |
 | `jwt` | `NewToken`, `NewAuthentication`, `NewAuthorization`, `NewAppToken`, `NewEphemeralToken`, `Validate`, `RenewToken`, `DeleteToken` | `claim, err := jwt.Validate(token)` |
 | `claim` | `NewToken`, `NewAuthenticationToken`, `ParseToken`, `Claim.ToJson` | `c, _ := claim.ParseToken(token)` |
-| `service` | `LoadSend(tenantId, name, email)` → `Send` (`SendOTPEmail`, `SendOTPSMS`, `VerifyOTP`, `SendEmail`, `SendSMS`, `SendWhatsapp`); `LoadLocalStorage`; proveedores `New(provider, params)` → `Sender` (`SendSMS`, `SendEmail`, `SendWhatsApp`), `infobip`, `labsmobile` (SMS), `meta` (WhatsApp Cloud sobre `jwsp`, con su lector del webhook), `resend` (correo) y `mock` (anota en la caché del tenant, no envía) (movido de core-studio, también plantillas de WhatsApp) | `ok, _ := send.VerifyOTP(key, otp)` |
+| `senders` | Proveedores de envío movidos de core-studio: `New(provider, params)` → `Sender` (`SendSMS`, `SendEmail`, `SendWhatsApp`) para `infobip`, `labsmobile` (SMS), `meta` (WhatsApp Cloud sobre `jwsp`, con su lector del webhook), `resend` (correo) y `mock` (anota en la caché del tenant, no envía); `TemplateManager` para las plantillas de WhatsApp | `s, _ := senders.New("infobip", params); s.SendSMS(senders.SMS{To: to, Text: text})` |
+| `service` | `LoadSend(tenantId, name, email)` → `Send` (`SendOTPEmail`, `SendOTPSMS`, `VerifyOTP`, `SendEmail`, `SendSMS`, `SendWhatsapp`); `LoadLocalStorage` | `ok, _ := send.VerifyOTP(key, otp)` |
 | `utility` | `Hash`/`Match` (bcrypt), `EncryptAES`/`DecryptAES`, `HashSHA256`, `GetOTP`, `ValidEmail`, `ValidPhone`, `ToBase64` | `h, _ := utility.Hash(password)` |
 
 ### Scripting, workflows e IA

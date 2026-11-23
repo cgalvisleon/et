@@ -1,4 +1,4 @@
-package service
+package senders
 
 import (
 	"github.com/cgalvisleon/et/et"

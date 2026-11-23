@@ -65,8 +65,8 @@ func readNodeWith(blk page.BlockNumber, p page.Page, checkItems bool) (node, err
 			return node{}, corruptAt(blk, "%v", err)
 		}
 	}
-	n, err := pageNode(p, o)
-	if err != nil {
+	var n node
+	if err := n.init(p, o); err != nil {
 		return node{}, corruptAt(blk, "%v", err)
 	}
 	n.blk = blk
@@ -114,20 +114,33 @@ func (n *node) ignore() bool { return n.o.Flags&ignoredPage != 0 }
 * @return node, error: ErrCorrupt
 **/
 func pageNode(p page.Page, o page.Opaque) (node, error) {
-	n := node{p: p, o: o}
+	var n node
+	if err := n.init(p, o); err != nil {
+		return node{}, err
+	}
+	return n, nil
+}
+
+/**
+* init es pageNode sobre un node ya reservado (sin copiar el node en cada vuelta: va en el camino de cada lectura).
+* @param p page.Page, o page.Opaque
+* @return error: ErrCorrupt; con error n queda a medio armar
+**/
+func (n *node) init(p page.Page, o page.Opaque) error {
+	n.p, n.o = p, o
 	if p.LayoutVersion() != page.LayoutVersion2 {
-		return n, nil
+		return nil
 	}
 	if !n.leaf() || n.deleted() {
-		return node{}, corrupt("page with layout version 2 is not a leaf")
+		return corrupt("page with layout version 2 is not a leaf")
 	}
 	n.v2 = true
 	pre, err := readPrefixItem(p, n.prefixOff())
 	if err != nil {
-		return node{}, err
+		return err
 	}
 	n.pre = pre
-	return n, nil
+	return nil
 }
 
 // prefixOff es el número del ítem de prefijo de una hoja de la forma 2: después de la clave alta, si tiene.
@@ -259,7 +272,7 @@ func (n *node) pastHighKey(k key) (bool, error) {
 * @return page.OffsetNumber: de firstData a maxOff + 1, error
 **/
 func (n *node) lowerBound(k key) (page.OffsetNumber, error) {
-	return n.search(func(c int) bool { return c >= 0 }, k)
+	return n.search(k, false)
 }
 
 /**
@@ -268,43 +281,76 @@ func (n *node) lowerBound(k key) (page.OffsetNumber, error) {
 * @return page.OffsetNumber, error
 **/
 func (n *node) upperBound(k key) (page.OffsetNumber, error) {
-	return n.search(func(c int) bool { return c > 0 }, k)
+	return n.search(k, true)
 }
 
 /**
-* search es la búsqueda binaria de lowerBound y upperBound: el primer ítem de datos cuya comparación con k cumple
-* stop (stop es monótona porque los ítems están ordenados).
-* @param stop func(c int) bool: recibe compareKeys(clave del ítem, k)
-* @param k key
+* search es la búsqueda binaria de lowerBound y upperBound: el primer ítem de datos cuya clave es ≥ k (> k con
+* strict). Los ítems están ordenados, así que la condición es monótona.
+* @param k key, strict bool
 * @return page.OffsetNumber, error
 **/
-func (n *node) search(stop func(c int) bool, k key) (page.OffsetNumber, error) {
+func (n *node) search(k key, strict bool) (page.OffsetNumber, error) {
 	lo, hi := int(n.firstData()), int(n.maxOff())+1
 	if len(n.pre) > 0 {
 		var inside bool
 		if k, inside = n.trim(k); !inside {
-			if stop(compareKeys(key{pre: n.pre, lsn: MaxLSN}, k)) {
+			if stopAt(compareKeys(key{pre: n.pre, lsn: MaxLSN}, k), strict) {
 				return page.OffsetNumber(lo), nil // k va antes de toda la hoja
 			}
 			return page.OffsetNumber(hi), nil // después
 		}
 	}
+	leaf := n.leaf()
 	for lo < hi {
 		mid := int(uint(lo+hi) >> 1)
-		mk, err := n.keyAt(page.OffsetNumber(mid))
+		var mk key
+		var err error
+		if leaf {
+			mk, err = n.entryKey(page.OffsetNumber(mid))
+		} else {
+			mk, err = n.pivotKey(page.OffsetNumber(mid))
+		}
 		if err != nil {
 			return 0, err
 		}
-		if len(n.pre) > 0 {
-			mk.pre = nil // k ya está recortada: se comparan los sufijos
-		}
-		if stop(compareKeys(mk, k)) {
+		if stopAt(cmpKeys(&mk, &k), strict) {
 			hi = mid
 		} else {
 			lo = mid + 1
 		}
 	}
 	return page.OffsetNumber(lo), nil
+}
+
+// stopAt dice si la búsqueda para en un ítem cuya comparación con la clave buscada es c (≥ 0, o > 0 con strict).
+func stopAt(c int, strict bool) bool { return c > 0 || c == 0 && !strict }
+
+/**
+* entryKey es la clave de la entrada off de una hoja para comparar con una clave ya recortada por trim: sin el
+* prefijo de la hoja (en una de la forma 2 se comparan los sufijos).
+* @param off page.OffsetNumber
+* @return key, error
+**/
+func (n *node) entryKey(off page.OffsetNumber) (key, error) {
+	e, err := n.entryAt(off)
+	if err != nil {
+		return key{}, err
+	}
+	return key{id: e.suffix(), lsn: e.lsn()}, nil
+}
+
+/**
+* pivotKey es la clave del pivote off de una página interna.
+* @param off page.OffsetNumber
+* @return key, error
+**/
+func (n *node) pivotKey(off page.OffsetNumber) (key, error) {
+	v, err := n.pivotAt(off)
+	if err != nil {
+		return key{}, err
+	}
+	return v.key(), nil
 }
 
 /**

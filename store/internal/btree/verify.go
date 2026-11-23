@@ -1,6 +1,8 @@
 package btree
 
 import (
+	"bytes"
+
 	"github.com/cgalvisleon/et/store/internal/buffer"
 	"github.com/cgalvisleon/et/store/internal/page"
 	"github.com/cgalvisleon/et/store/internal/smgr"
@@ -364,6 +366,11 @@ func (v *verifier) page(n node, level uint32, prev page.BlockNumber, low *key, l
 		k := cloneKey(hk.key())
 		high = &k
 	}
+	if n.leaf() && n.v2 && !n.halfDead() {
+		if err := prefixInBounds(n, low, high); err != nil {
+			return 0, nil, err
+		}
+	}
 	if err := v.keys(n, low, high, ls); err != nil {
 		return 0, nil, err
 	}
@@ -381,6 +388,29 @@ func (v *verifier) page(n node, level uint32, prev page.BlockNumber, low *key, l
 		}
 	}
 	return n.o.Next, high, nil
+}
+
+/**
+* prefixInBounds comprueba que el prefijo de una hoja de la forma 2 deja lugar a algún id dentro de sus cotas
+* [low, high): los ids con un prefijo son un tramo contiguo, que tiene que cruzarse con el de la hoja. Cubre también la
+* hoja sin entradas (la de entradas ya lo cumple si cada una está en sus cotas). No se exige más (que el prefijo y la
+* cota baja coincidan hasta el más corto): el borrado de una hoja baja la cota de la hermana derecha sin tocar su
+* prefijo, y un prefijo alargado por longerPrefix sale de las entradas y no de la cota.
+* @param n node: hoja de la forma 2, low, high *key: nil = sin cota
+* @return error: ErrCorrupt
+**/
+func prefixInBounds(n node, low, high *key) error {
+	if low != nil {
+		lowID := low.appendID(nil)
+		m := min(len(lowID), len(n.pre))
+		if bytes.Compare(lowID[:m], n.pre[:m]) > 0 {
+			return corruptAt(n.blk, "leaf prefix %q is below the page's low bound", n.pre)
+		}
+	}
+	if high != nil && compareKeys(key{id: n.pre, lsn: MaxLSN}, *high) >= 0 {
+		return corruptAt(n.blk, "leaf prefix %q is not before the high key", n.pre)
+	}
+	return nil
 }
 
 /**

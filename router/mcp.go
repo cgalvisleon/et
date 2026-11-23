@@ -189,12 +189,13 @@ func (s *Api) mcpOrigins(origins []string) []string {
 }
 
 /**
-* mcpOriginAllowed: If an Origin header is in the list: "*", the same origin (scheme, host and port) or the same host;
-* an Origin that does not parse (as "null") only passes with "*"
+* OriginAllowed: If an Origin header is in the list: "*", the same origin (scheme, host and port) or the same host;
+* an Origin that does not parse (as "null") only passes with "*". The rule of the MCP origins and of the CORS of the
+* ettp/v2 gateway
 * @param origins []string, origin string
 * @return bool
 **/
-func mcpOriginAllowed(origins []string, origin string) bool {
+func OriginAllowed(origins []string, origin string) bool {
 	if slices.Contains(origins, "*") {
 		return true
 	}
@@ -224,7 +225,7 @@ func mcpOriginAllowed(origins []string, origin string) bool {
 * @param w http.ResponseWriter, r *http.Request
 **/
 func (s *mcpServer) handle(w http.ResponseWriter, r *http.Request) {
-	if origin := r.Header.Get("Origin"); origin != "" && !mcpOriginAllowed(s.config.Origins, origin) {
+	if origin := r.Header.Get("Origin"); origin != "" && !OriginAllowed(s.config.Origins, origin) {
 		writeMCP(w, http.StatusForbidden, mcpFail(nil, mcpForbidden, fmt.Sprintf(MSG_MCP_ORIGIN, origin)))
 		return
 	}

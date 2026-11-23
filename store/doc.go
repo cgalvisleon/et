@@ -373,9 +373,11 @@
 // recorridos (ForEach… con una copia nueva; ForEachBorrowed descomprime en un búfer del recorrido que se reutiliza,
 // válido solo dentro de fn como siempre). Un valor que no se descomprime es ErrCorrupt (MSG_COMPRESSED).
 //
-// Verify: descomprime cada valor comprimido en línea (btree.VerifyWith entrega su valor) y anota FindValue (no
-// reparable) si falla; de uno en desborde solo recorre la cadena (a confirmar: descomprimirlo pide leerlo entero).
-// Repair no toca los valores.
+// Verify: descomprime cada valor comprimido en línea (btree.VerifyWith entrega su valor) y también los que viven en
+// una cadena de desborde (tarea 137: si la cadena está sana la lee entera con overflow.Manager.Read y la descomprime,
+// storeCheck.chainValue; en memoria, a lo sumo un valor leído y uno descomprimido a la vez), y anota FindValue (no
+// reparable) si no se descomprime o no da el largo anotado; una versión «liberándose» no se lee. Repair no toca los
+// valores.
 //
 // Memoria y CPU: un codificador y un decodificador de zstd por proceso (EncodeAll y DecodeAll concurrentes,
 // WithLowerEncoderMem, WithDecoderLowmem); S2 no guarda estado. Nada crece con la base.
@@ -458,9 +460,17 @@
 //
 // Lo que no cambió: la poda antes de partir (tarea 108) y el borrado de páginas (tarea 70) trabajan igual sobre hojas
 // 2 (una hoja medio muerta conserva su ítem de prefijo; la borrada vuelve a la forma 1: es otra clase de página); las
-// marcas de visibilidad; Repair (sin reparación nueva). Verify comprueba el ítem de prefijo y cada entrada (todas
-// tienen el prefijo por construcción: un prefijo dañado sale como claves fuera de orden o de sus cotas), cuenta las
-// hojas de la forma 1 (Report.LeavesForm1) y da daño si la meta dice MetaLeavesForm2 y queda alguna.
+// marcas de visibilidad; Repair (sin reparación nueva). Verify comprueba el ítem de prefijo, cada entrada y que el
+// prefijo deje lugar a algún id dentro de las cotas de la hoja (btree.prefixInBounds, tarea 137: los ids con ese
+// prefijo tienen que cruzarse con [cota baja, clave alta); así se ve también en una hoja sin entradas), cuenta las
+// hojas de la forma 1 (Report.LeavesForm1) y da daño si la meta dice MetaLeavesForm2 y queda alguna. Un prefijo
+// dañado sale como FindTree (no reparable, como cualquier otro daño del árbol). Límite: un prefijo cambiado que sigue
+// cruzándose con las cotas y deja las entradas en orden y dentro de ellas no se ve (la hoja de más a la derecha, sin
+// clave alta, con un prefijo mayor: TestReviewDamagedPrefix); sus ids cambian de nombre. Verlo pide una copia del
+// prefijo en otro lado (formato) o la suma de la página, que se comprueba al leerla del disco y no en la caché. No se
+// exige más (que prefijo y cota baja coincidan hasta el más corto): no es un invariante, el borrado de una hoja baja
+// la cota de la hermana derecha y una partición posterior da a su izquierda el prefijo de sus entradas
+// (TestPrefixAfterLeafDelete).
 //
 // Medido (Apple M5, 2026-11-22; antes = el binario con (a) y la hoja de la forma 1). Disco:
 //
@@ -493,10 +503,17 @@
 // Hecha para (a): Open de un directorio del 1 (sin herramienta aparte): checkFormat acepta 1 y 2 en cada archivo; la
 // recuperación rehace el WAL del 1 (sus registros son del 2: el 2 solo agrega la marca); antes de escribir nada
 // nuevo, wal.Open (Options.Upgrade, salvo en una réplica) deja atrás el segmento activo del 1 (lo sella y sigue en uno
-// nuevo con encabezado del 2, o le reescribe el encabezado si no tiene registros) y el control (markInProduction, o el
-// checkpoint del final de la recuperación) y el catálogo pasan al 2. Así ningún registro con EntryCompressed cae en
+// nuevo con encabezado del 2, o le reescribe el encabezado si no tiene registros; esto pasa antes de markInProduction,
+// pero no escribe registros) y el control (markInProduction tras un cierre limpio, y siempre el checkpoint del final
+// de la recuperación) y el catálogo pasan al 2. Así ningún registro con EntryCompressed que escriba un primario cae en
 // un segmento que dice 1, y un binario del 1 que abre el directorio migrado da ErrFormatVersion (control 2) sin
-// tocarlo. Los segmentos sellados del 1, slots y archive_status siguen en 1 hasta reciclarse o reescribirse: se leen
+// tocarlo. Una réplica abierta de una copia del 1 (OpenReplica) no hace Upgrade: su control y su catálogo pasan al 2
+// con el primer restartpoint (al abrir), y su segmento activo sigue en 1 hasta que el flujo del primario cambia de
+// segmento (la réplica rota con FormatVersion: frente a un primario todavía del 1, sus segmentos nuevos dicen 2 y el
+// de él 1; los registros son los mismos). Si se la promueve (Promote) antes de eso, Promote rota el WAL antes de
+// escribir nada (tarea 138, wal.StartSegment: sella el del 1 y sigue en uno del 2, o le reescribe el encabezado si no
+// tiene registros), así que lo que escribe como primario —también valores comprimidos— nunca cae en un segmento que
+// dice 1; un binario del 1 no abre el directorio (control 2). Los segmentos sellados del 1, slots y archive_status siguen en 1 hasta reciclarse o reescribirse: se leen
 // igual. Las páginas siguen en LayoutVersion 1 (la (a) no cambia su forma). Réplicas: el binario nuevo primero en
 // las réplicas (leen 1 y 2), después en el primario; una réplica del 1 frente a un primario migrado da
 // ErrFormatVersion en el primer segmento del 2. No hay vuelta atrás: un directorio migrado no lo abre un binario del 1
@@ -514,7 +531,9 @@
 // Stats.LeafRewrites cuenta las que reescribió la limpieza. La limpieza de fondo corre también sin escrituras mientras
 // quede algo (leafMigration.due: el catálogo era del 1 al abrir y todavía no hubo una pasada entera, o un store abierto
 // sin migrar); Engine.Vacuum la fuerza. No hay herramienta aparte (a confirmar: Engine.Upgrade o storecheck -upgrade).
-// Una réplica no limpia: sus hojas se reescriben con los registros del primario.
+// Una réplica no limpia: sus hojas se reescriben con los registros del primario, y su Stats.LeafForm1Stores baja al
+// rehacer el KindSetFrozen con MetaLeavesForm2 de la limpieza del primario (btree.RecordMetaFlags en applyEntry; un
+// store vaciado o borrado deja de contar en syncHandles; tarea 137).
 //
 // # Límites
 //
@@ -1174,7 +1193,7 @@
 //     Si el final no coincide (un corte entre el WAL y el control) o un segmento mide más que WAL_SEGMENT_SIZE (otro
 //     tamaño), se corta como siempre.
 //  6. loadSlots lee el archivo slots y pone sus retenciones (una cuyo lsn ya no está en el WAL queda invalidada). Con
-//     WAL_ARCHIVE=on (no en una réplica), startArchive lee archive_status, retiene desde lo no archivado y sella el segmento en que el
+//     WAL_ARCHIVE=on (no en una réplica: Promote lo arranca al promoverla), startArchive lee archive_status, retiene desde lo no archivado y sella el segmento en que el
 //     WAL quedó (ver «Archivo continuo del WAL y recuperación a un punto en el tiempo»).
 //  7. Borrar los stores que siguen con FlagPendingCreate (los creó un lote cuyo KindCommit no llegó a ser durable),
 //     con sus archivos, sin escribir en el WAL (redoState.dropPending; ver «DDL dentro de un lote»).
@@ -1579,8 +1598,8 @@
 //     nueva confirmada decide, como Count; el estado sale de las marcas o del archivo de estados, sin marcar), las
 //     versiones sin congelar con xid menor que el frozenXID del store (y ese frozenXID no mayor que nextXID), las
 //     cadenas de desborde (overflow.Manager.Pages: cada página de desborde, del xid de la versión, en su posición y
-//     con su trozo; de una versión «liberándose», solo lo que todavía es suyo), los valores comprimidos en línea
-//     (formato 2: se descomprimen; FindValue, no reparable, si no) y su bit del mapa de visibilidad (un
+//     con su trozo; de una versión «liberándose», solo lo que todavía es suyo), los valores comprimidos en línea o en
+//     desborde (formato 2: se descomprimen; FindValue, no reparable, si no) y su bit del mapa de visibilidad (un
 //     bit puesto exige page.FlagAllVisible y todas las versiones congeladas o confirmadas con xid menor que el
 //     horizonte; VMAllFrozen, todas congeladas). Una hoja medio muerta (un borrado de páginas cortado a medias) es un
 //     hallazgo reparable, FindHalfDead: btree.Verify reconoce el borrado a medias (la hoja y su cadena de padres de un
@@ -1967,7 +1986,15 @@
 // vecinos con ChangesFrom desde su posición, y avanzada al mínimo de ellas con AdvanceLogicalSlot) más una física por
 // réplica del modo single (TestSlotTopology).
 //
-// Promote (tarea 85, promote.go): con ckptMu → applyMu → replayMu termina la recuperación como Open (dropPending,
+// Promote (tarea 85, promote.go): con ckptMu → applyMu, antes de tocar nada, rota el WAL (startPrimaryWAL →
+// wal.StartSegment, tarea 138: con registros en el activo lo sella como SwitchWAL, con el encabezado del siguiente
+// con fsync antes de la marca de sellado; sin registros y con encabezado de una versión anterior lo reescribe) y, con
+// WAL_ARCHIVE=on, arranca el archivo como Open (startArchive: archive_status, retención desde el segmento más viejo,
+// el sellado pendiente de archivar); así el primer registro como primario va a un segmento nuevo del formato actual.
+// Con el disco lleno ahí da ErrDiskFull y sigue siendo réplica. Un corte después de rotar deja un directorio que se
+// abre con Open (termina la promoción); con OpenReplica, el próximo ApplyWal del primario viejo da ErrOutOfOrder (su
+// WAL ya no sigue las posiciones del primario: lo mismo que tras dropPending). Después, con replayMu, termina la
+// recuperación como Open (dropPending,
 // syncHandles, horizonte del archivo de estados con status.Recover y el próximo xid), marca replicaState.promoted —el
 // puntero e.replica no cambia nunca, así nadie lo lee a medio escribir; todo pregunta isReplica()—, arranca la limpieza
 // de fondo y, con ckptMu todavía tomado, hace el checkpoint de fin de recuperación (checkpointLocked, con su

@@ -504,6 +504,48 @@ func TestCompressedValues(t *testing.T) {
 	mustOK(t, e.Close())
 }
 
+// TestVerifyCompressedOverflow (hallazgo 2 de la revisión del formato 2, tarea 137): Verify descomprime también los
+// valores comprimidos que viven en una cadena de desborde y comprueba su largo anotado; uno sano no da hallazgos y uno
+// dañado da FindValue (no reparable), como en línea.
+func TestVerifyCompressedOverflow(t *testing.T) {
+	e := openTest(t, crashfs.New(), zstdConfig())
+	defer e.Close()
+	s := mustStore(t, e, "docs")
+	r := rand.New(rand.NewPCG(5, 6))
+	doc := make([]byte, 16<<10) // la mitad al azar: comprimido sigue sin caber en línea
+	for i := range len(doc) / 2 {
+		doc[i] = byte(r.Uint32())
+	}
+	mustOK(t, s.Put("good", doc))
+	v, found, err := s.tree.Lookup("good", nil)
+	mustOK(t, err)
+	if !found || v.Flags&(btree.EntryOverflow|btree.EntryCompressed) != btree.EntryOverflow|btree.EntryCompressed {
+		t.Fatalf("the document is not compressed in overflow: flags %#x", v.Flags)
+	}
+	checkClean(t, e)
+
+	bad := bytes.Clone(e.cfg.compress.force(doc))
+	le.PutUint32(bad[1:], le.Uint32(bad[1:])+1) // el largo anotado miente
+	_, err = s.write("bad", change{data: bad, compressed: true})
+	mustOK(t, err)
+	if v, _, _ := s.tree.Lookup("bad", nil); v.Flags&btree.EntryOverflow == 0 {
+		t.Fatalf("the damaged value is not in overflow: flags %#x", v.Flags)
+	}
+	if _, _, err := s.Read("bad"); !errors.Is(err, ErrCorrupt) {
+		t.Fatalf("Read of a damaged value: %v", err)
+	}
+	report, err := e.Verify()
+	mustOK(t, err)
+	if len(report.Findings) != 1 || report.Findings[0].Kind != FindValue || report.Findings[0].Repairable {
+		t.Fatalf("Verify of a damaged value in overflow:\n%s", report)
+	}
+	report, err = e.Repair()
+	mustOK(t, err)
+	if report.Pending() != 1 || report.Irreparable != 1 {
+		t.Fatalf("Repair of a damaged value in overflow:\n%s", report)
+	}
+}
+
 // TestCompressCrash: escrituras durables de documentos comprimidos (en línea y en desborde) cortadas en los tres
 // modos de crashfs a mitad de camino: al recuperar, cada id tiene un valor que se intentó escribir y no anterior al
 // último confirmado, y Verify solo encuentra lo que explica un corte.

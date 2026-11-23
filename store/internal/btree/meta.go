@@ -251,6 +251,19 @@ func RecordFrozenXID(rec *wal.Record) (page.XID, bool) {
 }
 
 /**
+* RecordMetaFlags da las marcas que un KindSetFrozen del formato 2 suma a la meta de su store (flags(4) al final del
+* delta). La réplica lo usa para poner al día lo que el motor sabe de la meta sin leerla (MetaLeavesForm2).
+* @param rec *wal.Record
+* @return MetaFlags, bool: si el registro suma marcas
+**/
+func RecordMetaFlags(rec *wal.Record) (MetaFlags, bool) {
+	if rec.Kind != wal.KindSetFrozen || len(rec.Blocks) == 0 || len(rec.Blocks[0].Delta) != frozenFlagsDeltaSize {
+		return 0, false
+	}
+	return MetaFlags(le.Uint32(rec.Blocks[0].Delta[frozenDeltaSize:])), true
+}
+
+/**
 * DecodeLeafWrite lee el cambio lógico de un KindLeafWrite (el decodificado lógico de la réplica): la versión que
 * escribe, con su lsn, su xid, sus marcas, el valor en línea copiado o la referencia a desborde.
 * @param rec *wal.Record: un KindLeafWrite leído del WAL

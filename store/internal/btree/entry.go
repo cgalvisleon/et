@@ -277,7 +277,16 @@ func (e *entry) overflowRef() overflow.Ref {
 * @return Version
 **/
 func (e *entry) version() Version {
-	v := e.header()
+	return e.versionOf(e.idString())
+}
+
+/**
+* versionOf es version con el id ya conocido (una búsqueda exacta: no arma ni asigna el id de la página).
+* @param id string: el id entero de la entrada
+* @return Version
+**/
+func (e *entry) versionOf(id string) Version {
+	v := e.headerOf(id)
 	if v.Flags&(EntryTombstone|EntryOverflow) == 0 {
 		v.Value = bytes.Clone(e.inlineValue())
 		if v.Value == nil {
@@ -293,7 +302,16 @@ func (e *entry) version() Version {
 * @return Version
 **/
 func (e *entry) header() Version {
-	v := Version{ID: e.idString(), LSN: e.lsn(), XID: e.xid(), Flags: e.flags()}
+	return e.headerOf(e.idString())
+}
+
+/**
+* headerOf es header con el id ya conocido.
+* @param id string: el id entero de la entrada
+* @return Version
+**/
+func (e *entry) headerOf(id string) Version {
+	v := Version{ID: id, LSN: e.lsn(), XID: e.xid(), Flags: e.flags()}
 	if v.Flags&EntryOverflow != 0 && v.Flags&EntryTombstone == 0 {
 		v.Overflow = e.overflowRef()
 	}

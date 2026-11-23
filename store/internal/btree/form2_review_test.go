@@ -2,6 +2,7 @@ package btree
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"math/rand"
 	"path/filepath"
@@ -297,35 +298,162 @@ func TestReviewMixedFormsCrash(t *testing.T) {
 	}
 }
 
-// TestReviewDamagedPrefixUndetected: store/doc.go dice que un prefijo dañado «sale como claves fuera de orden o de sus
-// cotas». En la hoja de más a la derecha (sin cota alta) un prefijo cambiado a uno mayor, del mismo largo, deja todas
-// las claves en orden y sobre la cota baja: Verify no lo ve y todos los ids de la hoja cambian de nombre.
-func TestReviewDamagedPrefixUndetected(t *testing.T) {
+// TestReviewDamagedPrefix (hallazgo 1 de la revisión, tarea 137): Verify comprueba que el prefijo de una hoja de la
+// forma 2 cae dentro de sus cotas (prefixInBounds). En una hoja con entradas un prefijo fuera de las cotas ya sale
+// por las claves; en una sin entradas solo lo ve esa comprobación. Lo que Verify no puede ver: en la hoja de más a la
+// derecha (sin cota alta) un prefijo cambiado a uno mayor deja todo en orden y sobre la cota baja; sin una copia del
+// prefijo en otro lado (eso es formato) no se distingue de una hoja válida con esos ids.
+func TestReviewDamagedPrefix(t *testing.T) {
+	setup := func(t *testing.T) (*BTree, model) {
+		e := openEnv(t, crashfs.New(), wal.Start, 64)
+		tr := createTree(t, e)
+		m := model{}
+		for i := range 2000 {
+			put(t, tr, m, fmt.Sprintf("k/%06d", i), []byte("v"))
+		}
+		return tr, m
+	}
+	// damage cambia el primer byte del prefijo de la hoja de id (con vaciar, le quita antes todas las entradas)
+	damage := func(t *testing.T, tr *BTree, id string, b byte, empty bool) string {
+		t.Helper()
+		h, n, _, err := tr.descend(searchKey([]byte(id)), 0, buffer.Exclusive, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer h.Release()
+		if !n.v2 || len(n.pre) == 0 {
+			t.Fatalf("hoja sin prefijo: %q", n.pre)
+		}
+		if empty {
+			var offs []page.OffsetNumber
+			for off := n.firstData(); off <= n.maxOff(); off++ {
+				offs = append(offs, off)
+			}
+			if err := n.p.DeleteItems(offs); err != nil {
+				t.Fatal(err)
+			}
+		}
+		item, _ := n.p.Item(n.prefixOff())
+		before := string(item[PivotHeaderSize:])
+		item[PivotHeaderSize] = b
+		h.MarkDirty(n.p.LSN())
+		return before
+	}
+	mustDetect := func(t *testing.T, tr *BTree) {
+		t.Helper()
+		_, err := tr.Verify()
+		if !errors.Is(err, ErrCorrupt) {
+			t.Fatalf("Verify no detectó el prefijo dañado: %v", err)
+		}
+		t.Logf("detectado: %v", err)
+	}
+
+	t.Run("empty-above-high", func(t *testing.T) {
+		tr, _ := setup(t)
+		damage(t, tr, "k/000500", 'z', true) // hoja del medio sin entradas: «k/…» → «z/…», sobre su clave alta
+		mustDetect(t, tr)
+	})
+	t.Run("empty-below-low", func(t *testing.T) {
+		tr, _ := setup(t)
+		damage(t, tr, "k/000500", 'a', true) // «k/…» → «a/…», bajo su cota baja
+		mustDetect(t, tr)
+	})
+	t.Run("empty-intact", func(t *testing.T) {
+		tr, _ := setup(t)
+		h, n, _, err := tr.descend(searchKey([]byte("k/000500")), 0, buffer.Exclusive, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var offs []page.OffsetNumber
+		for off := n.firstData(); off <= n.maxOff(); off++ {
+			offs = append(offs, off)
+		}
+		if err := n.p.DeleteItems(offs); err != nil {
+			t.Fatal(err)
+		}
+		h.MarkDirty(n.p.LSN())
+		h.Release()
+		if _, err := tr.Verify(); err != nil {
+			t.Fatalf("una hoja sin entradas con su prefijo intacto no es daño: %v", err)
+		}
+	})
+	t.Run("rightmost-below-low", func(t *testing.T) {
+		tr, _ := setup(t)
+		damage(t, tr, "\xff", 'a', false)
+		mustDetect(t, tr)
+	})
+	t.Run("rightmost-above-low", func(t *testing.T) {
+		tr, _ := setup(t)
+		before := damage(t, tr, "\xff", 'z', false)
+		if _, err := tr.Verify(); err != nil {
+			t.Fatalf("Verify ya ve este daño: hay que actualizar store/doc.go («Formato 2») y esta prueba: %v", err)
+		}
+		if _, ok, _ := tr.Lookup(fmt.Sprintf("k/%06d", 1999), nil); ok {
+			t.Fatal("el id sigue con su nombre")
+		}
+		t.Logf("límite conocido: Verify limpio con el prefijo %q cambiado a %q", before, "z"+before[1:])
+	})
+}
+
+// TestPrefixAfterLeafDelete: el borrado de una hoja deja a su hermana derecha con una cota baja menor, y una partición
+// posterior le da a la izquierda el prefijo de sus entradas: queda una hoja cuyo prefijo y cota baja no comparten
+// comienzo (ninguno es comienzo del otro). Es un árbol válido: por eso Verify no exige que el prefijo y la cota baja
+// coincidan, solo que se crucen (prefixInBounds).
+func TestPrefixAfterLeafDelete(t *testing.T) {
 	e := openEnv(t, crashfs.New(), wal.Start, 64)
 	tr := createTree(t, e)
 	m := model{}
-	for i := range 2000 {
-		put(t, tr, m, fmt.Sprintf("k/%06d", i), []byte("v"))
+	value := bytes.Repeat([]byte("v"), 60)
+	for _, g := range []string{"a", "b", "c"} {
+		for i := range 600 {
+			put(t, tr, m, fmt.Sprintf("%s/%04d", g, i), value)
+		}
 	}
-	h, n, _, err := tr.descend(searchKey([]byte("\xff")), 0, buffer.Exclusive, true)
+	for i := range 600 {
+		remove(t, tr, m, fmt.Sprintf("b/%04d", i))
+	}
+	if st := vacuumAt(t, tr, 2); st.Deleted == 0 {
+		t.Fatalf("la limpieza no borró hojas: %+v", st)
+	}
+	// La hoja que tenía los últimos b/… y los primeros c/… conserva su cota baja «b/…»; al llenarla con ids c/0000/…
+	// se parte y su izquierda elige el prefijo de sus entradas, «c/000…»
+	for i := range 200 {
+		put(t, tr, m, fmt.Sprintf("c/0000/%03d", i), value)
+	}
+	checkTree(t, tr, m)
+	found := false
+	var prevHigh []byte
+	h0, n0, _, err := tr.descend(searchKey(nil), 0, buffer.Share, true)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !n.rightmost() || !n.v2 || len(n.pre) == 0 {
+	blk := n0.blk
+	h0.Release()
+	for blk != 0 {
+		h, n, err := tr.lockNodeWith(blk, buffer.Share, buffer.Normal)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if prevHigh != nil && n.v2 && len(n.pre) > 0 {
+			k := min(len(prevHigh), len(n.pre))
+			if !bytes.Equal(prevHigh[:k], n.pre[:k]) {
+				found = true
+				t.Logf("hoja %d: cota baja %q, prefijo %q", blk, prevHigh, n.pre)
+			}
+		}
+		prevHigh = nil
+		if !n.rightmost() {
+			hk, err := n.highKey()
+			if err != nil {
+				h.Release()
+				t.Fatal(err)
+			}
+			prevHigh = hk.key().appendID(nil)
+		}
+		blk = n.o.Next
 		h.Release()
-		t.Fatalf("hoja de más a la derecha sin prefijo: %q", n.pre)
 	}
-	before := string(n.pre)
-	b, _ := n.p.Item(n.prefixOff())
-	b[PivotHeaderSize] = 'z' // «k/…» → «z/…»: mayor que la cota baja, la hoja no tiene cota alta
-	h.MarkDirty(n.p.LSN())
-	h.Release()
-	if _, err := tr.Verify(); err != nil {
-		t.Logf("Verify detectó el prefijo dañado: %v", err)
-		return
+	if !found {
+		t.Fatal("ninguna hoja quedó con un prefijo que no comparte su cota baja")
 	}
-	if _, ok, _ := tr.Lookup(fmt.Sprintf("k/%06d", 1999), nil); ok {
-		t.Fatal("el id sigue con su nombre")
-	}
-	t.Logf("Verify limpio con el prefijo %q cambiado a %q: los ids de la hoja se renombraron", before, "z"+before[1:])
 }

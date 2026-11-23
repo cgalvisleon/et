@@ -84,6 +84,8 @@ type Server struct {
 	Solvers       map[string]*Solver                `json:"solvers"`
 	Packages      map[string]*Package               `json:"packages"`
 	Requests      map[string]*Resolver              `json:"requests"`
+	metrics       *Metrics                          `json:"-"`
+	allowOrigin   []string                          `json:"-"`
 	router        map[string]*Router                `json:"-"`
 	muRequests    sync.RWMutex                      `json:"-"`
 	muRoutes      sync.RWMutex                      `json:"-"`
@@ -122,7 +124,9 @@ func New(name string, cnf *Config) (*Server, error) {
 		Packages:      make(map[string]*Package),
 		router:        make(map[string]*Router),
 		Requests:      make(map[string]*Resolver),
+		metrics:       newMetrics(),
 		Version:       Version,
+		allowOrigin:   cnf.AllowOrigin,
 		mux:           http.NewServeMux(),
 		middlewares:   make([]func(http.Handler) http.Handler, 0),
 		authenticator: make([]func(http.Handler) http.Handler, 0),
@@ -137,7 +141,7 @@ func New(name string, cnf *Config) (*Server, error) {
 
 	result.svr = &http.Server{
 		Addr:         result.Addr,
-		Handler:      CorsAllowAll(cnf.AllowOrigin).Handler(result.mux),
+		Handler:      result.httpHandler(),
 		ReadTimeout:  cnf.ReadTimeout,
 		WriteTimeout: cnf.WriteTimeout,
 		IdleTimeout:  cnf.IdleTimeout,
@@ -186,10 +190,30 @@ func New(name string, cnf *Config) (*Server, error) {
 }
 
 /**
-* ToJson
+* ToJson: The state of the server: its routes (solvers), its packages and the requests in flight. Built under the locks
+* (the maps are written by the route events) and from the ToJson of each part: a Resolver embeds its *http.Request,
+* which json.Marshal rejects (GetBody is a func), so marshaling the maps themselves failed and GET /routes was empty
 * @return et.Json
 **/
 func (s *Server) ToJson() et.Json {
+	s.muRoutes.RLock()
+	solvers := make(map[string]et.Json, len(s.Solvers))
+	for id, solver := range s.Solvers {
+		solvers[id] = solver.ToJson()
+	}
+	packages := make(map[string]et.Json, len(s.Packages))
+	for name, pkg := range s.Packages {
+		packages[name], _ = pkg.ToJson()
+	}
+	s.muRoutes.RUnlock()
+
+	s.muRequests.RLock()
+	requests := make([]et.Json, 0, len(s.Requests))
+	for _, resolver := range s.Requests {
+		requests = append(requests, resolver.ToJson())
+	}
+	s.muRequests.RUnlock()
+
 	return et.Json{
 		"created_at": s.CreatedAt,
 		"name":       s.Name,
@@ -199,9 +223,9 @@ func (s *Server) ToJson() et.Json {
 		"addr":       s.Addr,
 		"parent":     s.Parent,
 		"version":    s.Version,
-		"solvers":    s.Solvers,
-		"packages":   s.Packages,
-		"requests":   s.Requests,
+		"solvers":    solvers,
+		"packages":   packages,
+		"requests":   requests,
 	}
 }
 
@@ -224,10 +248,19 @@ func (s *Server) banner() {
 }
 
 /**
-* initHttpServer
+* httpHandler: The handler of the HTTP server: CORS (Config.AllowOrigin) around the middlewares of Use around the routes
+* @return http.Handler
+**/
+func (s *Server) httpHandler() http.Handler {
+	return CorsAllowAll(s.allowOrigin).Handler(s.applyMiddlewares(s.mux, s.middlewares))
+}
+
+/**
+* initHttpServer: Serves HTTP with the middlewares given to Use until now
 * @return error
 **/
 func (s *Server) initHttpServer() error {
+	s.svr.Handler = s.httpHandler()
 	go func() {
 		if s.istls {
 			logs.Logf("Https", `Load server on https://localhost%s`, s.Addr)
@@ -384,6 +417,43 @@ func (s *Server) SetRouter(method, path, resolve string, typeHeader int, header 
 }
 
 /**
+* SetStatic: A route of files of an origin (TpStatic): GET <path> proxied or redirected (mode) to resolve, both ending
+* in /* (GET:/plugins/eam/1.0.0/* → http://localhost:5603/plugins/eam/1.0.0/*); fallback is the file a SPA answers
+* for a page (a path without an extension that asks for html), empty for none
+* @param path, resolve, mode, fallback string, version int, packageName string, saved bool
+* @return *Solver, error
+**/
+func (s *Server) SetStatic(path, resolve, mode, fallback string, version int, packageName string, saved bool) (*Solver, error) {
+	suffix := "/" + Wildcard
+	if !strings.HasSuffix(path, suffix) || !strings.HasSuffix(resolve, suffix) {
+		return nil, fmt.Errorf(MSG_STATIC_NOT_VALID, path, resolve)
+	}
+
+	if mode == "" {
+		mode = ModeProxy
+	}
+	if mode != ModeProxy && mode != ModeRedirect {
+		return nil, fmt.Errorf(MSG_MODE_NOT_VALID, mode)
+	}
+
+	result, err := s.setSolver(TpStatic, GET, path, resolve, TpKeepHeader, map[string]string{}, []string{}, version, packageName, false)
+	if err != nil {
+		return nil, err
+	}
+
+	s.muRoutes.Lock()
+	result.Mode = mode
+	result.Fallback = fallback
+	s.muRoutes.Unlock()
+
+	if saved {
+		s.Save()
+	}
+
+	return result, nil
+}
+
+/**
 * Public
 * @param method, path string, handlerFn http.HandlerFunc, packageName string
 **/
@@ -503,6 +573,7 @@ func (s *Server) Start() {
 	if err := s.initHttpServer(); err != nil {
 		logs.Fatal(err)
 	}
+	s.Refresh()
 	s.startPipe()
 	s.banner()
 
@@ -532,10 +603,9 @@ func (s *Server) Close() {
 }
 
 /**
-* Reset
-* @return error
+* clear: Leaves only the routes of the gateway itself (basicRoutes)
 **/
-func (s *Server) Reset() {
+func (s *Server) clear() {
 	s.muRoutes.Lock()
 	s.router = make(map[string]*Router)
 	s.Solvers = make(map[string]*Solver)
@@ -545,7 +615,25 @@ func (s *Server) Reset() {
 	if err := s.basicRoutes(); err != nil {
 		logs.Fatal(err)
 	}
+}
+
+/**
+* Reset: Drops every route and asks the services to publish theirs again (the reset event of et/router); the other
+* replicas also clear theirs (eventReset) and receive them again
+**/
+func (s *Server) Reset() {
+	s.clear()
 
 	event.Publish(router.APIGATEWAY_RESET_ROUTER, et.Json{})
 	event.Publish(router.APIGATEWAY_RESET, et.Json{})
+}
+
+/**
+* Refresh: Asks the services to publish their routes again without dropping the ones it has (Start calls it): a service
+* that started before the gateway, or published while it was down, is routed without restarting it. The routes that no
+* service publishes again stay (the saved ones and the ones of POST /routes); GET /reset drops them. The other replicas
+* ignore it (keep) and get the routes too
+**/
+func (s *Server) Refresh() {
+	event.Publish(router.APIGATEWAY_RESET_ROUTER, et.Json{"keep": true})
 }

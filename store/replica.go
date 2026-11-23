@@ -430,6 +430,9 @@ func (e *Engine) applyEntry(en WalEntry, rec *wal.Record) error {
 	if rec.Kind == wal.KindInitStore {
 		e.openPendingTree(rec.Blocks[0].File)
 	}
+	if flags, ok := btree.RecordMetaFlags(rec); ok && flags&btree.MetaLeavesForm2 != 0 {
+		e.leaves.note(rec.Blocks[0].File, true) // la limpieza del primario terminó la migración de sus hojas
+	}
 	rs.applied.Store(uint64(rec.LSN))
 	return nil
 }
@@ -465,6 +468,7 @@ func (e *Engine) syncHandles() error {
 		if ok && entry.File == s.file {
 			continue
 		}
+		e.leaves.forget(s.file) // vaciado o borrado: su archivo viejo ya no cuenta para la migración de las hojas
 		s.mu.Lock()
 		if ok {
 			s.file, s.tree = entry.File, nil

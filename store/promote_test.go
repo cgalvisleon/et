@@ -1,10 +1,17 @@
 package store
 
 import (
+	"bytes"
 	"errors"
+	"math/rand/v2"
+	"os"
+	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/cgalvisleon/et/store/internal/crashfs"
+	"github.com/cgalvisleon/et/store/internal/vfs"
+	"github.com/cgalvisleon/et/store/internal/wal"
 )
 
 // TestPromote (tarea 85): Promote vuelve primario a una réplica sin cerrarla. Lo confirmado en el primario está; lo
@@ -71,4 +78,99 @@ func TestPromote(t *testing.T) {
 	checkClean(t, r)
 	_ = open.Rollback()
 	_ = ddl.Rollback()
+}
+
+// TestPromoteFormatV1Backup (tarea 138): una réplica abierta de la copia de referencia del formato 1, cuyo segmento
+// activo es del 1 y tiene registros, al promoverse rota el WAL: el activo pasa a uno nuevo con encabezado del
+// formato actual, el del 1 queda sellado para archivar, se escriben valores comprimidos y, tras un corte y Open,
+// siguen; Verify limpio.
+func TestPromoteFormatV1Backup(t *testing.T) {
+	ref := readReference(t, formatV1Dir)
+	doc := jsonDoc(rand.New(rand.NewPCG(13, 14)), 8192)
+	base := writeImage(t, ref.backup)
+	proc := newProc(base)
+	cfg := formatConfig()
+	cfg.replica = true
+	cfg.conflictDelay = 2 * time.Second
+	r := openTest(t, proc, cfg)
+	old := r.log.ActiveSegment()
+	if h := activeHeader(t, base, old); h.Version != 1 {
+		t.Fatalf("the replica of the v1 copy starts on a segment of version %d", h.Version)
+	}
+	mustOK(t, r.Promote())
+	active := r.log.ActiveSegment()
+	if h := activeHeader(t, base, active); active == old || h.Version != wal.FormatVersion {
+		t.Fatalf("after Promote: active %d (was %d), version %d", active, old, h.Version)
+	}
+	pending, err := r.PendingArchive()
+	mustOK(t, err)
+	found := false
+	for _, seg := range pending {
+		found = found || seg.Segment == old
+	}
+	if !found {
+		t.Fatalf("the sealed v1 segment %d is not pending to archive: %+v", old, pending)
+	}
+	s := mustStore(t, r, "small")
+	mustOK(t, s.Put("promoted", doc))
+	if got := r.log.ActiveSegment(); got != active {
+		t.Fatalf("the first write moved the active segment to %d", got)
+	}
+	checkClean(t, r)
+	proc.kill(crashfs.LoseUnsynced, 1)
+	r.Close()
+
+	e := openTest(t, newProc(base), formatConfig())
+	defer e.Close()
+	got, ok, err := mustStore(t, e, "small").Read("promoted")
+	mustOK(t, err)
+	if !ok || !bytes.Equal(got, doc) {
+		t.Fatalf("value written after Promote: found %v, %d bytes", ok, len(got))
+	}
+	checkClean(t, e)
+}
+
+// TestPromoteRotates (tarea 138): una réplica normal (formato actual) también rota al promoverse; sin registros en
+// el activo no rota (no hay nada que dejar atrás).
+func TestPromoteRotates(t *testing.T) {
+	p := openTest(t, crashfs.New(), smallWAL())
+	defer p.Close()
+	a := mustStore(t, p, "a")
+	mustOK(t, a.Put("k1", []byte("v1")))
+	r, _ := newReplica(t, p)
+	defer r.Close()
+	before := r.log.ActiveSegment()
+	mustOK(t, r.Promote())
+	if after := r.log.ActiveSegment(); after != before+1 {
+		t.Fatalf("active segment %d after Promote, was %d", after, before)
+	}
+	mustOK(t, mustStore(t, r, "a").Put("k2", []byte("v2")))
+	checkClean(t, r)
+
+	num, err := r.log.StartSegment() // recién rotado y con el checkpoint escrito: sí rota
+	mustOK(t, err)
+	if num == 0 {
+		t.Fatal("StartSegment did not seal an active segment with records")
+	}
+	if num, err = r.log.StartSegment(); err != nil || num != 0 {
+		t.Fatalf("StartSegment of an empty active segment: %d %v", num, err)
+	}
+}
+
+/**
+* activeHeader lee el encabezado del segmento num del WAL del motor en fsys.
+* @param t testing.TB, fsys vfs.FS, num uint64
+* @return wal.SegmentHeader
+**/
+func activeHeader(t testing.TB, fsys vfs.FS, num uint64) wal.SegmentHeader {
+	t.Helper()
+	f, err := fsys.OpenFile(filepath.Join(testDir, wal.Dir, wal.SegmentName(num)), os.O_RDONLY)
+	mustOK(t, err)
+	defer f.Close()
+	buf := make([]byte, wal.SegmentHeaderSize)
+	_, err = f.ReadAt(buf, 0)
+	mustOK(t, err)
+	h, err := wal.ParseSegmentHeader(buf)
+	mustOK(t, err)
+	return h
 }

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"maps"
 	"net/http"
+	"strings"
 	"sync"
 
 	"github.com/cgalvisleon/et/et"
@@ -182,6 +183,54 @@ func PushApiGateway(method, path, resolve string, tpHeader TpHeader, header et.J
 
 	event.Publish(APIGATEWAY_SET_ROUTER, route)
 	event.Publish(APIGATEWAY_SET_RESOLVE, route)
+}
+
+// The modes of a static route (PushStatic): the gateway copies the files (proxy) or redirects to the origin (redirect)
+const (
+	ModeProxy    = "proxy"
+	ModeRedirect = "redirect"
+)
+
+/**
+* StaticId: The id in the gateway of the static route of a prefix (GET:<path>/*), for RemoveApiGateway
+* @param path string
+* @return string
+**/
+func StaticId(path string) string {
+	return fmt.Sprintf("%s:%s/*", GET, strings.TrimSuffix(path, "/"))
+}
+
+/**
+* PushStatic: Publishes to the gateway the files of an origin under a prefix (ettp/v2 TpStatic): GET <path>/* resolves
+* to <origin>/<rest>, copied (proxy) or answered with a 302 (redirect; the entry files —index.html, mf-manifest.json,
+* remoteEntry.js— are always copied); fallback is the file of a SPA for its pages (index.html), empty for none. Like
+* PushApiGateway, it is kept and published again when the gateway resets
+* @param path, origin, mode, fallback string, version int, packageName string
+* @return string
+**/
+func PushStatic(path, origin, mode, fallback string, version int, packageName string) string {
+	prefix := strings.TrimSuffix(path, "/")
+	resolve := strings.TrimSuffix(origin, "/") + "/*"
+	id := StaticId(prefix)
+	mu.Lock()
+	initRouter(packageName)
+	route := et.Json{
+		"_id":          id,
+		"id":           id,
+		"kind":         "static",
+		"method":       GET,
+		"path":         prefix + "/*",
+		"resolve":      resolve,
+		"mode":         mode,
+		"fallback":     fallback,
+		"version":      version,
+		"package_name": packageName,
+	}
+	router.Routes[id] = route
+	mu.Unlock()
+
+	event.Publish(APIGATEWAY_SET_ROUTER, route)
+	return id
 }
 
 /**

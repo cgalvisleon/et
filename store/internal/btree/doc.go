@@ -41,7 +41,7 @@
 // de la hoja donde cae); si no, a desborde (preguntas 22 y 37). MaxEntrySize = 2.032 garantiza que tres entradas máximas y una clave alta máxima entren en una hoja, como el
 // tercio de página de PostgreSQL. Con EntryCompressed, valueLen es el del valor comprimido: el motor comprime antes
 // de decidir (store/doc.go, «Formato 2»). VerifyWith entrega con su valor las versiones comprimidas en línea (el
-// motor comprueba que se descomprimen); las demás, sin él. Un borrado es una lápida (EntryTombstone, sin valor); el reemplazo no toca la
+// motor comprueba que se descomprimen; las comprimidas en desborde las lee él de su cadena); las demás, sin él. Un borrado es una lápida (EntryTombstone, sin valor); el reemplazo no toca la
 // versión anterior (pregunta 38). Remove de un id sin versión viva no escribe nada.
 //
 // # Hojas de la forma 2 (formato 2, tarea 134 de F-23; leaf2.go)
@@ -457,6 +457,9 @@
 // hojas. Las hojas medio muertas o borradas no se reescriben (terminan borradas). Las marcas de visibilidad y las
 // lecturas no reescriben nada: una hoja de la forma 1 se lee igual. Verify cuenta las de la forma 1
 // (VerifyStats.LeavesForm1, LeafInfo.Form1) y da daño si la meta dice MetaLeavesForm2 y queda alguna; LeavesForm2 lee
-// la marca. Un KindLeafWrite de la forma 1 (de un WAL del formato 1) solo se rehace sobre una hoja de la forma 1; uno
-// de la 2, sobre una de la 2.
+// la marca y RecordMetaFlags da las marcas de un KindSetFrozen (la réplica pone al día con eso su cuenta). En una hoja
+// de la forma 2 Verify comprueba además que el prefijo deja lugar a algún id dentro de sus cotas (prefixInBounds; el
+// límite de lo que ve, en store/doc.go «Formato 2: hojas de la forma 2 (b y c)»).
+// Un KindLeafWrite de la forma 1 (de un WAL del formato 1) solo se rehace sobre una hoja de la forma 1; uno de la 2,
+// sobre una de la 2.
 package btree

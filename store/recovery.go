@@ -79,7 +79,7 @@ func (e *Engine) recover() error {
 		replica: e.cfg.replica, sample: ctl.FrozenXID}
 	opts := e.cfg.wal
 	opts.StopLSN = e.cfg.stopLSN
-	opts.Upgrade = !e.cfg.replica // un directorio del formato 1 sigue en un segmento del 2 (formato 2, doc.go)
+	opts.Upgrade = !e.cfg.replica // un directorio del formato 1 sigue en un segmento del 2; una réplica al promoverse (doc.go, «Formato 2: migración»)
 	clean := !fresh && !restoring && !e.cfg.replica && e.cfg.stopLSN == 0 && ctl.State == control.StateShutdown
 	if clean {
 		opts.CleanEnd = ctl.CheckpointLSN + 1 // el WAL termina en el checkpoint de Close (tarea 109)
@@ -116,10 +116,13 @@ func (e *Engine) recover() error {
 }
 
 /**
-* markInProduction anota en el control, con fsync, que el motor está abierto antes de escribir nada en el WAL: tras un
-* cierre limpio wal.Open no corta la cola (Options.CleanEnd), y si un corte dejara registros nuevos después del final
-* con el control todavía en StateShutdown, el próximo Open tampoco la cortaría (un registro sin confirmar podría quedar
-* justo donde termina uno nuevo). Así el control vuelve a StateShutdown solo con el checkpoint de un Close.
+* markInProduction anota en el control, con fsync, que el motor está abierto antes de escribir ningún registro en el
+* WAL: tras un cierre limpio wal.Open no corta la cola (Options.CleanEnd), y si un corte dejara registros nuevos después
+* del final con el control todavía en StateShutdown, el próximo Open tampoco la cortaría (un registro sin confirmar
+* podría quedar justo donde termina uno nuevo). Así el control vuelve a StateShutdown solo con el checkpoint de un
+* Close. wal.Open ya pudo escribir antes en el WAL sin registros: el Upgrade de un directorio del formato 1 sella el
+* segmento activo y abre uno del 2 (o reescribe su encabezado), y tras un corte ahí el final sigue en CleanEnd. El
+* control se escribe con FormatVersion: el de un directorio del 1 pasa aquí al 2.
 * @param ctl control.Control: el leído al abrir
 * @return error
 **/

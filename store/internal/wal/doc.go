@@ -44,13 +44,18 @@
 // Y Open, en el activo sin registros cuyo
 // encabezado falta (el primero de un motor nuevo, o uno cortado antes de que fuera durable: ensureHeader). La
 // réplica rota igual al recibir el primer registro de un segmento, con el mismo número y el mismo lsn: su encabezado
-// es idéntico al del primario y las posiciones (el primer registro en el byte 32) coinciden byte a byte.
+// es idéntico al del primario (salvo la versión si los binarios son de formatos distintos: ver «Formato 2» abajo) y
+// las posiciones (el primer registro en el byte 32) coinciden byte a byte.
 //
 // Formato 2 (tarea 132): los registros no cambian de forma (el 2 solo agrega EntryCompressed a la entrada de hoja,
 // que viaja en el delta de KindLeafWrite), así que un segmento del 1 se recorre igual. Options.Upgrade (el motor lo
 // pone salvo en una réplica) hace que Open deje atrás un segmento activo del 1 antes de devolver el WAL (upgrade: lo
-// sella y rota si tiene registros; si no, le reescribe el encabezado con fsync): ningún registro escrito por este
-// binario cae en un segmento que dice 1.
+// sella y rota si tiene registros; si no, le reescribe el encabezado con fsync): ningún registro que escriba después
+// un primario cae en un segmento que dice 1. Una réplica no lo hace: sigue en el segmento del 1 de su copia hasta que
+// el flujo rota (rotate escribe siempre FormatVersion, así que frente a un primario del 1 su encabezado difiere del
+// de él en la versión). Al promoverla, el motor llama a StartSegment antes de escribir nada (tarea 138): con registros
+// sella el activo y rota (como Switch); sin registros, si es de una versión anterior, le reescribe el encabezado. Así
+// una réplica promovida tampoco escribe en un segmento que dice 1.
 //
 // Quién lo valida: el recorrido (scan: Open, la recuperación, OpenAt, Read de WalSince y de la réplica) en el
 // segmento donde empieza (checkStartHeader: de este número, de esta versión, first ≤ from; ausente solo si from es

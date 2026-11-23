@@ -394,8 +394,8 @@ func withValidate(middlewares []func(http.Handler) http.Handler, doc *Doc) []fun
 * @return et.Json, error
 **/
 func (s *Api) readBody(r *http.Request) (et.Json, error) {
-	// Sin cuerpo, un objeto vacío
-	if r.Body == nil || r.ContentLength == 0 {
+	// Sin cuerpo, un objeto vacío; un multipart/form-data queda sin leer para el handler (request.GetFile)
+	if r.Body == nil || r.ContentLength == 0 || request.IsMultipart(r) {
 		return et.Json{}, nil
 	}
 	return request.GetBody(r)

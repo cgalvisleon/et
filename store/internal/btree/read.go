@@ -120,9 +120,9 @@ func (t *BTree) lookup(id string, snap *xact.Snapshot, withValue bool) (Version,
 		}
 		var ok bool
 		if ok, err = t.visible(e, snap, &hs); err == nil && ok {
-			v := e.header() // copia: e apunta a la página, que no se toca después de soltarla
+			v := e.headerOf(id) // copia: e apunta a la página, que no se toca después de soltarla; el id es el buscado
 			if withValue {
-				v = e.version()
+				v = e.versionOf(id)
 			}
 			h.Release()
 			return v, v.Flags&EntryTombstone == 0, nil

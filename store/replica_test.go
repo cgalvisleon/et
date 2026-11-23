@@ -392,3 +392,42 @@ func replicaCrashRound(t *testing.T, mode crashfs.Mode, seed int64) {
 	checkContents(t, r, dumpEngine(t, p))
 	checkClean(t, r)
 }
+
+// TestReplicaLeafForm1Stores (hallazgo 3 de la revisión del formato 2, tarea 137): una réplica de un primario que
+// viene del formato 1 cuenta en Stats.LeafForm1Stores los stores con hojas de la forma 1 y, al rehacer el KindSetFrozen
+// con MetaLeavesForm2 de la limpieza del primario, los descuenta como él.
+func TestReplicaLeafForm1Stores(t *testing.T) {
+	ref := readReference(t, formatV1Dir)
+	p := openTest(t, writeImage(t, ref.primary), formatConfig())
+	defer p.Close()
+	names := p.Stores()
+	rcfg := formatConfig()
+	rcfg.replica = true
+	rcfg.conflictDelay = 2 * time.Second
+	bfs := crashfs.New()
+	_, err := p.backup(bfs, testDir)
+	mustOK(t, err)
+	r := openTest(t, bfs, rcfg)
+	defer r.Close()
+	for _, name := range names {
+		mustStore(t, p, name)
+		mustStore(t, r, name)
+	}
+	before := p.Stats().LeafForm1Stores
+	if before == 0 || r.Stats().LeafForm1Stores != before {
+		t.Fatalf("before the migration: primary %d, replica %d stores with form-1 leaves", before,
+			r.Stats().LeafForm1Stores)
+	}
+	mustOK(t, p.Vacuum())
+	if n := p.Stats().LeafForm1Stores; n != 0 {
+		t.Fatalf("primary after Vacuum: %d stores with form-1 leaves", n)
+	}
+	mustOK(t, mustStore(t, p, "small").Put("sync", []byte("x"))) // la limpieza no espera su WAL: sale con este commit
+	catchUp(t, p, r, "")
+	if n := r.Stats().LeafForm1Stores; n != 0 {
+		t.Fatalf("replica after the primary's migration: %d stores with form-1 leaves", n)
+	}
+	if rep := checkClean(t, r); rep.LeavesForm1 != 0 {
+		t.Fatalf("replica leaves of form 1 after the migration:\n%s", rep)
+	}
+}

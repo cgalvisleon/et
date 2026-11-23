@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cgalvisleon/et/cache"
 	"github.com/cgalvisleon/et/et"
 	"github.com/cgalvisleon/et/event"
 	"github.com/cgalvisleon/et/jrpc"
@@ -204,51 +203,12 @@ func wrapperJrpc(bindings map[string]interface{}) map[string]interface{} {
 }
 
 /**
-* wrapperCache: Adds the cache binding (set, get, json, items, item, delete over the Redis cache).
+* wrapperCache: Adds the cache binding over the package's Redis (CacheOf).
 * @param bindings map[string]interface{}
 * @return map[string]interface{}
 **/
 func wrapperCache(bindings map[string]interface{}) map[string]interface{} {
-	bindings["cache"] = map[string]interface{}{
-		"set": func(key string, value interface{}, expiration time.Duration) interface{} {
-			return cache.Set(key, value, expiration)
-		},
-		"get": func(key string, defaultValue string) string {
-			result, exists, err := cache.Get(key, defaultValue)
-			if err != nil {
-				return defaultValue
-			}
-			if !exists {
-				return defaultValue
-			}
-			return result
-		},
-		"json": func(key string) et.Json {
-			result, _, err := cache.GetJson(key)
-			if err != nil {
-				return et.Json{}
-			}
-			return result
-		},
-		"items": func(key string) et.Items {
-			result, _, err := cache.GetItems(key)
-			if err != nil {
-				return et.Items{}
-			}
-			return result
-		},
-		"item": func(key string) et.Item {
-			result, _, err := cache.GetItem(key)
-			if err != nil {
-				return et.Item{}
-			}
-			return result
-		},
-		"delete": func(key string) bool {
-			_, err := cache.Delete(key)
-			return err == nil
-		},
-	}
+	bindings["cache"] = CacheOf(nil)
 	return bindings
 }
 

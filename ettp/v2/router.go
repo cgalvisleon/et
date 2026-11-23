@@ -24,6 +24,10 @@ const (
 
 var paramRegex = regexp.MustCompile(`^\{.*\}$`)
 
+// Wildcard: the last segment of a route that takes the rest of the path (GET:/plugins/{scope}/*); its value is the
+// path param "*", replaced in the resolve as "*" too (http://origin/*)
+const Wildcard = "*"
+
 var methods = map[string]bool{
 	GET:     true,
 	POST:    true,
@@ -36,8 +40,9 @@ var methods = map[string]bool{
 }
 
 /**
-* Router: Node of the route tree of one method: one segment per level (Param when it is {name}),
-* with the Solver at the leaf.
+* Router: Node of the route tree of one method: one segment per level (Param when it is {name}, Wildcard when it is
+* the * that ends a route), with the Solver at the leaf. A segment resolves first by its name, then by the param and
+* last by the wildcard, without backtracking.
 **/
 type Router struct {
 	Tag    string             `json:"tag"`
@@ -111,6 +116,10 @@ func (s *Router) set(kind TypeRouter, method, path, solver string, typeHeader Tp
 			continue
 		}
 
+		if tag == Wildcard && i != len(tags)-1 {
+			return nil, fmt.Errorf(msg.MSG_PATH_INVALID, path)
+		}
+
 		router, ok := target.Router[tag]
 		if !ok {
 			if isParam(tag) {
@@ -151,7 +160,7 @@ func (s *Router) find(path string) (*Router, map[string]string, error) {
 
 	params := make(map[string]string)
 	result := s
-	for _, tag := range tags {
+	for i, tag := range tags {
 		if len(tag) == 0 {
 			continue
 		}
@@ -210,7 +219,23 @@ func (s *Router) find(path string) (*Router, map[string]string, error) {
 			}
 		}
 
+		// A wildcard takes the rest of the path (it is the last resort of its node: there is no backtracking)
+		router, ok = result.Router[Wildcard]
+		if ok {
+			params[Wildcard] = strings.Join(tags[i:], "/")
+			result = router
+			break
+		}
+
 		return nil, nil, fmt.Errorf(msg.MSG_SOLVER_NOT_FOUND, path)
+	}
+
+	// The prefix itself (/plugins/x/1.0 or /): the wildcard with an empty rest
+	if result.Solver == nil {
+		if router, ok := result.Router[Wildcard]; ok {
+			params[Wildcard] = ""
+			result = router
+		}
 	}
 
 	if result.Solver == nil {

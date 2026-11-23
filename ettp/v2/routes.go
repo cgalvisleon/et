@@ -22,6 +22,7 @@ import (
 **/
 func (s *Server) basicRoutes() error {
 	s.Public(GET, "/version", s.getVersion, s.Name)
+	s.Public(GET, "/health", s.getHealth, s.Name)
 	s.Public(GET, "/test/{id}/{test}", s.getTest, s.Name)
 	s.Private(GET, "/reset", s.reset, s.Name)
 	// Develop Token
@@ -42,6 +43,9 @@ func (s *Server) basicRoutes() error {
 	s.Private(GET, "/cache", s.listCache, s.Name)
 	s.Private(GET, "/cache/{key}", s.getCache, s.Name)
 	s.Private(DELETE, "/cache", s.emptyCache, s.Name)
+	// Metrics (metrics.go)
+	s.Private(GET, "/metrics", s.getMetrics, s.Name)
+	s.Private(DELETE, "/metrics", s.resetMetrics, s.Name)
 
 	return nil
 }
@@ -68,6 +72,31 @@ func (s *Server) getVersion(w http.ResponseWriter, r *http.Request) {
 	}
 
 	metric.JSON(w, r, http.StatusOK, result)
+}
+
+/**
+* getHealth: 200 when the cache and the events are connected (the gateway routes and syncs its replicas with them), 503
+* if not; for the health checks of Docker or Kubernetes
+* @params w http.ResponseWriter
+* @params r *http.Request
+**/
+func (s *Server) getHealth(w http.ResponseWriter, r *http.Request) {
+	metric := middleware.GetMetrics(r)
+
+	cacheOk := cache.HealthCheck()
+	eventsOk := event.HealthCheck()
+	status := http.StatusOK
+	if !cacheOk || !eventsOk {
+		status = http.StatusServiceUnavailable
+	}
+
+	metric.JSON(w, r, status, et.Json{
+		"ok":      status == http.StatusOK,
+		"service": s.Name,
+		"version": s.Version,
+		"cache":   cacheOk,
+		"events":  eventsOk,
+	})
 }
 
 /**
@@ -439,4 +468,29 @@ func (s *Server) getCache(w http.ResponseWriter, r *http.Request) {
 			"value": result,
 		},
 	})
+}
+
+/**
+* getMetrics: The usage of the gateway in this replica (metrics.go), with the host and the version
+* @params w http.ResponseWriter, r *http.Request
+**/
+func (s *Server) getMetrics(w http.ResponseWriter, r *http.Request) {
+	metric := middleware.GetMetrics(r)
+
+	result := s.metrics.ToJson()
+	result["service"] = s.Name
+	result["host"] = s.Host
+	result["version"] = s.Version
+	metric.JSON(w, r, http.StatusOK, result)
+}
+
+/**
+* resetMetrics: Starts the usage of this replica over
+* @params w http.ResponseWriter, r *http.Request
+**/
+func (s *Server) resetMetrics(w http.ResponseWriter, r *http.Request) {
+	metric := middleware.GetMetrics(r)
+
+	s.metrics.Reset()
+	metric.JSON(w, r, http.StatusOK, et.Json{"message": MSG_METRICS_RESET})
 }

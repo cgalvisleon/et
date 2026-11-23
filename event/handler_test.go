@@ -183,3 +183,76 @@ func TestSubscribeByChannelUnchanged(t *testing.T) {
 	}
 	UnsubscribeKey(channel)
 }
+
+/**
+* TestConnWithoutConnection: Los métodos de una conexión nil se portan como el paquete sin conexión
+**/
+func TestConnWithoutConnection(t *testing.T) {
+	var own *Conn
+	if err := own.Pub("c", et.Json{}); err != nil {
+		t.Fatal("Pub sin conexión no hace nada")
+	}
+	if err := own.Sub("c", nil); err != nil {
+		t.Fatal("Sub sin conexión no hace nada")
+	}
+	if err := own.SubscribeWith("k", "c", nil); err == nil {
+		t.Fatal("SubscribeWith sin conexión debe fallar")
+	}
+	if err := own.QueueWith("k", "c", "", nil); err == nil {
+		t.Fatal("QueueWith sin grupo debe fallar")
+	}
+	if err := own.UnsubscribeKey("k"); err == nil {
+		t.Fatal("UnsubscribeKey sin conexión debe fallar")
+	}
+	if own.HasKey("k") {
+		t.Fatal("HasKey sin conexión")
+	}
+}
+
+/**
+* TestOwnConnection: Una conexión propia (New) publica y recibe aparte de la del paquete; Myself es de esa conexión.
+* Necesita NATS_HOST
+**/
+func TestOwnConnection(t *testing.T) {
+	host := os.Getenv("NATS_HOST")
+	if host == "" {
+		t.Skip("NATS_HOST no definido")
+	}
+
+	own, err := New(Params{Host: host})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer own.Close()
+
+	var keyed, plain, mine atomic.Int32
+	if err := own.SubscribeWith("own:k", "own:canal", func(m Message) {
+		keyed.Add(1)
+		if m.Myself {
+			mine.Add(1)
+		}
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := own.Sub("own:canal", func(m Message) { plain.Add(1) }); err != nil {
+		t.Fatal(err)
+	}
+	if !own.HasKey("own:k") {
+		t.Fatal("HasKey de la conexión propia")
+	}
+
+	if err := own.Pub("own:canal", et.Json{"a": 1}); err != nil {
+		t.Fatal(err)
+	}
+	if !waitFor(func() bool { return keyed.Load() == 1 && plain.Load() == 1 && mine.Load() == 1 }) {
+		t.Fatalf("recibidos: clave %d, canal %d, propios %d", keyed.Load(), plain.Load(), mine.Load())
+	}
+
+	if err := own.UnsubscribeKey("own:k"); err != nil {
+		t.Fatal(err)
+	}
+	own.Pub("own:canal", et.Json{"a": 2})
+	if !waitFor(func() bool { return plain.Load() == 2 }) || keyed.Load() != 1 {
+		t.Fatalf("tras quitar la clave: clave %d, canal %d", keyed.Load(), plain.Load())
+	}
+}

@@ -20,7 +20,7 @@ const (
 	FindNoMeta      FindingKind = "no-meta"      // store sin página meta: se crea vacío al abrirlo con Store
 	FindTree        FindingKind = "tree"         // el árbol no pasa btree.Verify o una página suya no se lee
 	FindChain       FindingKind = "chain"        // la cadena de desborde de una versión está dañada
-	FindValue       FindingKind = "value"        // un valor comprimido en línea no se descomprime (formato 2)
+	FindValue       FindingKind = "value"        // un valor comprimido (en línea o en desborde) no se descomprime (formato 2)
 	FindDouble      FindingKind = "double-page"  // una página es de dos dueños (árbol, cadena o lista de libres)
 	FindFreeList    FindingKind = "free-list"    // la lista de libres apunta a una página que no es libre o se sale
 	FindLostPage    FindingKind = "lost-page"    // páginas sin dueño (reparable: vuelven a la lista de libres)

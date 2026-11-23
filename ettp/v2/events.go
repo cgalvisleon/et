@@ -60,6 +60,16 @@ func (s *Server) eventSetResolve(m event.Message) {
 	excludeHeader := data.ArrayStr("exclude_header")
 	version := data.Int("version")
 	packageName := data.Str("package_name")
+	if StringToTypeRouter(data.Str("kind")) == TpStatic {
+		mode := data.Str("mode")
+		fallback := data.Str("fallback")
+		_, err := s.SetStatic(path, resolve, mode, fallback, version, packageName, true)
+		if err != nil {
+			logs.Alertf(`eventSetRouter error:%s`, err.Error())
+		}
+		return
+	}
+
 	_, err := s.SetRouter(method, path, resolve, typeHeader, header, excludeHeader, version, packageName, true)
 	if err != nil {
 		logs.Alertf(`eventSetRouter error:%s`, err.Error())
@@ -84,13 +94,14 @@ func (s *Server) eventRemoveRouterById(m event.Message) {
 }
 
 /**
-* eventReset
+* eventReset: Another replica reset (clear the routes: the services publish them again to every replica) or refreshes
+* (keep: nothing to do). It does not publish the reset again: two replicas would answer each other forever
 * @param m event.Message
 **/
 func (s *Server) eventReset(m event.Message) {
-	if m.Myself {
+	if m.Myself || m.Data.Bool("keep") {
 		return
 	}
 
-	s.Reset()
+	s.clear()
 }

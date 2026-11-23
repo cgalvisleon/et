@@ -798,8 +798,15 @@ Reglas del bucle:
 
 - deja de aplicar WAL (`ApplyWal` da `ErrNotReplica`);
 - aborta lo que seguía en curso en el primario;
+- rota el WAL: lo primero que escribe como primario va a un segmento nuevo (con el formato actual, aunque la réplica
+  venga de una copia del formato 1), y con `WAL_ARCHIVE=on` arranca el archivo continuo como `Open` (el segmento
+  sellado y los anteriores que haya quedan en `PendingArchive`);
 - hace el checkpoint de fin de recuperación;
 - desde ahí acepta escrituras; las lecturas y los snapshots abiertos siguen.
+
+Con el disco lleno para el segmento nuevo, `Promote` da `ErrDiskFull` y la réplica sigue siendo réplica: libera
+espacio y reintenta. Si el proceso se corta a mitad de `Promote`, abre el directorio con `store.Open` (termina la
+promoción), no con `OpenReplica`.
 
 Cerrar la réplica y abrirla con `store.Open` hace lo mismo. Los stores abiertos antes de promover no ponen marcas de
 visibilidad hasta reabrir el motor (solo afecta al rendimiento de lectura).
@@ -961,9 +968,9 @@ echo $?   # 0 = nada pendiente, 1 = hallazgos sin arreglar, 2 = no pudo revisar
 | `half-dead`: borrado de páginas cortado a medias | sí | Lo termina (también lo hace la próxima limpieza). |
 | `unknown-file`: un archivo en `data/` con un nombre que no es de datos | no | Se informa sin tocarlo: revisa quién lo dejó ahí. |
 | `no-meta`: store sin página meta | no | `Store(name)` lo crea vacío al abrirlo. Si tenía datos, restaura. |
-| `tree`: el árbol no pasa la verificación o una página no se lee | no | El resto del store no es confiable. Restaura el respaldo (o PITR). |
+| `tree`: el árbol no pasa la verificación o una página no se lee (desde la tarea 137 también una hoja cuyo prefijo no cae en sus cotas) | no | El resto del store no es confiable. Restaura el respaldo (o PITR). |
 | `chain`: cadena de desborde viva rota | no | Ese valor se perdió: `Read` del id da error. Restaura, o reescribe el id si tienes el valor en otro lado. |
-| `value`: un valor comprimido en línea que no se descomprime (formato 2) | no | Igual que `chain`: ese valor se perdió (`Read` da `ErrCorrupt`). Restaura, o reescribe el id. |
+| `value`: un valor comprimido (en línea o en desborde) que no se descomprime o no da su largo (formato 2) | no | Igual que `chain`: ese valor se perdió (`Read` da `ErrCorrupt`). Restaura, o reescribe el id. |
 | `double-page`: página con dos dueños | no | Restaura. |
 | `free-list`: la lista de libres apunta a una página no libre o tiene un bucle | no | Restaura. |
 | `frozen`: versión sin congelar por debajo del frozenXID | no | Restaura. |

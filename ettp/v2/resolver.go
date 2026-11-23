@@ -57,6 +57,10 @@ type Resolver struct {
 	URL         string                            `json:"url"`
 	Path        string                            `json:"path"`
 	Kind        TypeRouter                        `json:"kind"`
+	Mode        string                            `json:"mode,omitempty"`
+	Fallback    string                            `json:"fallback,omitempty"`
+	resolve     string                            `json:"-"`
+	packageName string                            `json:"-"`
 	middlewares []func(http.Handler) http.Handler `json:"-"`
 	handlerFn   http.HandlerFunc                  `json:"-"`
 	timer       *time.Timer                       `json:"-"`
@@ -132,6 +136,10 @@ func newResolver(r *http.Request, solver *Solver, params map[string]string) (*Re
 		URL:         url,
 		Path:        solver.Path,
 		Kind:        solver.Kind,
+		Mode:        solver.Mode,
+		Fallback:    solver.Fallback,
+		resolve:     solver.Solver,
+		packageName: solver.PackageName,
 		middlewares: solver.middlewares,
 		handlerFn:   solver.handlerFn,
 	}

@@ -131,7 +131,45 @@ func HealthCheck() bool {
 }
 
 /**
-* SetWithDuration: Stores val as text under key for the given expiration.
+* TextOf: The text a value is stored as in the cache (et.Json, et.Item, et.Items and et.List as JSON, numbers, bools,
+* bytes, times in RFC3339, durations and strings); false for any other type
+* @param val interface{}
+* @return string, bool
+**/
+func TextOf(val interface{}) (string, bool) {
+	switch v := val.(type) {
+	case et.Json:
+		return v.ToString(), true
+	case et.Item:
+		return v.ToString(), true
+	case et.Items:
+		return v.ToString(), true
+	case et.List:
+		return v.ToString(), true
+	case int:
+		return fmt.Sprintf(`%d`, v), true
+	case int64:
+		return fmt.Sprintf(`%d`, v), true
+	case float64:
+		return strconv.FormatFloat(v, 'f', -1, 64), true
+	case bool:
+		return fmt.Sprintf(`%t`, v), true
+	case []byte:
+		return string(v), true
+	case time.Time:
+		return v.Format(time.RFC3339), true
+	case time.Duration:
+		return v.String(), true
+	case string:
+		return v, true
+	}
+
+	return "", false
+}
+
+/**
+* SetWithDuration: Stores val as text (TextOf) under key for the given expiration; a type TextOf does not know is not
+* stored (nil)
 * @params key string, val interface{}, expiration time.Duration
 * @return interface{}
 **/
@@ -140,37 +178,12 @@ func SetWithDuration(key string, val interface{}, expiration time.Duration) inte
 		return val
 	}
 
-	switch v := val.(type) {
-	case et.Json:
-		return SetCtx(bg(), key, v.ToString(), expiration)
-	case et.Item:
-		return SetCtx(bg(), key, v.ToString(), expiration)
-	case et.Items:
-		return SetCtx(bg(), key, v.ToString(), expiration)
-	case et.List:
-		return SetCtx(bg(), key, v.ToString(), expiration)
-	case int:
-		return SetCtx(bg(), key, fmt.Sprintf(`%d`, v), expiration)
-	case int64:
-		return SetCtx(bg(), key, fmt.Sprintf(`%d`, v), expiration)
-	case float64:
-		return SetCtx(bg(), key, strconv.FormatFloat(v, 'f', -1, 64), expiration)
-	case bool:
-		return SetCtx(bg(), key, fmt.Sprintf(`%t`, v), expiration)
-	case []byte:
-		return SetCtx(bg(), key, string(v), expiration)
-	case time.Time:
-		return SetCtx(bg(), key, v.Format(time.RFC3339), expiration)
-	case time.Duration:
-		return SetCtx(bg(), key, v.String(), expiration)
-	default:
-		s, ok := v.(string)
-		if ok {
-			return SetCtx(bg(), key, s, expiration)
-		}
+	text, ok := TextOf(val)
+	if !ok {
+		return nil
 	}
 
-	return nil
+	return SetCtx(bg(), key, text, expiration)
 }
 
 /**

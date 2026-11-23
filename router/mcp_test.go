@@ -265,10 +265,10 @@ func TestMCPOriginDefault(t *testing.T) {
 func TestMCPOriginHost(t *testing.T) {
 	api := &Api{Host: "Studio.Local"}
 	origins := api.mcpOrigins(nil)
-	if !mcpOriginAllowed(origins, "https://studio.local:8443") || !mcpOriginAllowed(origins, "http://localhost:5600") {
+	if !OriginAllowed(origins, "https://studio.local:8443") || !OriginAllowed(origins, "http://localhost:5600") {
 		t.Fatalf("host of the Api: %v", origins)
 	}
-	if mcpOriginAllowed(origins, "https://other.local") {
+	if OriginAllowed(origins, "https://other.local") {
 		t.Fatalf("other host allowed: %v", origins)
 	}
 }

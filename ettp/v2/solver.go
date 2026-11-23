@@ -13,6 +13,15 @@ type TypeRouter int
 const (
 	TpHandler TypeRouter = iota + 1
 	TpApiRest
+	TpStatic // files of an origin (a frontend or a plugin): proxied or redirected, with the cache policy of handlerStatic
+)
+
+// The modes of a static route: the gateway copies the file (proxy) or answers 302 to the origin (redirect); the entry
+// files (index.html, mf-manifest.json, remoteEntry.js) are always proxied, so the page and the manifest keep the origin
+// of the gateway
+const (
+	ModeProxy    = "proxy"
+	ModeRedirect = "redirect"
 )
 
 /**
@@ -25,6 +34,8 @@ func (t TypeRouter) String() string {
 		return "handler"
 	case TpApiRest:
 		return "app"
+	case TpStatic:
+		return "static"
 	default:
 		return "Unknown"
 	}
@@ -34,6 +45,8 @@ func StringToTypeRouter(s string) TypeRouter {
 	switch s {
 	case "api":
 		return TpApiRest
+	case "static":
+		return TpStatic
 	default:
 		return TpHandler
 	}
@@ -65,8 +78,9 @@ func (t TpHeader) String() string {
 }
 
 /**
-* Solver: One route of the gateway (ID = METHOD:path): a local handler (TpHandler) or
-* a proxied URL (TpApiRest) with its header policy, version and package.
+* Solver: One route of the gateway (ID = METHOD:path): a local handler (TpHandler), a proxied URL (TpApiRest)
+* with its header policy, version and package, or the files of an origin (TpStatic, path and resolve ending in /*)
+* with its Mode and, for a SPA, the Fallback file of the paths without an extension.
 **/
 type Solver struct {
 	ID            string                            `json:"id"`
@@ -79,6 +93,8 @@ type Solver struct {
 	ExcludeHeader []string                          `json:"exclude_header"`
 	Version       int                               `json:"version"`
 	PackageName   string                            `json:"package_name"`
+	Mode          string                            `json:"mode,omitempty"`
+	Fallback      string                            `json:"fallback,omitempty"`
 	middlewares   []func(http.Handler) http.Handler `json:"-"`
 	handlerFn     http.HandlerFunc                  `json:"-"`
 }

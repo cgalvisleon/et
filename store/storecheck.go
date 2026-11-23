@@ -61,6 +61,9 @@ type storeCheck struct {
 	curID   string
 	decided bool
 
+	// raw es el búfer de los valores comprimidos en desborde que se descomprimen (chainValue)
+	raw []byte
+
 	// halfDead son los hallazgos de hojas medio muertas (borrados cortados a medias), que Repair termina.
 	halfDead []int
 }
@@ -305,6 +308,9 @@ func (c *storeCheck) chain(blk page.BlockNumber, v *btree.Version) error {
 		c.r.ChainPages++
 		return nil
 	})
+	if err == nil && v.Flags&btree.EntryCompressed != 0 && !partial {
+		return c.chainValue(blk, v)
+	}
 	if err == nil || errors.Is(err, errStopWalk) {
 		return nil
 	}
@@ -313,6 +319,27 @@ func (c *storeCheck) chain(blk page.BlockNumber, v *btree.Version) error {
 	}
 	c.pagesSafe = false
 	c.add(FindChain, int64(blk), 1, false, fmt.Sprintf(MSG_CHECK_CHAIN, v.ID, v.LSN, err))
+	return nil
+}
+
+/**
+* chainValue lee de su cadena (ya recorrida sana) el valor comprimido de una versión y comprueba que se descomprime al
+* largo anotado, como los comprimidos en línea. Lo leído y lo descomprimido se reutilizan entre versiones.
+* @param blk page.BlockNumber: la hoja, v *btree.Version: con EntryOverflow y EntryCompressed
+* @return error: ErrFailed
+**/
+func (c *storeCheck) chainValue(blk page.BlockNumber, v *btree.Version) error {
+	stored, err := c.e.chains.Read(c.file, v.Overflow)
+	if err != nil {
+		if ferr := c.e.fatal(err); ferr != nil {
+			return ferr
+		}
+		c.add(FindChain, int64(blk), 1, false, fmt.Sprintf(MSG_CHECK_CHAIN, v.ID, v.LSN, err))
+		return nil
+	}
+	if c.raw, err = decompress(c.raw, stored); err != nil {
+		c.add(FindValue, int64(blk), 1, false, fmt.Sprintf(MSG_CHECK_VALUE, v.ID, v.LSN, err))
+	}
 	return nil
 }
 

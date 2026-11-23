@@ -794,9 +794,11 @@ func OpenReplicaWith(dir string, o Options) (*Engine, error) {
 
 /**
 * Promote vuelve primario a la réplica sin cerrarla (failover): deja de aplicar WAL (ApplyWal da ErrNotReplica), lo
-* que seguía en curso en el primario queda abortado, y hace el checkpoint de fin de recuperación. Desde ahí acepta
-* escrituras; las lecturas y snapshots abiertos siguen. Es lo mismo que cerrarla y abrirla con Open, sin cortar.
-* @return error: ErrNotReplica (no es una réplica, o ya la promovieron), ErrClosed, ErrFailed
+* que seguía en curso en el primario queda abortado, rota el WAL (lo que escribe como primario va a un segmento nuevo
+* del formato actual; con WAL_ARCHIVE=on arranca el archivo) y hace el checkpoint de fin de recuperación. Desde ahí
+* acepta escrituras; las lecturas y snapshots abiertos siguen. Es lo mismo que cerrarla y abrirla con Open, sin cortar.
+* @return error: ErrNotReplica (no es una réplica, o ya la promovieron), ErrDiskFull (sigue siendo réplica), ErrClosed,
+* ErrFailed
 **/
 func (e *Engine) Promote() error {
 	return e.promote()

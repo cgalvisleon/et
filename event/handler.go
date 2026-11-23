@@ -96,23 +96,33 @@ func HealthCheck() bool {
 }
 
 /**
-* publish
+* Pub: Publishes data on channel over this connection (one of its own, New, or the package's); without a connection
+* (nil) it does nothing
 * @param channel string, data et.Json
 * @return error
 **/
-func publish(channel string, data et.Json) error {
-	if conn == nil {
+func (s *Conn) Pub(channel string, data et.Json) error {
+	if s == nil {
 		return nil
 	}
 
 	msg := NewEventMessage(channel, data)
-	msg.FromId = conn.id
+	msg.FromId = s.id
 	dt, err := msg.Encode()
 	if err != nil {
 		return err
 	}
 
-	return conn.Publish(msg.Channel, dt)
+	return s.Conn.Publish(msg.Channel, dt)
+}
+
+/**
+* publish
+* @param channel string, data et.Json
+* @return error
+**/
+func publish(channel string, data et.Json) error {
+	return conn.Pub(channel, data)
 }
 
 /**
@@ -121,11 +131,7 @@ func publish(channel string, data et.Json) error {
 * @return error
 **/
 func Publish(channel string, data et.Json) error {
-	if conn == nil {
-		return nil
-	}
-
-	return publish(channel, data)
+	return conn.Pub(channel, data)
 }
 
 /**
@@ -157,11 +163,12 @@ func Unsubscribe(channel string) error {
 }
 
 /**
-* handlerOf: The NATS handler of a subscription: decodes the message, sets Myself and calls f, recovering a panic of f
-* @param channel, panicMsg string, f func(Message)
+* handlerOf: The NATS handler of a subscription of the connection s: decodes the message, sets Myself and calls f,
+* recovering a panic of f
+* @param s *Conn, channel, panicMsg string, f func(Message)
 * @return nats.MsgHandler
 **/
-func handlerOf(channel, panicMsg string, f func(Message)) nats.MsgHandler {
+func handlerOf(s *Conn, channel, panicMsg string, f func(Message)) nats.MsgHandler {
 	return func(m *nats.Msg) {
 		defer func() {
 			if r := recover(); r != nil {
@@ -178,11 +185,34 @@ func handlerOf(channel, panicMsg string, f func(Message)) nats.MsgHandler {
 			return
 		}
 
-		msg.Myself = conn != nil && msg.FromId == conn.id
+		msg.Myself = msg.FromId == s.id
 		if f != nil {
 			f(msg)
 		}
 	}
+}
+
+/**
+* Sub: Subscribes channel over this connection (every replica receives), stored under the channel like Subscribe;
+* without a connection (nil) or channel it does nothing
+* @param channel string, f func(Message)
+* @return error
+**/
+func (s *Conn) Sub(channel string, f func(Message)) error {
+	if s == nil || len(channel) == 0 {
+		return nil
+	}
+
+	subscribe, err := s.Subscribe(channel, handlerOf(s, channel, MSG_PANIC_IN_SUBSCRIBE, f))
+	if err != nil {
+		return err
+	}
+
+	s.mutex.Lock()
+	s.events[channel] = subscribe
+	s.mutex.Unlock()
+
+	return nil
 }
 
 /**
@@ -191,24 +221,7 @@ func handlerOf(channel, panicMsg string, f func(Message)) nats.MsgHandler {
 * @return error
 **/
 func Subscribe(channel string, f func(Message)) (err error) {
-	if conn == nil {
-		return
-	}
-
-	if len(channel) == 0 {
-		return
-	}
-
-	subscribe, err := conn.Subscribe(channel, handlerOf(channel, MSG_PANIC_IN_SUBSCRIBE, f))
-	if err != nil {
-		return err
-	}
-
-	conn.mutex.Lock()
-	conn.events[channel] = subscribe
-	conn.mutex.Unlock()
-
-	return err
+	return conn.Sub(channel, f)
 }
 
 /**
@@ -225,7 +238,7 @@ func Queue(channel, queue string, f func(Message)) (err error) {
 		return nil
 	}
 
-	subscribe, err := conn.QueueSubscribe(channel, queue, handlerOf(channel, MSG_PANIC_IN_QUEUE, f))
+	subscribe, err := conn.QueueSubscribe(channel, queue, handlerOf(conn, channel, MSG_PANIC_IN_QUEUE, f))
 	if err != nil {
 		return err
 	}
@@ -243,8 +256,8 @@ func Queue(channel, queue string, f func(Message)) (err error) {
 * @param key, channel, queue string, f func(Message)
 * @return error
 **/
-func subscribeWith(key, channel, queue string, f func(Message)) error {
-	if conn == nil {
+func (s *Conn) subscribeWith(key, channel, queue string, f func(Message)) error {
+	if s == nil {
 		return errors.New(msg.MSG_ERR_NOT_CONNECT)
 	}
 
@@ -256,26 +269,88 @@ func subscribeWith(key, channel, queue string, f func(Message)) error {
 		return errors.New(msg.MSG_ERR_CHANNEL_REQUIRED)
 	}
 
-	conn.mutex.Lock()
-	defer conn.mutex.Unlock()
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
 
 	var subscribe *nats.Subscription
 	var err error
 	if queue == "" {
-		subscribe, err = conn.Subscribe(channel, handlerOf(channel, MSG_PANIC_IN_SUBSCRIBE, f))
+		subscribe, err = s.Subscribe(channel, handlerOf(s, channel, MSG_PANIC_IN_SUBSCRIBE, f))
 	} else {
-		subscribe, err = conn.QueueSubscribe(channel, queue, handlerOf(channel, MSG_PANIC_IN_QUEUE, f))
+		subscribe, err = s.QueueSubscribe(channel, queue, handlerOf(s, channel, MSG_PANIC_IN_QUEUE, f))
 	}
 	if err != nil {
 		return err
 	}
 
-	if previous, ok := conn.keyed[key]; ok {
+	if previous, ok := s.keyed[key]; ok {
 		previous.Unsubscribe()
 	}
-	conn.keyed[key] = subscribe
+	s.keyed[key] = subscribe
 
 	return nil
+}
+
+/**
+* SubscribeWith: Subscribe under a key of the caller over this connection (nil: MSG_ERR_NOT_CONNECT); see the package's
+* SubscribeWith
+* @param key, channel string, f func(Message)
+* @return error
+**/
+func (s *Conn) SubscribeWith(key, channel string, f func(Message)) error {
+	return s.subscribeWith(key, channel, "", f)
+}
+
+/**
+* QueueWith: Queue under a key of the caller over this connection; see the package's QueueWith
+* @param key, channel, queue string, f func(Message)
+* @return error
+**/
+func (s *Conn) QueueWith(key, channel, queue string, f func(Message)) error {
+	if len(queue) == 0 {
+		return fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "queue")
+	}
+
+	return s.subscribeWith(key, channel, queue, f)
+}
+
+/**
+* UnsubscribeKey: Cuts the subscription of key over this connection; an unknown key is not an error
+* @param key string
+* @return error
+**/
+func (s *Conn) UnsubscribeKey(key string) error {
+	if s == nil {
+		return errors.New(msg.MSG_ERR_NOT_CONNECT)
+	}
+
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	subscribe, ok := s.keyed[key]
+	if !ok {
+		return nil
+	}
+
+	delete(s.keyed, key)
+	return subscribe.Unsubscribe()
+}
+
+/**
+* HasKey: Whether this connection has a subscription under key
+* @param key string
+* @return bool
+**/
+func (s *Conn) HasKey(key string) bool {
+	if s == nil {
+		return false
+	}
+
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+
+	_, ok := s.keyed[key]
+	return ok
 }
 
 /**
@@ -285,7 +360,7 @@ func subscribeWith(key, channel, queue string, f func(Message)) error {
 * @return error
 **/
 func SubscribeWith(key, channel string, f func(Message)) error {
-	return subscribeWith(key, channel, "", f)
+	return conn.SubscribeWith(key, channel, f)
 }
 
 /**
@@ -294,11 +369,7 @@ func SubscribeWith(key, channel string, f func(Message)) error {
 * @return error
 **/
 func QueueWith(key, channel, queue string, f func(Message)) error {
-	if len(queue) == 0 {
-		return fmt.Errorf(msg.MSG_ATRIB_REQUIRED, "queue")
-	}
-
-	return subscribeWith(key, channel, queue, f)
+	return conn.QueueWith(key, channel, queue, f)
 }
 
 /**
@@ -316,20 +387,7 @@ func StackWith(key, channel string, f func(Message)) error {
 * @return error
 **/
 func UnsubscribeKey(key string) error {
-	if conn == nil {
-		return errors.New(msg.MSG_ERR_NOT_CONNECT)
-	}
-
-	conn.mutex.Lock()
-	defer conn.mutex.Unlock()
-
-	subscribe, ok := conn.keyed[key]
-	if !ok {
-		return nil
-	}
-
-	delete(conn.keyed, key)
-	return subscribe.Unsubscribe()
+	return conn.UnsubscribeKey(key)
 }
 
 /**
@@ -338,15 +396,7 @@ func UnsubscribeKey(key string) error {
 * @return bool
 **/
 func HasKey(key string) bool {
-	if conn == nil {
-		return false
-	}
-
-	conn.mutex.RLock()
-	defer conn.mutex.RUnlock()
-
-	_, ok := conn.keyed[key]
-	return ok
+	return conn.HasKey(key)
 }
 
 /**

@@ -47,6 +47,15 @@ func searchKey(id []byte) key {
 * @return int: -1, 0 o 1
 **/
 func compareKeys(a, b key) int {
+	return cmpKeys(&a, &b)
+}
+
+/**
+* cmpKeys es compareKeys por puntero: la búsqueda binaria no copia las claves en cada comparación.
+* @param a, b *key
+* @return int: -1, 0 o 1
+**/
+func cmpKeys(a, b *key) int {
 	switch {
 	case a.top && b.top:
 		return 0
@@ -55,7 +64,7 @@ func compareKeys(a, b key) int {
 	case b.top:
 		return -1
 	}
-	if c := compareIDs(a, b); c != 0 {
+	if c := cmpIDs(a, b); c != 0 {
 		return c
 	}
 	if c := cmp.Compare(b.lsn, a.lsn); c != 0 {
@@ -162,6 +171,11 @@ func (k key) idEqual(b []byte) bool {
 * @return int: -1, 0 o 1
 **/
 func compareIDs(a, b key) int {
+	return cmpIDs(&a, &b)
+}
+
+// cmpIDs es compareIDs por puntero.
+func cmpIDs(a, b *key) int {
 	if len(a.pre) == 0 && len(b.pre) == 0 {
 		return bytes.Compare(a.id, b.id)
 	}

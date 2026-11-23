@@ -55,6 +55,37 @@ func (w *WAL) Switch() (uint64, error) {
 	return num, nil
 }
 
+// StartSegment deja el WAL listo para que el próximo registro caiga en un segmento sin registros de antes y con
+// encabezado de FormatVersion (Promote de una réplica, tarea 138): con registros en el activo lo sella y rota como
+// Switch; sin registros, si su encabezado es de una versión anterior lo reescribe con fsync (como upgrade en Open).
+// Bajo writeMu: con el disco lleno para preasignar el siguiente devuelve ErrNoRoom sin tocar nada.
+// Devuelve el número del segmento sellado (0 si no selló nada).
+func (w *WAL) StartSegment() (uint64, error) {
+	w.writeMu.Lock()
+	defer w.writeMu.Unlock()
+	if err := w.writable(); err != nil {
+		return 0, err
+	}
+	if w.active.size > SegmentHeaderSize {
+		num := w.active.num
+		if err := w.rotate(); err != nil {
+			return 0, w.reserveError(err)
+		}
+		return num, nil
+	}
+	h, state, err := readHeader(w.active.file)
+	if err != nil {
+		return 0, err
+	}
+	if state == headerValid && h.Version >= FormatVersion {
+		return 0, nil
+	}
+	if err := w.writeHeader(w.active.file, w.active.num, page.LSN(w.lastLSN.Load())+1); err != nil {
+		return 0, w.reserveError(err)
+	}
+	return 0, nil
+}
+
 // SegmentInfo describe el segmento sellado num. El final sale de lo anotado al sellarlo o al recorrerlo en Open; un
 // segmento anterior al punto de rehacer de Open (retenido por el archivo) se recorre una vez, sin writeMu (ya no
 // cambia), y queda anotado.

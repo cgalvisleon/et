@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/cgalvisleon/et/logs"
 	"github.com/cgalvisleon/et/middleware"
@@ -68,6 +69,8 @@ func (s *Server) applyMiddlewares(handler http.Handler, middlewares []func(http.
 * @param r *http.Request
 **/
 func (s *Server) handler(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
+
 	/* Begin telemetry */
 	metric := middleware.GetMetrics(r)
 	ctx := context.WithValue(r.Context(), middleware.MetricKey, metric)
@@ -82,9 +85,18 @@ func (s *Server) handler(w http.ResponseWriter, r *http.Request) {
 	/* Get resolver */
 	resolver, err := s.FindResolver(r)
 	if err != nil {
+		s.metrics.recordUnmatched()
 		s.HTTPError(resolver, metric, w, r, http.StatusNotFound, http.StatusText(http.StatusNotFound))
 		return
 	}
+
+	/* Usage of the route (metrics.go), counted when the request ends; the gateway's own routes apart */
+	rw := &middleware.ResponseWriterWrapper{ResponseWriter: w}
+	own := resolver.packageName == s.Name
+	defer func() {
+		s.metrics.record(resolver, r, rw.StatusCode, start, own)
+	}()
+	w = rw
 
 	if s.debug {
 		logs.Log("Route Table", resolver.ToJson().ToString())
@@ -108,8 +120,11 @@ func (s *Server) handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	/* If API REST is handler */
+	/* If API REST is handler (or the files of an origin) */
 	h := s.handlerApi
+	if resolver.Kind == TpStatic {
+		h = s.handlerStatic
+	}
 	ctx = context.WithValue(ctx, ResoluteKey, resolver)
 	handler := s.applyMiddlewares(http.HandlerFunc(h), resolver.middlewares)
 	handler.ServeHTTP(w, r.WithContext(ctx))

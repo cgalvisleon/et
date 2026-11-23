@@ -107,6 +107,11 @@ func (s *Server) load() error {
 			continue
 		}
 
+		if solver.Kind == TpStatic {
+			s.SetStatic(solver.Path, solver.Solver, solver.Mode, solver.Fallback, solver.Version, solver.PackageName, false)
+			continue
+		}
+
 		s.setSolver(
 			solver.Kind,
 			solver.Method,

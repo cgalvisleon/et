@@ -1,6 +1,7 @@
 package store
 
 import (
+	"strconv"
 	"time"
 
 	"github.com/cgalvisleon/et/store/internal/control"
@@ -110,6 +111,19 @@ func (e *Engine) checkpointNow() error {
 func (e *Engine) stepDone(step int) {
 	if e.afterStep != nil {
 		e.afterStep(step)
+	}
+	if e.cfg.openStep != nil {
+		e.cfg.openStep("checkpoint " + strconv.Itoa(step))
+	}
+}
+
+/**
+* openStep avisa al banco de Open que terminó un paso de la apertura (config.openStep).
+* @param step string
+**/
+func (e *Engine) openStep(step string) {
+	if e.cfg.openStep != nil {
+		e.cfg.openStep(step)
 	}
 }
 

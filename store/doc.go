@@ -1205,6 +1205,13 @@
 //  9. Checkpoint de fin de recuperación (sin repartir) y state = en producción; en un motor nuevo guarda el catálogo y
 //     crea el control (control.Create). Con marcador, borrarlo: la copia ya es un motor más.
 //
+// Costo de Open tras un Close limpio (tarea 69, TestOpenBench): no toca data/ más que con un ReadDir (los archivos de
+// datos se abren al usarlos); lee el control, el catálogo, ~1 MB del segmento activo del WAL, los encabezados de los
+// repuestos y una página del archivo de estados, y hace 7 fsync (control ×2, catalog.tmp, la raíz, el registro de
+// checkpoint, el archivo de estados y xact/). Con F_FULLFSYNC de macOS (~4 ms cada uno) esos fsync son casi todo:
+// ~25 ms con 1, 10 o 100 millones de claves, igual E/S en los tres. Lo único que crece con los datos es el ReadDir de
+// data/ (un archivo por GB).
+//
 // Las particiones incompletas las termina la próxima inserción que las encuentre; los borrados de páginas a medias (una
 // hoja medio muerta), la próxima limpieza (o Repair). Un store del catálogo cuya página
 // meta no existe o está en ceros (su KindInitStore no llegó a ser durable) se crea de nuevo al abrirlo con Store:

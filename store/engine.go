@@ -202,6 +202,7 @@ func open(base vfs.FS, dir string, cfg config) (*Engine, error) {
 		e.bg.Add(1)
 		go e.vacuumer()
 	}
+	e.openStep("background")
 	return e, nil
 }
 

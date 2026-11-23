@@ -51,6 +51,13 @@ segmento activo y los repuestos siguen preasignados, sin un truncado + fsync por
 128 MB de ceros (medido en el WAL solo: el primer registro durable tras abrir pasó de 109–157 ms a 4–7 ms). Tras una
 caída sí corta, como siempre.
 
+Medido de nuevo en la Mac (tarea 69, `STORE_BENCH=1 STORE_BENCH_KEYS=100000000 go test -p 1 ./store -run
+TestOpenBench -v`, disco real): `Open` tras `Close` tarda ~25 ms con 1, 10 y 100 millones de claves (mediana de 5–7;
+28–40 ms el primero de un proceso nuevo). Hace la misma E/S a cualquier escala: no abre ningún archivo de datos, lee
+~1 MB del WAL y unos KB de control, catálogo y archivo de estados, y hace 7 fsync, que en macOS (`F_FULLFSYNC`, ~4 ms)
+son casi todo el tiempo. La diferencia que se vio en la VM (64–97 ms con 100 millones) era de antes de la tarea 109
+(`Open` cortaba y llenaba de ceros el WAL) y de una VM de 4 GiB con 16 GB de datos.
+
 ### Cuándo usarlo
 
 - Hay más claves de las que caben en RAM, y se necesitan recorridos ordenados (por prefijo y por rango) y escrituras

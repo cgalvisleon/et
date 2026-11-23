@@ -76,6 +76,10 @@ type config struct {
 	// Solo pruebas: páginas por archivo de estados (0 = xact.PagesPerFile) y primer xid de un motor nuevo (0 = 1).
 	xactFilePages int
 	firstXID      page.XID
+
+	// Solo pruebas: si no es nil, open lo llama al terminar cada paso de la apertura (y cada paso de su checkpoint),
+	// con su nombre; el banco de Open mide así cuánto tarda cada uno (openbench_test.go).
+	openStep func(step string)
 }
 
 /**

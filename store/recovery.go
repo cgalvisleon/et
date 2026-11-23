@@ -27,6 +27,7 @@ func (e *Engine) recover() error {
 	if err := e.checkFormat(); err != nil { // antes de leer o cambiar nada
 		return err
 	}
+	e.openStep("format")
 	label, restoring, err := e.readBackupLabel()
 	if err != nil {
 		return err
@@ -56,6 +57,7 @@ func (e *Engine) recover() error {
 			return err
 		}
 	}
+	e.openStep("control")
 	redo := wal.Start
 	e.frozen.base = ctl.FrozenXID
 	if fresh {
@@ -68,12 +70,15 @@ func (e *Engine) recover() error {
 	for _, entry := range e.cat.Catalog().Entries {
 		e.counts.set(entry.File, entry.Count)
 	}
+	e.openStep("catalog")
 	if err := e.openPieces(); err != nil {
 		return err
 	}
+	e.openStep("pieces")
 	if err := e.status.Truncate(ctl.FrozenXID); err != nil { // termina un truncado cortado y fija el límite
 		return err
 	}
+	e.openStep("xact truncate")
 
 	r := &redoState{e: e, countLSN: e.cat.CountLSN(), checkpointLSN: ctl.CheckpointLSN, nextXID: ctl.NextXID,
 		replica: e.cfg.replica, sample: ctl.FrozenXID}
@@ -90,10 +95,12 @@ func (e *Engine) recover() error {
 	}
 	e.log = log
 	e.proxy.connect(log)
+	e.openStep("wal")
 	if clean {
 		if err := e.markInProduction(ctl); err != nil {
 			return err
 		}
+		e.openStep("control in production")
 	}
 	if !fresh && !r.sawCheckpoint {
 		return fmt.Errorf(MSG_NO_CHECKPOINT, ErrCorrupt, ctl.CheckpointLSN)
@@ -106,6 +113,7 @@ func (e *Engine) recover() error {
 			return err
 		}
 	}
+	e.openStep("slots, archive")
 	if err := e.finishRecovery(r, end); err != nil {
 		return err
 	}
@@ -214,6 +222,7 @@ func (e *Engine) finishRecovery(r *redoState, end wal.Position) error {
 	if err := e.removeUnallocated(); err != nil {
 		return err
 	}
+	e.openStep("drop pending")
 	next := max(r.nextXID, r.maxXID+1, 1, e.cfg.firstXID)
 	if err := e.status.Recover(next); err != nil {
 		return err
@@ -222,6 +231,7 @@ func (e *Engine) finishRecovery(r *redoState, end wal.Position) error {
 	e.free = fsm.New(e.pool, e.sm, e.log)
 	e.chains = overflow.New(e.pool, e.free, e.log)
 	e.replayed = r.replayed
+	e.openStep("xact recover")
 	return e.checkpoint(control.StateInProduction, false)
 }
 

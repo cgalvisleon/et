@@ -8,7 +8,7 @@ Requires Go 1.25. Add the module and import only the packages you use:
 
 ```bash
 go get github.com/cgalvisleon/et@latest
-go get github.com/cgalvisleon/et@v1.0.52
+go get github.com/cgalvisleon/et@v1.0.53
 ```
 
 To scaffold a new service, run the generator inside a folder that already has its `go.mod` (`go mod init <module>`); it asks what to create (Project, Microservice, Modelo, Rpc) and runs `go mod tidy` at the end:
@@ -33,7 +33,7 @@ A modular library for Go microservices, CLIs and web apps. Every directory is an
 
 Infrastructure packages (`cache`, `event`, `jsql`) read their configuration from environment variables and connect once in `Load()`; later calls are no-ops.
 
-## Upgrading to v1.0.52
+## Upgrading to v1.0.53
 
 - `router.Publish` / `router.With` no longer prefix `Route.PackageName` onto `Route.Path`: put the full path in the route.
 - `jsql` models require a schema. On SQLite, MySQL and Oracle the table is `schema_name` (before, SQLite used the bare name), so existing SQLite databases need their tables renamed.
@@ -42,7 +42,7 @@ Infrastructure packages (`cache`, `event`, `jsql`) read their configuration from
 - jsql scripts (goja): `where` of a model, query or command takes a JSON condition or a list (`[{status: {eq: "active"}}, {and: {age: {more: 18}}}]`); `and`/`or` are gone. A bare object (`{status: {eq: "active"}}`) or one wrapped in `where` both work.
 - `router.Api.Public` / `Session` / `Protected` take `group` first.
 
-## Changes after v1.0.52
+## Changes after v1.0.53
 
 - Conditions evaluate in memory as in SQL: `AND` binds tighter than `OR`, and a condition without connector after the first one is an `AND` (before, it was ignored in memory). Review in-memory filters that relied on left-to-right order.
 - `like` in memory takes `%` and `_` and ignores case; `*` still works as `%`.
